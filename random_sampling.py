@@ -10,11 +10,14 @@ import pandas as pd
 SETTINGS = {
     # path to input file.
     'path': 'Pasta para Ju.xlsx',
-    # number of bins in which to divide the population.
-    # This becomes the number of "break points" in the CVP.
-    'bins': 15,
+    # max size of colony to not be binned, e.g. a parameter of 10 makes colonies of up to 10 cells to be
+    # plotted individually in CVP, instead of being binned along with other cell sizes.
+    'max_binned_colony_size': 10,
+    # number of bins in which to divide the population after the max number of individual colony sizes
+    # determined by the parameter before.
+    'bins': 10,
     # number of independent runs.
-    'runs': 30,
+    'runs': 10,
     # number of repeated samplings to perform for each run.
     'repeats': 10,
     # number of instances in each sample.
@@ -24,11 +27,12 @@ SETTINGS = {
 }
 
 
-def main(path: str, bins: int, runs: int, repeats: int, sample_size: int, smoothing: bool) -> None:
+def main(path: str, max_binned_colony_size: int, bins: int, runs: int, repeats: int, sample_size: int,
+         smoothing: bool) -> None:
     """Main function of this script"""
     fig, ax = plt.subplots(figsize=(16, 16))
     data = load_data(path=path)
-    data = add_bins(data=data, bins=bins)
+    data = add_bins(data=data, max_binned_colony_size=max_binned_colony_size, bins=bins)
     for _ in range(runs):
         cs, gr = sample_data(data=data, repeats=repeats, sample_size=sample_size)
         ax.plot(cs, gr, color='black', alpha=0.5, marker='.')
@@ -46,10 +50,14 @@ def load_data(path: str) -> pd.DataFrame:
     return pd.DataFrame(values, columns=('CS1', 'GR2'))
 
 
-def add_bins(data: pd.DataFrame, bins: int) -> pd.DataFrame:
+def add_bins(data: pd.DataFrame, max_binned_colony_size: int, bins: int) -> pd.DataFrame:
     """Returns the data DataFrame with a "bins" column, which divides the population of values in
     bins with a close number of instances in them"""
-    binned_data = pd.qcut(data['CS1'], bins, labels=False)
+    data['bins'] = data['CS1']
+    bin_condition = data['bins'] > max_binned_colony_size
+    binned_data = pd.qcut(data.loc[bin_condition]['CS1'], bins, labels=False)
+    binned_data += max_binned_colony_size + 1
+    binned_data = pd.concat([binned_data, data.loc[~bin_condition]['bins']])
     return data.assign(bins=binned_data)
 
 
