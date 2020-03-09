@@ -10,6 +10,10 @@ import pandas as pd
 SETTINGS = {
     # path to input file.
     'path': 'Pasta para Ju.xlsx',
+    # Colony Size cell range in input Excel file
+    'cs_range': 'A4:A1071',
+    # Growth Rate range in input Excel file
+    'gr_range': 'B4:B1071',
     # max size of colony to not be binned, e.g. a parameter of 10 makes colonies of up to 10 cells to be
     # plotted individually in CVP, instead of being binned along with other cell sizes.
     'max_binned_colony_size': 10,
@@ -27,11 +31,11 @@ SETTINGS = {
 }
 
 
-def main(path: str, max_binned_colony_size: int, bins: int, runs: int, repeats: int, sample_size: int,
-         smoothing: bool) -> None:
+def main(path: str, cs_range: str, gr_range: str, max_binned_colony_size: int, bins: int, runs: int, repeats: int,
+         sample_size: int, smoothing: bool) -> None:
     """Main function of this script"""
     fig, ax = plt.subplots(figsize=(16, 16))
-    data = load_data(path=path)
+    data = load_data(path=path, cs_range=cs_range, gr_range=gr_range)
     data = add_bins(data=data, max_binned_colony_size=max_binned_colony_size, bins=bins)
     for _ in range(runs):
         cs, gr = sample_data(data=data, repeats=repeats, sample_size=sample_size)
@@ -41,12 +45,12 @@ def main(path: str, max_binned_colony_size: int, bins: int, runs: int, repeats: 
     plt.show()
 
 
-def load_data(path: str) -> pd.DataFrame:
+def load_data(path: str, cs_range: str, gr_range: str) -> pd.DataFrame:
     """Loads relevant data from input file as a Pandas DataFrame.
     ASSUMES: data to be in cell range A4 to B1071; modify this as needed"""
     wb = openpyxl.load_workbook(path)
     ws = wb.active
-    values = [(cs.value, gr.value) for cs, gr in ws['A4':'B1071']]
+    values = [(cs[0].value, gr[0].value) for cs, gr in zip(ws[cs_range], ws[gr_range])]
     return pd.DataFrame(values, columns=('CS1', 'GR2'))
 
 
