@@ -19,7 +19,7 @@ SETTINGS = {
     'max_binned_colony_size': 10,
     # number of bins in which to divide the population after the max number of individual colony sizes
     # determined by the parameter before.
-    'bins': 10,
+    'bins': 5,
     # number of independent runs.
     'runs': 10,
     # number of repeated samplings to perform for each run.
@@ -27,12 +27,14 @@ SETTINGS = {
     # number of instances in each sample.
     'sample_size': 20,
     # whether to interpolate mean value in CVP.
-    'smoothing': True,
+    'smoothing': False,
+    # whether to show a histogram as well
+    'show_hist': True,
 }
 
 
 def main(path: str, cs_range: str, gr_range: str, max_binned_colony_size: int, bins: int, runs: int, repeats: int,
-         sample_size: int, smoothing: bool) -> None:
+         sample_size: int, smoothing: bool, show_hist: True) -> None:
     """Main function of this script"""
     fig, ax = plt.subplots(figsize=(16, 16))
     data = load_data(path=path, cs_range=cs_range, gr_range=gr_range)
@@ -42,7 +44,8 @@ def main(path: str, cs_range: str, gr_range: str, max_binned_colony_size: int, b
         ax.plot(cs, gr, color='black', alpha=0.5, marker='.')
     title = get_plot_title(runs=runs, repeats=repeats, sample_size=sample_size)
     format_plot(fig, ax, title, smoothing)
-    plt.show()
+    if show_hist is True:
+        plot_histogram(data=data)
 
 
 def load_data(path: str, cs_range: str, gr_range: str) -> pd.DataFrame:
@@ -148,6 +151,20 @@ def get_axes_params(ax: plt.Axes, coord: str) -> Tuple[float, float, float]:
     max_coord = max([v for line in ax.lines for v in coord_data(line)()])
     min_coord = min([v for line in ax.lines for v in coord_data(line)()])
     return start_coord, max_coord, min_coord
+
+
+def plot_histogram(data: pd.DataFrame) -> None:
+    """Plots a histogram of the colony size, indicating the "cuts" made by the binning process"""
+    fig, ax = plt.subplots()
+    grouped_data = data.groupby('bins')
+    ax.hist(np.log2(data['CS1']))
+    ax.set_xlabel('log2(colony size)')
+    ax.set_ylabel('count')
+    ax.set_title('Colony size histogram')
+    for xmax, label in zip(grouped_data.max()['CS1'], grouped_data.count()['CS1']):
+        ax.axvline(np.log2(xmax), c='k')
+        ax.text(np.log2(xmax), ax.get_ylim()[1] * 0.9, f'{xmax}\nn={label}')
+    plt.show()
 
 
 if __name__ == '__main__':
