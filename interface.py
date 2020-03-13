@@ -1,5 +1,5 @@
-import random
 import sys
+from random import random
 
 from PySide2.QtWidgets import QApplication, QMainWindow, QPushButton, QVBoxLayout, QWidget
 from matplotlib.backends.backend_qt5agg import (FigureCanvasQTAgg as Canvas, NavigationToolbar2QT as NavToolbar)
@@ -15,7 +15,7 @@ class MyMainWindow(QMainWindow):
         self.ax = self.fig.add_subplot(111)
         self.canvas = Canvas(self.fig)
         self.canvas.setParent(frame)
-        self.btn = QPushButton(self, text='Generate random plot')
+        self.btn = QPushButton(self, 'Generate random plot')
         self.btn.clicked.connect(self.plot_random)
         vbox = QVBoxLayout()
         vbox.addWidget(self.btn)
@@ -27,8 +27,8 @@ class MyMainWindow(QMainWindow):
     def plot_random(self):
         """plot"""
         self.ax.clear()
-
-        self.ax.plot([random.random(), random.random()], [random.random(), random.random()])
+        self.ax.plot([random(), random(), random(), random(), random(), random()],
+                     [random(), random(), random(), random(), random(), random()])
         self.canvas.draw()
 
 
