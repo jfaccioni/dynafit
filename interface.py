@@ -8,7 +8,7 @@ from matplotlib.pyplot import Figure
 
 class MyMainWindow(QMainWindow):
     def __init__(self, parent=None):
-        """Init"""
+        """init"""
         super(MyMainWindow, self).__init__(parent)
         frame = QWidget(self)
         self.fig = Figure(facecolor="white")
