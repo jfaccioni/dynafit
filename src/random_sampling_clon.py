@@ -1,11 +1,11 @@
-import random_sampling
+from src import random_sampling
 
 import matplotlib.pyplot as plt
 import openpyxl
 import pandas as pd
 
 SETTINGS = {
-    'path': 'clonogenico CS1 GR2.xlsx',
+    'path': '../data/clonogenico CS1 GR2.xlsx',
     'start_on_row': 3,
     'max_binned_colony_size': 0,
     'bins': 6,

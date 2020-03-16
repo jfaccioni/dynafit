@@ -9,7 +9,7 @@ import pandas as pd
 
 SETTINGS = {
     # path to input file.
-    'path': 'data/Pasta para Ju.xlsx',
+    'path': '../data/Pasta para Ju.xlsx',
     # Colony Size cell range in input Excel file
     'cs_range': 'A4:A1071',
     # Growth Rate range in input Excel file

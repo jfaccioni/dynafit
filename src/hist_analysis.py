@@ -1,11 +1,11 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-from random_sampling import add_bins, load_data
+from src.random_sampling import add_bins, load_data
 
 SETTINGS = {
     # path to input file.
-    'path': 'Pasta para Ju.xlsx',
+    'path': '../data/Pasta para Ju.xlsx',
     # Colony Size cell range in input Excel file
     'cs_range': 'A4:A1071',
     # Growth Rate range in input Excel file
