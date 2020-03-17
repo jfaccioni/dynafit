@@ -4,57 +4,27 @@ from typing import Tuple, Optional
 import scipy.interpolate as interpolate
 import matplotlib.pyplot as plt
 import numpy as np
-import openpyxl
+from openpyxl import Workbook
 import pandas as pd
 
-SETTINGS = {
-    # path to input file.
-    'path': '../data/Pasta para Ju.xlsx',
-    # Colony Size cell range in input Excel file
-    'cs_range': 'A4:A1071',
-    # Growth Rate range in input Excel file
-    'gr_range': 'B4:B1071',
-    # max size of colony to not be binned, e.g. a parameter of 10 makes colonies of up to 10 cells to be
-    # plotted individually in CVP, instead of being binned along with other cell sizes.
-    'max_binned_colony_size': 10,
-    # number of bins in which to divide the population after the max number of individual colony sizes
-    # determined by the parameter before.
-    'bins': 5,
-    # number of independent runs.
-    'runs': 10,
-    # number of repeated samplings to perform for each run.
-    'repeats': 10,
-    # number of instances in each sample.
-    'sample_size': 20,
-    # whether to interpolate mean value in CVP.
-    'smoothing': False,
-    # whether to show a histogram as well
-    'show_hist': True,
-}
 
-
-def main(path: str, cs_range: str, gr_range: str, max_binned_colony_size: int, bins: int, runs: int, repeats: int,
-         sample_size: int, smoothing: bool, show_hist: bool, fig: Optional[plt.Figure] = None,
-         ax: Optional[plt.Axes] = None) -> None:
+def main(data: Workbook, sheetname: str, cs_range: str, gr_range: str, max_binned_colony_size: int, bins: int,
+         runs: int, repeats: int, sample_size: int, fig: plt.Figure, ax: plt.Axes) -> None:
     """Main function of this script"""
-    if fig is None or ax is None:
-        fig, ax = plt.subplots(figsize=(16, 16))
-    data = load_data(path=path, cs_range=cs_range, gr_range=gr_range)
+    data = load_data(data=data, sheetname=sheetname, cs_range=cs_range, gr_range=gr_range)
     data = add_bins(data=data, max_binned_colony_size=max_binned_colony_size, bins=bins)
     for _ in range(runs):
         cs, gr = sample_data(data=data, repeats=repeats, sample_size=sample_size)
-        ax.plot(cs, gr, color='black', alpha=0.5, marker='.')
+        ax.plot(cs, gr, color=(0, 0, 0, 0), marker='.', markeredgecolor='k', markerfacecolor='gray')
     title = get_plot_title(runs=runs, repeats=repeats, sample_size=sample_size)
-    format_plot(fig, ax, title, smoothing)
-    if show_hist is True:
-        plot_histogram(data=data)
+    format_plot(fig, ax, title)
+    # plot_histogram(data=data)
 
 
-def load_data(path: str, cs_range: str, gr_range: str) -> pd.DataFrame:
+def load_data(data: Workbook, sheetname: str, cs_range: str, gr_range: str) -> pd.DataFrame:
     """Loads relevant data from input file as a Pandas DataFrame.
     ASSUMES: data to be in cell range A4 to B1071; modify this as needed"""
-    wb = openpyxl.load_workbook(path)
-    ws = wb.active
+    ws = data[sheetname]
     values = [(cs[0].value, gr[0].value) for cs, gr in zip(ws[cs_range], ws[gr_range])]
     return pd.DataFrame(values, columns=('CS1', 'GR2'))
 
@@ -95,19 +65,17 @@ def random_sampling(data: pd.DataFrame, repeats: int, sample_size: int) -> pd.Da
 
 def get_plot_title(runs, repeats, sample_size) -> str:
     """Returns a string for the plot's title."""
-    return (f'CVP\n'
-            f'independent runs: {runs}\n'
-            f'sampling repeats: {repeats}\n'
-            f'sample size: {sample_size}')
+    return f'CVP\nindependent runs: {runs}, sampling repeats: {repeats}, sample size: {sample_size}'
 
 
-def format_plot(fig: plt.Figure, ax: plt.Axes, title: str, smoothing: bool) -> None:
+def format_plot(fig: plt.Figure, ax: plt.Axes, title: str) -> None:
     """Adds formatting to CVP."""
-    fig.suptitle(title)
+
+    fig.suptitle(title, fontsize=12)
     ax.set_xlabel('log2(colony size)')
     ax.set_ylabel('log2(variance)')
     set_limits(ax)
-    plot_mean_line(ax, smoothing)
+    plot_mean_line(ax)
     plot_supporting_lines(ax)
 
 
@@ -128,14 +96,11 @@ def plot_supporting_lines(ax: plt.Axes) -> None:
     ax.axvline(start_x, color='black', lw=3)
 
 
-def plot_mean_line(ax: plt.Axes, smoothing: bool) -> None:
+def plot_mean_line(ax: plt.Axes) -> None:
     """Plots mean line for all data in ax."""
     xs = [x for x in ax.lines[0].get_xdata()]
     ys = np.array([line.get_ydata() for line in ax.lines]).mean(axis=0)
     ax.plot(xs, ys, color='green', alpha=0.9, lw=3)
-    if smoothing is True:
-        smooth_xs, smooth_ys = perform_smoothing(np.array(xs), ys)
-        ax.plot(smooth_xs, smooth_ys, color='purple', alpha=0.9, lw=3)
 
 
 def perform_smoothing(xs: np.ndarray, ys: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
@@ -166,8 +131,3 @@ def plot_histogram(data: pd.DataFrame) -> None:
     for xmax, label in zip(grouped_data.max()['CS1'], grouped_data.count()['CS1']):
         ax.axvline(np.log2(xmax), c='k')
         ax.text(np.log2(xmax), ax.get_ylim()[1] * 0.9, f'{xmax}\nn={label}')
-    plt.show()
-
-
-if __name__ == '__main__':
-    main(**SETTINGS)

@@ -2,11 +2,19 @@
   <dictionary name="juliano">
     <words>
       <w>clonogenico</w>
+      <w>colsize</w>
       <w>dfgui</w>
+      <w>dynafit</w>
       <w>groupname</w>
       <w>hbox</w>
+      <w>maxbin</w>
       <w>navbar</w>
+      <w>nbins</w>
+      <w>nrepeats</w>
+      <w>nruns</w>
+      <w>samplesize</w>
       <w>scipy</w>
+      <w>sheetname</w>
       <w>vbox</w>
       <w>xlsx</w>
       <w>xmax</w>
