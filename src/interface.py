@@ -5,6 +5,7 @@ from PySide2.QtWidgets import (QApplication, QComboBox, QFileDialog, QFormLayout
                                QMainWindow, QPushButton, QSpinBox, QVBoxLayout, QWidget)
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as Canvas, NavigationToolbar2QT as Navbar
 from matplotlib.pyplot import Figure
+import matplotlib; matplotlib.rc('font', size=8)
 
 from src.logic import main as dynafit
 
@@ -13,6 +14,7 @@ class DynaFitGUI(QMainWindow):
     def __init__(self):
         """init"""
         super().__init__()
+        self.resize(1080, 680)
         self.data = None
 
         self.frame = QWidget(self)
@@ -107,13 +109,22 @@ class DynaFitGUI(QMainWindow):
         self.plot_btn.clicked.connect(self.plot_dynafit)
         left_column.addWidget(self.plot_btn)
 
+        AAC_layout = QHBoxLayout()
+        self.AAC_label = QLabel(self, text='Measured area above curve:')
+        self.AAC_num = QLabel(self, text='None')
+        AAC_layout.addWidget(self.AAC_label)
+        AAC_layout.addWidget(self.AAC_num)
+        left_column.addLayout(AAC_layout)
+
         # Right column (plots)
         right_column = QVBoxLayout()
         columns.addLayout(right_column)
 
         # CVP canvas
         self.fig = Figure(facecolor="white")
-        self.ax = self.fig.add_subplot(111)
+        self.CVP_ax = self.fig.add_axes([0.1, 0.2, 0.85, 0.75])
+        self.histogram_ax = self.fig.add_axes([0.05, 0.0, 0.9, 0.1])
+        self.histogram_ax.set_axis_off()
         self.canvas = Canvas(self.fig)
         self.canvas.setParent(self)
         right_column.addWidget(self.canvas)
@@ -139,12 +150,14 @@ class DynaFitGUI(QMainWindow):
             self.input_sheetname.addItem('No data yet')
 
     def plot_dynafit(self):
-        self.ax.clear()
+        self.CVP_ax.clear()
+        self.histogram_ax.clear()
         self.plot_btn.setText('Plotting...')
         self.plot_btn.setEnabled(False)
         try:
             settings = self.get_gui_settings()
             dynafit(**settings)
+            self.histogram_ax.set_axis_off()
             self.canvas.draw()
         except Exception as e:
             print(e)
@@ -177,7 +190,8 @@ class DynaFitGUI(QMainWindow):
         settings['repeats'] = self.nrepeats_num.value()
         settings['sample_size'] = self.samplesize_num.value()
         settings['fig'] = self.fig
-        settings['ax'] = self.ax
+        settings['cvp_ax'] = self.CVP_ax
+        settings['hist_ax'] = self.histogram_ax
 
         return settings
 

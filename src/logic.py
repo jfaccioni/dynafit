@@ -1,24 +1,25 @@
 from operator import attrgetter
-from typing import Tuple, Optional
+from typing import Tuple
 
-import scipy.interpolate as interpolate
 import matplotlib.pyplot as plt
 import numpy as np
-from openpyxl import Workbook
 import pandas as pd
+import scipy.interpolate as interpolate
+from openpyxl import Workbook
 
 
 def main(data: Workbook, sheetname: str, cs_range: str, gr_range: str, max_binned_colony_size: int, bins: int,
-         runs: int, repeats: int, sample_size: int, fig: plt.Figure, ax: plt.Axes) -> None:
+         runs: int, repeats: int, sample_size: int, fig: plt.Figure, cvp_ax: plt.Axes, hist_ax: plt.Axes) -> None:
     """Main function of this script"""
     data = load_data(data=data, sheetname=sheetname, cs_range=cs_range, gr_range=gr_range)
     data = add_bins(data=data, max_binned_colony_size=max_binned_colony_size, bins=bins)
     for _ in range(runs):
         cs, gr = sample_data(data=data, repeats=repeats, sample_size=sample_size)
-        ax.plot(cs, gr, color=(0, 0, 0, 0), marker='.', markeredgecolor='k', markerfacecolor='gray')
+        cvp_ax.plot(cs, gr, color=(0, 0, 0, 0), marker='.', markeredgecolor='k', markerfacecolor='gray')
     title = get_plot_title(runs=runs, repeats=repeats, sample_size=sample_size)
-    format_plot(fig, ax, title)
-    # plot_histogram(data=data)
+    mean_line = format_plot(fig=fig, ax=cvp_ax, title=title)
+    plot_histogram(data=data, ax=hist_ax)
+    return area_above_curve(mean_line=mean_line)
 
 
 def load_data(data: Workbook, sheetname: str, cs_range: str, gr_range: str) -> pd.DataFrame:
@@ -65,18 +66,17 @@ def random_sampling(data: pd.DataFrame, repeats: int, sample_size: int) -> pd.Da
 
 def get_plot_title(runs, repeats, sample_size) -> str:
     """Returns a string for the plot's title."""
-    return f'CVP\nindependent runs: {runs}, sampling repeats: {repeats}, sample size: {sample_size}'
+    return f'CVP: independent runs={runs}, sampling repeats={repeats}, sample size={sample_size}'
 
 
-def format_plot(fig: plt.Figure, ax: plt.Axes, title: str) -> None:
+def format_plot(fig: plt.Figure, ax: plt.Axes, title: str) -> plt.Line2D:
     """Adds formatting to CVP."""
-
-    fig.suptitle(title, fontsize=12)
-    ax.set_xlabel('log2(colony size)')
-    ax.set_ylabel('log2(variance)')
+    fig.suptitle(title)
+    ax.set_xlabel('log2(Colony Size)')
+    ax.set_ylabel('log2(Growth Rate variance)')
     set_limits(ax)
-    plot_mean_line(ax)
     plot_supporting_lines(ax)
+    return plot_mean_line(ax)
 
 
 def set_limits(ax: plt.Axes) -> None:
@@ -96,11 +96,16 @@ def plot_supporting_lines(ax: plt.Axes) -> None:
     ax.axvline(start_x, color='black', lw=3)
 
 
-def plot_mean_line(ax: plt.Axes) -> None:
+def plot_mean_line(ax: plt.Axes) -> plt.Line2D:
     """Plots mean line for all data in ax."""
     xs = [x for x in ax.lines[0].get_xdata()]
     ys = np.array([line.get_ydata() for line in ax.lines]).mean(axis=0)
-    ax.plot(xs, ys, color='green', alpha=0.9, lw=3)
+    return ax.plot(xs, ys, color='green', alpha=0.9, lw=3)
+
+
+def area_above_curve(mean_line: plt.Line2D) -> None:
+    """Returns the area above the curve (mean green line)."""
+    triangle_area = max_x * () / 2
 
 
 def perform_smoothing(xs: np.ndarray, ys: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
@@ -120,14 +125,10 @@ def get_axes_params(ax: plt.Axes, coord: str) -> Tuple[float, float, float]:
     return start_coord, max_coord, min_coord
 
 
-def plot_histogram(data: pd.DataFrame) -> None:
+def plot_histogram(data: pd.DataFrame, ax: plt.Axes) -> None:
     """Plots a histogram of the colony size, indicating the "cuts" made by the binning process"""
-    fig, ax = plt.subplots()
     grouped_data = data.groupby('bins')
     ax.hist(np.log2(data['CS1']))
-    ax.set_xlabel('log2(colony size)')
-    ax.set_ylabel('count')
-    ax.set_title('Colony size histogram')
     for xmax, label in zip(grouped_data.max()['CS1'], grouped_data.count()['CS1']):
         ax.axvline(np.log2(xmax), c='k')
-        ax.text(np.log2(xmax), ax.get_ylim()[1] * 0.9, f'{xmax}\nn={label}')
+        ax.text(np.log2(xmax), ax.get_ylim()[1] * 0.5, f'<={int(xmax)}\nn={label}')
