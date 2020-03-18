@@ -1,13 +1,16 @@
 import sys
-
+import traceback
 import openpyxl
+import matplotlib
 from PySide2.QtWidgets import (QApplication, QComboBox, QFileDialog, QFormLayout, QHBoxLayout, QLabel, QLineEdit,
-                               QMainWindow, QPushButton, QSpinBox, QVBoxLayout, QWidget)
+                               QMainWindow, QMessageBox, QPushButton, QSpinBox, QVBoxLayout, QWidget)
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as Canvas, NavigationToolbar2QT as Navbar
 from matplotlib.pyplot import Figure
-import matplotlib; matplotlib.rc('font', size=8)
 
-from src.logic import main as dynafit
+from src.logic import dynafit
+
+# set a small font for plots
+matplotlib.rc('font', size=8)
 
 
 class DynaFitGUI(QMainWindow):
@@ -38,7 +41,7 @@ class DynaFitGUI(QMainWindow):
 
         # Input fields
         self.input_btn = QPushButton(self, text='Load input')
-        self.input_btn.clicked.connect(self.load_input_file)
+        self.input_btn.clicked.connect(self.load_input_dialog)
         self.input_filename = QLabel(self, text='data loaded: none')
         left_column.addWidget(self.input_btn)
         left_column.addWidget(self.input_filename)
@@ -106,7 +109,7 @@ class DynaFitGUI(QMainWindow):
 
         # Plot button
         self.plot_btn = QPushButton(self, text='Generate CVP')
-        self.plot_btn.clicked.connect(self.plot_dynafit)
+        self.plot_btn.clicked.connect(self.dynafit_run)
         left_column.addWidget(self.plot_btn)
 
         AAC_layout = QHBoxLayout()
@@ -123,8 +126,8 @@ class DynaFitGUI(QMainWindow):
         # CVP canvas
         self.fig = Figure(facecolor="white")
         self.CVP_ax = self.fig.add_axes([0.1, 0.2, 0.85, 0.75])
-        self.histogram_ax = self.fig.add_axes([0.05, 0.0, 0.9, 0.1])
-        self.histogram_ax.set_axis_off()
+        self.hist_ax = self.fig.add_axes([0.05, 0.0, 0.9, 0.1])
+        self.hist_ax.set_axis_off()
         self.canvas = Canvas(self.fig)
         self.canvas.setParent(self)
         right_column.addWidget(self.canvas)
@@ -132,68 +135,74 @@ class DynaFitGUI(QMainWindow):
         columns.setStretch(1, 100)
         main_layout.setStretch(1, 100)
 
-    def load_input_file(self):
+    def load_input_dialog(self):
         """load"""
-        options = QFileDialog.Options()
-        options |= QFileDialog.DontUseNativeDialog
-        query, _ = QFileDialog.getOpenFileName(self, "Select input file", "", "All Files (*)", options=options)
+        query, _ = QFileDialog.getOpenFileName(self, 'Select input file', '', 'Excel Spreadsheet (*.xlsx)')
         if query:
+            self.load_input_data(query=query)
+
+    def load_input_data(self, query: str) -> None:
+        """load"""
+        try:
             self.data = openpyxl.load_workbook(query)
+        except Exception as e:
+            self.show_error(e)
+        else:
             self.input_filename.setText(f'data loaded: {query.split("/")[-1]}')
             self.input_sheetname.clear()
             self.input_sheetname.addItems(self.data.sheetnames)
-        else:
-            print('no file loaded')
-            self.data = None
-            self.input_filename.setText('data loaded: none')
-            self.input_sheetname.clear()
-            self.input_sheetname.addItem('No data yet')
 
-    def plot_dynafit(self):
+    def dynafit_run(self):
+        self.dynafit_setup()
+        try:
+            dynafit(**self.get_dynafit_settings())
+        except Exception as e:
+            self.dynafit_raised_exception(e)
+        else:
+            self.dynafit_no_exceptions_raised()
+        finally:
+            self.dynafit_cleanup()
+
+    def dynafit_setup(self):
         self.CVP_ax.clear()
-        self.histogram_ax.clear()
+        self.hist_ax.clear()
         self.plot_btn.setText('Plotting...')
         self.plot_btn.setEnabled(False)
-        try:
-            settings = self.get_gui_settings()
-            dynafit(**settings)
-            self.histogram_ax.set_axis_off()
-            self.canvas.draw()
-        except Exception as e:
-            print(e)
-        finally:
-            self.plot_btn.setText('Generate CVP')
-            self.plot_btn.setEnabled(True)
 
-    def get_gui_settings(self):
-        settings = {'data': self.data, 'sheetname': self.input_sheetname.currentText()}
-        ws = settings['data'][settings['sheetname']]
-        cs_start_cell = self.CS_start_textbox.text()
-        if self.CS_end_textbox.text():
-            settings['cs_range'] = f'{cs_start_cell}:{self.CS_end_textbox.text()}'
-        else:
-            col = ws[cs_start_cell].column_letter
-            num = str(ws.max_row)
-            settings['cs_range'] = f'{cs_start_cell}:{col+num}'
+    def dynafit_raised_exception(self, e):
+        self.show_error(e)
+        self.CVP_ax.clear()
+        self.hist_ax.clear()
 
-        gr_start_cell = self.GR_start_textbox.text()
-        if self.GR_end_textbox.text():
-            settings['gr_range'] = f'{gr_start_cell}:{self.GR_end_textbox.text()}'
-        else:
-            col = ws[gr_start_cell].column_letter
-            num = str(ws.max_row)
-            settings['gr_range'] = f'{gr_start_cell}:{col + num}'
+    def get_dynafit_settings(self):
+        return {
+            'data': self.data,
+            'sheetname': self.input_sheetname.currentText(),
+            'cs_start_cell': self.CS_start_textbox.text(),
+            'cs_end_cell': self.CS_end_textbox.text(),
+            'gr_start_cell': self.GR_start_textbox.text(),
+            'gr_end_cell': self.GR_end_textbox.text(),
+            'max_binned_colony_size': self.maxbin_colsize_num.value(),
+            'bins': self.nbins_num.value(),
+            'runs': self.nruns_num.value(),
+            'repeats': self.nrepeats_num.value(),
+            'sample_size': self.samplesize_num.value(),
+            'fig': self.fig,
+            'cvp_ax': self.CVP_ax,
+            'hist_ax': self.hist_ax,
+        }
 
-        settings['max_binned_colony_size'] = self.maxbin_colsize_num.value()
-        settings['bins'] = self.nbins_num.value()
-        settings['runs'] = self.nruns_num.value()
-        settings['repeats'] = self.nrepeats_num.value()
-        settings['sample_size'] = self.samplesize_num.value()
-        settings['fig'] = self.fig
-        settings['cvp_ax'] = self.CVP_ax
-        settings['hist_ax'] = self.histogram_ax
+    def dynafit_no_exceptions_raised(self):
+        self.canvas.draw()
 
-        return settings
+    def dynafit_cleanup(self):
+        self.plot_btn.setText('Generate CVP')
+        self.plot_btn.setEnabled(True)
+        self.hist_ax.set_axis_off()
+
+
+    def show_error(self, error):
+        QMessageBox.critical(self, 'An error occurred!', f'{error}\nfull traceback:\n\n{traceback.format_exc()}')
 
 
 if __name__ == '__main__':

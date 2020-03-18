@@ -7,59 +7,67 @@ import pandas as pd
 import scipy.interpolate as interpolate
 from openpyxl import Workbook
 
+from src.validator import ExcelValidator
 
-def main(data: Workbook, sheetname: str, cs_range: str, gr_range: str, max_binned_colony_size: int, bins: int,
-         runs: int, repeats: int, sample_size: int, fig: plt.Figure, cvp_ax: plt.Axes, hist_ax: plt.Axes) -> None:
+
+def dynafit(data: Workbook, sheetname: str, cs_start_cell: str, cs_end_cell: str, gr_start_cell: str, gr_end_cell: str,
+            max_binned_colony_size: int, bins: int, runs: int, repeats: int, sample_size: int, fig: plt.Figure,
+            cvp_ax: plt.Axes, hist_ax: plt.Axes) -> None:
     """Main function of this script"""
-    data = load_data(data=data, sheetname=sheetname, cs_range=cs_range, gr_range=gr_range)
-    data = add_bins(data=data, max_binned_colony_size=max_binned_colony_size, bins=bins)
+    df = ExcelValidator(data=data, sheetname=sheetname, start_cell_01=cs_start_cell, end_cell_01=cs_end_cell,
+                        start_cell_02=gr_start_cell, end_cell_02=gr_end_cell).validated_data
+    df = add_bins(df=df, max_binned_colony_size=max_binned_colony_size, bins=bins)
     for _ in range(runs):
-        cs, gr = sample_data(data=data, repeats=repeats, sample_size=sample_size)
+        cs, gr = sample_data(df=df, repeats=repeats, sample_size=sample_size)
         cvp_ax.plot(cs, gr, color=(0, 0, 0, 0), marker='.', markeredgecolor='k', markerfacecolor='gray')
     title = get_plot_title(runs=runs, repeats=repeats, sample_size=sample_size)
-    mean_line = format_plot(fig=fig, ax=cvp_ax, title=title)
-    plot_histogram(data=data, ax=hist_ax)
-    return area_above_curve(mean_line=mean_line)
+    format_plot(fig=fig, ax=cvp_ax, title=title)
+    plot_histogram(df=df, ax=hist_ax)
+    # TODO: line below causes mismatched size error
+    # return area_above_curve(mean_line=mean_line)
 
 
-def load_data(data: Workbook, sheetname: str, cs_range: str, gr_range: str) -> pd.DataFrame:
+def load_data(data: Workbook, sheetname: str, cs_start_cell: str, cs_end_cell: str, gr_start_cell: str,
+              gr_end_cell: str) -> pd.DataFrame:
     """Loads relevant data from input file as a Pandas DataFrame.
     ASSUMES: data to be in cell range A4 to B1071; modify this as needed"""
     ws = data[sheetname]
+    cs_range = f'{cs_start_cell}:{cs_end_cell}'
+    gr_range = f'{gr_start_cell}:{gr_end_cell}'
     values = [(cs[0].value, gr[0].value) for cs, gr in zip(ws[cs_range], ws[gr_range])]
-    return pd.DataFrame(values, columns=('CS1', 'GR2'))
+    return pd.DataFrame(values, columns=('CS', 'GR'))
 
 
-def add_bins(data: pd.DataFrame, max_binned_colony_size: int, bins: int) -> pd.DataFrame:
+def add_bins(df: pd.DataFrame, max_binned_colony_size: int, bins: int) -> pd.DataFrame:
     """Returns the data DataFrame with a "bins" column, which divides the population of values in
     bins with a close number of instances in them"""
-    data['bins'] = data['CS1']
-    bin_condition = data['bins'] > max_binned_colony_size
-    binned_data = pd.qcut(data.loc[bin_condition]['CS1'], bins, labels=False)
+    df['bins'] = df['CS']
+    bin_condition = df['bins'] > max_binned_colony_size
+    binned_data = pd.qcut(df.loc[bin_condition]['CS'], bins, labels=False)
     binned_data += max_binned_colony_size + 1
-    binned_data = pd.concat([binned_data, data.loc[~bin_condition]['bins']])
-    return data.assign(bins=binned_data)
+    binned_data = pd.concat([binned_data, df.loc[~bin_condition]['bins']])
+    return df.assign(bins=binned_data)
 
 
-def sample_data(data: pd.DataFrame, repeats: int, sample_size: int) -> Tuple[np.ndarray, np.ndarray]:
+def sample_data(df: pd.DataFrame, repeats: int, sample_size: int) -> Tuple[np.ndarray, np.ndarray]:
     """Samples data and returns a tuple of arrays ready for plotting. This accounts for any
     necessary transformations before plotting, like log2."""
-    sampling_result = random_sampling(data, repeats, sample_size)
+    sampling_result = random_sampling(df, repeats, sample_size)
     cs = np.log2(sampling_result.index)
     gr = sampling_result.mean(axis=1)  # means of each repeat across columns
     return cs, gr
 
 
-def random_sampling(data: pd.DataFrame, repeats: int, sample_size: int) -> pd.DataFrame:
+def random_sampling(df: pd.DataFrame, repeats: int, sample_size: int) -> pd.DataFrame:
     """Samples each bin in the population. This is performed for a specific number of times (repeats),
     and each sampling contains a specific number of instances (sample_size)."""
-    index = data.groupby('bins').mean()['CS1']
+    index = df.groupby('bins').mean()['CS']
     output = pd.DataFrame(index=index)
     for i in range(repeats):
         variances = []
-        for groupname, group in data.groupby('bins'):
+        for groupname, group in df.groupby('bins'):
             sample = group.sample(n=sample_size)
-            variances.append(sample['GR2'].var())
+            variances.append(sample['GR'].var())
         output[f'repeat_{i+1}'] = variances
     return output.applymap(np.log2)
 
@@ -75,8 +83,8 @@ def format_plot(fig: plt.Figure, ax: plt.Axes, title: str) -> plt.Line2D:
     ax.set_xlabel('log2(Colony Size)')
     ax.set_ylabel('log2(Growth Rate variance)')
     set_limits(ax)
+    plot_mean_line(ax)
     plot_supporting_lines(ax)
-    return plot_mean_line(ax)
 
 
 def set_limits(ax: plt.Axes) -> None:
@@ -105,7 +113,8 @@ def plot_mean_line(ax: plt.Axes) -> plt.Line2D:
 
 def area_above_curve(mean_line: plt.Line2D) -> None:
     """Returns the area above the curve (mean green line)."""
-    triangle_area = max_x * () / 2
+    # triangle_area = max_x * () / 2
+    pass
 
 
 def perform_smoothing(xs: np.ndarray, ys: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
@@ -125,10 +134,10 @@ def get_axes_params(ax: plt.Axes, coord: str) -> Tuple[float, float, float]:
     return start_coord, max_coord, min_coord
 
 
-def plot_histogram(data: pd.DataFrame, ax: plt.Axes) -> None:
+def plot_histogram(df: pd.DataFrame, ax: plt.Axes) -> None:
     """Plots a histogram of the colony size, indicating the "cuts" made by the binning process"""
-    grouped_data = data.groupby('bins')
-    ax.hist(np.log2(data['CS1']))
-    for xmax, label in zip(grouped_data.max()['CS1'], grouped_data.count()['CS1']):
+    grouped_data = df.groupby('bins')
+    ax.hist(np.log2(df['CS']))
+    for xmax, label in zip(grouped_data.max()['CS'], grouped_data.count()['CS']):
         ax.axvline(np.log2(xmax), c='k')
         ax.text(np.log2(xmax), ax.get_ylim()[1] * 0.5, f'<={int(xmax)}\nn={label}')
