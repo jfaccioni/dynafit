@@ -3,8 +3,8 @@ import traceback
 
 import matplotlib
 import openpyxl
-from PySide2.QtWidgets import (QApplication, QComboBox, QFileDialog, QFormLayout, QHBoxLayout, QLabel, QLineEdit,
-                               QMainWindow, QMessageBox, QPushButton, QSpinBox, QVBoxLayout, QWidget)
+from PySide2.QtWidgets import (QApplication, QComboBox, QFileDialog, QFormLayout, QFrame, QGridLayout, QHBoxLayout,
+                               QLabel, QLineEdit, QMainWindow, QMessageBox, QPushButton, QSpinBox, QVBoxLayout, QWidget)
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as Canvas, NavigationToolbar2QT as Navbar
 from matplotlib.pyplot import Figure
 
@@ -23,67 +23,89 @@ class DynaFitGUI(QMainWindow):
         self.resize(1080, 680)
         self.data = None
 
+        # ### MAIN SETUP
+
+        # --Central widget--
         self.frame = QWidget(self)
         self.setCentralWidget(self.frame)
+        # --Main layout--
         main_layout = QVBoxLayout()
         self.frame.setLayout(main_layout)
-
+        # --Top bar--
+        # App header
         top_bar = QVBoxLayout()
-        columns = QHBoxLayout()
         main_layout.addLayout(top_bar)
+        # --Columns--
+        # App body
+        columns = QHBoxLayout()
         main_layout.addLayout(columns)
-
-        # Top bar
-        self.title = QLabel(self, text="DynaFit GUI")
-        self.title.setStyleSheet('QLabel {font-size: 18pt; font-weight: 600}')
-        top_bar.addWidget(self.title)
-
-        # Left column (options)
+        # --Left column--
+        # Region where user selects parameters
         left_column = QVBoxLayout()
         columns.addLayout(left_column)
+        # --Right column--
+        # Region where plots are displayed
+        right_column = QVBoxLayout()
+        columns.addLayout(right_column)
 
-        # Input fields
-        self.input_btn = QPushButton(self, text='Load input')
-        self.input_btn.clicked.connect(self.load_input_dialog)
-        self.input_filename = QLabel(self, text='data loaded: none')
-        left_column.addWidget(self.input_btn)
-        left_column.addWidget(self.input_filename)
+        # ### TOP BAR (TITLE)
 
-        sheetname_layout = QHBoxLayout()
-        self.input_sheetname_label = QLabel(self, text='Sheetname to analyse')
+        self.title = QLabel(self, text='DynaFit GUI', styleSheet='font-size: 16pt; font-weight: 600')
+        top_bar.addWidget(self.title)
+
+        # ### LEFT COLUMN
+
+        # --Input frame--
+        # Region where users select worksheet and spreadsheet to analyse
+        self.input_frame = QFrame(self, frameShape=QFrame.Box)
+        self.input_frame.setLayout(QGridLayout())
+        # Input button
+        self.input_button = QPushButton(self, text='Load input data')
+        self.input_button.clicked.connect(self.load_data_dialog)
+        self.input_frame.layout().addWidget(self.input_button, 0, 0, 1, 2)
+        # Input filename and label
+        self.input_filename_label = QLabel(self, text='Data loaded:', styleSheet='font-weight: 600')
+        self.input_frame.layout().addWidget(self.input_filename_label, 1, 0)
+        self.input_filename = QLabel(self, text='None')
+        self.input_frame.layout().addWidget(self.input_filename, 1, 1)
+        # Input sheetname and label
+        self.input_sheetname_label = QLabel(self, text='Sheetname to analyse:', styleSheet='font-weight: 600')
         self.input_sheetname = QComboBox(self)
         self.input_sheetname.addItem('No data yet')
-        sheetname_layout.addWidget(self.input_sheetname_label)
-        sheetname_layout.addWidget(self.input_sheetname)
-        left_column.addLayout(sheetname_layout)
+        self.input_frame.layout().addWidget(self.input_sheetname_label, 2, 0)
+        self.input_frame.layout().addWidget(self.input_sheetname, 2, 1)
+        # add section above to left column
+        self.input_frame.layout()
+        left_column.addWidget(self.input_frame)
 
-        # CS Columns
+        # --Cell range frame--
+        # Region where user selects the ranges of cells containing CS and GR data
+        self.cell_range_frame = QFrame(self, frameShape=QFrame.Box)
+        self.cell_range_frame.setLayout(QFormLayout())
+        # CS label
         self.CS_label = QLabel(self, text='Select Colony Size column (blank for entire column)')
-        left_column.addWidget(self.CS_label)
-        self.CS_layout = QHBoxLayout()
+        self.cell_range_frame.layout().addRow(self.CS_label, None)
+        # CS start
         self.CS_start_label = QLabel(self, text='From:')
         self.CS_start_textbox = QLineEdit(self, placeholderText="A1")
-        self.CS_layout.addWidget(self.CS_start_label)
-        self.CS_layout.addWidget(self.CS_start_textbox)
+        self.cell_range_frame.layout().addRow(self.CS_start_label, self.CS_start_textbox)
+        # CS end
         self.CS_end_label = QLabel(self, text='To:')
         self.CS_end_textbox = QLineEdit(self, placeholderText="None")
-        self.CS_layout.addWidget(self.CS_end_label)
-        self.CS_layout.addWidget(self.CS_end_textbox)
-        left_column.addLayout(self.CS_layout)
-
-        # GR Columns
+        self.cell_range_frame.layout().addRow(self.CS_end_label, self.CS_end_textbox)
+        # GR label
         self.GR_label = QLabel(self, text='Select Growth Rate column (blank for entire column)')
-        left_column.addWidget(self.GR_label)
-        self.GR_layout = QHBoxLayout()
+        self.cell_range_frame.layout().addRow(self.GR_label, None)
+        # GR start
         self.GR_start_label = QLabel(self, text='From:')
         self.GR_start_textbox = QLineEdit(self, placeholderText="A1")
-        self.GR_layout.addWidget(self.GR_start_label)
-        self.GR_layout.addWidget(self.GR_start_textbox)
+        self.cell_range_frame.layout().addRow(self.GR_start_label, self.GR_start_textbox)
+        # GR end
         self.GR_end_label = QLabel(self, text='To:')
         self.GR_end_textbox = QLineEdit(self, placeholderText="None")
-        self.GR_layout.addWidget(self.GR_end_label)
-        self.GR_layout.addWidget(self.GR_end_textbox)
-        left_column.addLayout(self.GR_layout)
+        self.cell_range_frame.layout().addRow(self.GR_end_label, self.GR_end_textbox)
+
+        left_column.addWidget(self.cell_range_frame)
 
         # Options grid
         self.options_grid = QFormLayout()
@@ -122,9 +144,6 @@ class DynaFitGUI(QMainWindow):
         area_above_curve_layout.addWidget(self.AAC_num)
         left_column.addLayout(area_above_curve_layout)
 
-        # Right column (plots)
-        right_column = QVBoxLayout()
-        columns.addLayout(right_column)
 
         # CVP canvas
         self.fig = Figure(facecolor="white")
@@ -138,20 +157,20 @@ class DynaFitGUI(QMainWindow):
         columns.setStretch(1, 100)
         main_layout.setStretch(1, 100)
 
-    def load_input_dialog(self):
+    def load_data_dialog(self):
         """load"""
         query, _ = QFileDialog.getOpenFileName(self, 'Select input file', '', 'Excel Spreadsheet (*.xlsx)')
         if query:
-            self.load_input_data(query=query)
+            self.load_data(query=query)
 
-    def load_input_data(self, query: str) -> None:
+    def load_data(self, query: str) -> None:
         """load"""
         try:
             self.data = openpyxl.load_workbook(query)
         except Exception as e:
             self.show_error(e)
         else:
-            self.input_filename.setText(f'data loaded: {query.split("/")[-1]}')
+            self.input_filename.setText(f'{query.split("/")[-1]}')
             self.input_sheetname.clear()
             self.input_sheetname.addItems(self.data.sheetnames)
 
@@ -209,7 +228,7 @@ class DynaFitGUI(QMainWindow):
         box.show()
 
     def debug(self):
-        self.load_input_data(query='data/Pasta para Ju.xlsx')
+        self.load_data(query='data/Pasta para Ju.xlsx')
         self.CS_start_textbox.setText('A4')
         self.GR_start_textbox.setText('B4')
 

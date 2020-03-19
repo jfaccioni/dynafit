@@ -23,7 +23,6 @@ def dynafit(data: Workbook, sheetname: str, cs_start_cell: str, cs_end_cell: str
     title = get_plot_title(runs=runs, repeats=repeats, sample_size=sample_size)
     format_plot(fig=fig, ax=cvp_ax, title=title)
     plot_histogram(df=df, ax=hist_ax)
-    # TODO: line below causes mismatched size error
     # return area_above_curve(mean_line=mean_line)
 
 
