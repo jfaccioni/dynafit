@@ -1,7 +1,8 @@
 import sys
 import traceback
-import openpyxl
+
 import matplotlib
+import openpyxl
 from PySide2.QtWidgets import (QApplication, QComboBox, QFileDialog, QFormLayout, QHBoxLayout, QLabel, QLineEdit,
                                QMainWindow, QMessageBox, QPushButton, QSpinBox, QVBoxLayout, QWidget)
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as Canvas, NavigationToolbar2QT as Navbar
@@ -11,6 +12,8 @@ from src.logic import dynafit
 
 # set a small font for plots
 matplotlib.rc('font', size=8)
+# set debugging flag
+DEBUG = True
 
 
 class DynaFitGUI(QMainWindow):
@@ -112,12 +115,12 @@ class DynaFitGUI(QMainWindow):
         self.plot_btn.clicked.connect(self.dynafit_run)
         left_column.addWidget(self.plot_btn)
 
-        AAC_layout = QHBoxLayout()
+        area_above_curve_layout = QHBoxLayout()
         self.AAC_label = QLabel(self, text='Measured area above curve:')
         self.AAC_num = QLabel(self, text='None')
-        AAC_layout.addWidget(self.AAC_label)
-        AAC_layout.addWidget(self.AAC_num)
-        left_column.addLayout(AAC_layout)
+        area_above_curve_layout.addWidget(self.AAC_label)
+        area_above_curve_layout.addWidget(self.AAC_num)
+        left_column.addLayout(area_above_curve_layout)
 
         # Right column (plots)
         right_column = QVBoxLayout()
@@ -163,17 +166,6 @@ class DynaFitGUI(QMainWindow):
         finally:
             self.dynafit_cleanup()
 
-    def dynafit_setup(self):
-        self.CVP_ax.clear()
-        self.hist_ax.clear()
-        self.plot_btn.setText('Plotting...')
-        self.plot_btn.setEnabled(False)
-
-    def dynafit_raised_exception(self, e):
-        self.show_error(e)
-        self.CVP_ax.clear()
-        self.hist_ax.clear()
-
     def get_dynafit_settings(self):
         return {
             'data': self.data,
@@ -192,6 +184,17 @@ class DynaFitGUI(QMainWindow):
             'hist_ax': self.hist_ax,
         }
 
+    def dynafit_setup(self):
+        self.CVP_ax.clear()
+        self.hist_ax.clear()
+        self.plot_btn.setText('Plotting...')
+        self.plot_btn.setEnabled(False)
+
+    def dynafit_raised_exception(self, e):
+        self.show_error(e)
+        self.CVP_ax.clear()
+        self.hist_ax.clear()
+
     def dynafit_no_exceptions_raised(self):
         self.canvas.draw()
 
@@ -200,13 +203,21 @@ class DynaFitGUI(QMainWindow):
         self.plot_btn.setEnabled(True)
         self.hist_ax.set_axis_off()
 
-
     def show_error(self, error):
-        QMessageBox.critical(self, 'An error occurred!', f'{error}\nfull traceback:\n\n{traceback.format_exc()}')
+        text = f'{error.__class__.__name__}:\n{error}'
+        box = QMessageBox(self, windowTitle='An error occurred!', text=text, detailedText=traceback.format_exc())
+        box.show()
+
+    def debug(self):
+        self.load_input_data(query='data/Pasta para Ju.xlsx')
+        self.CS_start_textbox.setText('A4')
+        self.GR_start_textbox.setText('B4')
 
 
 if __name__ == '__main__':
     app = QApplication()
     dfgui = DynaFitGUI()
+    if DEBUG:
+        dfgui.debug()
     dfgui.show()
     sys.exit(app.exec_())

@@ -14,8 +14,8 @@ def dynafit(data: Workbook, sheetname: str, cs_start_cell: str, cs_end_cell: str
             max_binned_colony_size: int, bins: int, runs: int, repeats: int, sample_size: int, fig: plt.Figure,
             cvp_ax: plt.Axes, hist_ax: plt.Axes) -> None:
     """Main function of this script"""
-    df = ExcelValidator(data=data, sheetname=sheetname, start_cell_01=cs_start_cell, end_cell_01=cs_end_cell,
-                        start_cell_02=gr_start_cell, end_cell_02=gr_end_cell).validated_data
+    df = ExcelValidator(data=data, sheetname=sheetname, cs_start_cell=cs_start_cell, cs_end_cell=cs_end_cell,
+                        gr_start_cell=gr_start_cell, gr_end_cell=gr_end_cell).data
     df = add_bins(df=df, max_binned_colony_size=max_binned_colony_size, bins=bins)
     for _ in range(runs):
         cs, gr = sample_data(df=df, repeats=repeats, sample_size=sample_size)
@@ -66,7 +66,11 @@ def random_sampling(df: pd.DataFrame, repeats: int, sample_size: int) -> pd.Data
     for i in range(repeats):
         variances = []
         for groupname, group in df.groupby('bins'):
-            sample = group.sample(n=sample_size)
+            try:
+                sample = group.sample(n=sample_size)
+            except ValueError:
+                raise SamplingError(f'Sample size {sample_size} is larger than the population with CS '
+                                    f'<= {int(groupname)} (group has only {len(group)} instances).')
             variances.append(sample['GR'].var())
         output[f'repeat_{i+1}'] = variances
     return output.applymap(np.log2)
@@ -77,7 +81,7 @@ def get_plot_title(runs, repeats, sample_size) -> str:
     return f'CVP: independent runs={runs}, sampling repeats={repeats}, sample size={sample_size}'
 
 
-def format_plot(fig: plt.Figure, ax: plt.Axes, title: str) -> plt.Line2D:
+def format_plot(fig: plt.Figure, ax: plt.Axes, title: str) -> None:
     """Adds formatting to CVP."""
     fig.suptitle(title)
     ax.set_xlabel('log2(Colony Size)')
@@ -111,8 +115,9 @@ def plot_mean_line(ax: plt.Axes) -> plt.Line2D:
     return ax.plot(xs, ys, color='green', alpha=0.9, lw=3)
 
 
-def area_above_curve(mean_line: plt.Line2D) -> None:
+def area_above_curve() -> None:
     """Returns the area above the curve (mean green line)."""
+    # TODO: calculate this
     # triangle_area = max_x * () / 2
     pass
 
@@ -141,3 +146,8 @@ def plot_histogram(df: pd.DataFrame, ax: plt.Axes) -> None:
     for xmax, label in zip(grouped_data.max()['CS'], grouped_data.count()['CS']):
         ax.axvline(np.log2(xmax), c='k')
         ax.text(np.log2(xmax), ax.get_ylim()[1] * 0.5, f'<={int(xmax)}\nn={label}')
+
+
+class SamplingError(Exception):
+    def __init__(self, *args):
+        super().__init__(*args)
