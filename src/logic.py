@@ -4,7 +4,6 @@ from typing import Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import scipy.interpolate as interpolate
 from openpyxl import Workbook
 
 from src.validator import ExcelValidator
@@ -85,17 +84,15 @@ def format_plot(fig: plt.Figure, ax: plt.Axes, title: str) -> None:
     fig.suptitle(title)
     ax.set_xlabel('log2(Colony Size)')
     ax.set_ylabel('log2(Growth Rate variance)')
-    set_limits(ax)
     plot_mean_line(ax)
     plot_supporting_lines(ax)
 
 
-def set_limits(ax: plt.Axes) -> None:
-    """Sets ax limits based on max and min values of XY lines."""
-    _, max_x, min_x = get_axes_params(ax, 'x')
-    _, max_y, min_y = get_axes_params(ax, 'y')
-    ax.set_xlim(min_x - (abs(min_x) * 0.05), max_x + (abs(max_x) * 0.05))
-    ax.set_ylim(min_y - (abs(min_y) * 0.05), max_y + (abs(max_y) * 0.05))
+def plot_mean_line(ax: plt.Axes) -> plt.Line2D:
+    """Plots mean line for all data in ax."""
+    xs = [x for x in ax.lines[0].get_xdata()]
+    ys = np.array([line.get_ydata() for line in ax.lines]).mean(axis=0)
+    return ax.plot(xs, ys, color='green', alpha=0.9, lw=3)
 
 
 def plot_supporting_lines(ax: plt.Axes) -> None:
@@ -107,28 +104,6 @@ def plot_supporting_lines(ax: plt.Axes) -> None:
     ax.axvline(start_x, color='black', lw=3)
 
 
-def plot_mean_line(ax: plt.Axes) -> plt.Line2D:
-    """Plots mean line for all data in ax."""
-    xs = [x for x in ax.lines[0].get_xdata()]
-    ys = np.array([line.get_ydata() for line in ax.lines]).mean(axis=0)
-    return ax.plot(xs, ys, color='green', alpha=0.9, lw=3)
-
-
-def area_above_curve() -> None:
-    """Returns the area above the curve (mean green line)."""
-    # TODO: calculate this
-    # triangle_area = max_x * () / 2
-    pass
-
-
-def perform_smoothing(xs: np.ndarray, ys: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-    """Performs smoothing with scipy.interpolate"""
-    # noinspection PyArgumentList
-    new_xs = np.linspace(xs.min(), xs.max(), 100)
-    spline = interpolate.BSpline(*interpolate.splrep(xs, ys, s=5, k=4), extrapolate=False)
-    return new_xs, spline(new_xs)
-
-
 def get_axes_params(ax: plt.Axes, coord: str) -> Tuple[float, float, float]:
     """Gets start, max and min position of all lines in ax for X or Y coordinate."""
     coord_data = attrgetter(f'get_{coord}data')
@@ -136,6 +111,13 @@ def get_axes_params(ax: plt.Axes, coord: str) -> Tuple[float, float, float]:
     max_coord = max([v for line in ax.lines for v in coord_data(line)()])
     min_coord = min([v for line in ax.lines for v in coord_data(line)()])
     return start_coord, max_coord, min_coord
+
+
+def area_above_curve() -> None:
+    """Returns the area above the curve (mean green line)."""
+    # TODO: calculate this
+    # triangle_area = max_x * () / 2
+    pass
 
 
 def plot_histogram(df: pd.DataFrame, ax: plt.Axes) -> None:
@@ -148,5 +130,6 @@ def plot_histogram(df: pd.DataFrame, ax: plt.Axes) -> None:
 
 
 class SamplingError(Exception):
+    """Error raised when there are less instances in the binned population than the sample size selected"""
     def __init__(self, *args):
         super().__init__(*args)

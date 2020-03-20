@@ -12,9 +12,11 @@
       <w>nbins</w>
       <w>nrepeats</w>
       <w>nruns</w>
+      <w>openpyxl</w>
       <w>samplesize</w>
       <w>scipy</w>
       <w>sheetname</w>
+      <w>threadpool</w>
       <w>vbox</w>
       <w>xlsx</w>
       <w>xmax</w>
