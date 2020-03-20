@@ -323,7 +323,8 @@ class WorkerSignals(QObject):
 
 
 class BadExcelFile(Exception):
-    """Exception raised when openpyxl cannot parse the input Excel file."""
+    """Exception raised when openpyxl cannot parse the input Excel file. This is the only exception raised by the GUI
+     itself, and not by the ExcelValidator class, since the Excel spreadsheet names must be read in advance"""
     def __init__(self, *args):
         super().__init__(*args)
 
