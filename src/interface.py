@@ -16,7 +16,7 @@ from src.logic import dynafit
 # Set a small font for plots
 matplotlib.rc('font', size=8)
 # Set debugging flag
-DEBUG = False
+DEBUG = True
 
 
 class DynaFitGUI(QMainWindow):
@@ -126,10 +126,6 @@ class DynaFitGUI(QMainWindow):
         self.nbins_label = QLabel(self, text='Number of bins for remaining population')
         self.nbins_num = QSpinBox(self, minimum=0, value=5, maximum=20, singleStep=1)
         self.options_frame.layout().addRow(self.nbins_label, self.nbins_num)
-        # Number of runs parameter
-        self.nruns_label = QLabel(self, text='Number of independent runs to perform')
-        self.nruns_num = QSpinBox(self, minimum=0, value=10, maximum=100, singleStep=1)
-        self.options_frame.layout().addRow(self.nruns_label, self.nruns_num)
         # Number of repeats parameter
         self.nrepeats_label = QLabel(self, text='Number of repeated samples for each run/CS')
         self.nrepeats_num = QSpinBox(self, minimum=0, value=10, maximum=100, singleStep=1)
@@ -221,7 +217,6 @@ class DynaFitGUI(QMainWindow):
             'gr_end_cell': self.GR_end_textbox.text(),
             'max_binned_colony_size': self.maxbin_colsize_num.value(),
             'bins': self.nbins_num.value(),
-            'runs': self.nruns_num.value(),
             'repeats': self.nrepeats_num.value(),
             'sample_size': self.samplesize_num.value(),
             'fig': self.fig,
@@ -296,7 +291,6 @@ class DynaFitWorker(QRunnable):
             self.func(*self.args, **self.kwargs)
         except Exception as e:
             self.emit_error(e)
-
         else:
             self.signals.success.emit()
         finally:
