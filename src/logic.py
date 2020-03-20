@@ -10,11 +10,13 @@ from src.validator import ExcelValidator
 
 def dynafit(data: Workbook, sheetname: str, cs_start_cell: str, cs_end_cell: str, gr_start_cell: str, gr_end_cell: str,
             max_binned_colony_size: int, bins: int, repeats: int, sample_size: int, fig: plt.Figure, cvp_ax: plt.Axes,
-            hist_ax: plt.Axes) -> None:
+            hist_ax: plt.Axes) -> float:
     """Main function of this script"""
+    # Validate input data
+    ev = ExcelValidator(data=data, sheetname=sheetname, cs_start_cell=cs_start_cell, cs_end_cell=cs_end_cell,
+                        gr_start_cell=gr_start_cell, gr_end_cell=gr_end_cell)
+    df = ev.data
     # Run DynaFit analysis
-    df = ExcelValidator(data=data, sheetname=sheetname, cs_start_cell=cs_start_cell, cs_end_cell=cs_end_cell,
-                        gr_start_cell=gr_start_cell, gr_end_cell=gr_end_cell).data
     binned_df = add_bins(df=df, max_binned_colony_size=max_binned_colony_size, bins=bins)
     bootstrapped_df = bootstrap_data(df=binned_df, repeats=repeats, sample_size=sample_size)
     # Calculate mean line
@@ -24,12 +26,12 @@ def dynafit(data: Workbook, sheetname: str, cs_start_cell: str, cs_end_cell: str
     plot_supporting_lines(mean_line=mean_line, ax=cvp_ax)
     plot_mean_line(ax=cvp_ax, mean_line=mean_line)
     plot_histogram(df=binned_df, ax=hist_ax)
-    # Format resulting plot
-    fig.suptitle(get_plot_title(repeats=repeats, sample_size=sample_size))
+    # Format figure
+    fig.suptitle(f'CVP: sampling repeats={repeats}, sample size={sample_size}')
     cvp_ax.set_xlabel('log2(Colony Size)')
     cvp_ax.set_ylabel('log2(Growth Rate variance)')
-    # Return AAC value to GUI
-    # return area_above_curve(df=df)
+    area_above_curve = calculate_area_above_curve(df=bootstrapped_df)
+    return area_above_curve
 
 
 def add_bins(df: pd.DataFrame, max_binned_colony_size: int, bins: int) -> pd.DataFrame:
@@ -84,19 +86,14 @@ def plot_supporting_lines(ax: plt.Axes, mean_line: Tuple[np.ndarray, np.ndarray]
     ax.axvline(min_x, color='black', lw=3)
 
 
-def get_plot_title(repeats, sample_size) -> str:
-    """Returns a string for the plot's title."""
-    return f'CVP: sampling repeats={repeats}, sample size={sample_size}'
-
-
 def plot_histogram(df: pd.DataFrame, ax: plt.Axes) -> None:
     """Plots a histogram of the colony size, indicating the "cuts" made by the binning process"""
     ax.hist(np.log2(df['CS']))
     grouped_data = df.groupby('bins')
     positions = np.log2(grouped_data.max()['CS'])
-    bin_min_labels = np.core.defchararray.add('> ', np.roll(grouped_data.max()['CS'], 1).astype(str))
+    bin_min_labels = np.core.defchararray.add('> ', np.roll(grouped_data.max()['CS'], 1).astype(int).astype(str))
     bin_min_labels[0] = '> 0'
-    bin_max_labels = np.core.defchararray.add('<= ', grouped_data.max()['CS'].astype(str))
+    bin_max_labels = np.core.defchararray.add('<= ', grouped_data.max()['CS'].astype(int).astype(str))
     bin_max_labels[-1] = '<= inf'
     number_of_instances = grouped_data.count()['CS']
     for pos, bin_min, bin_max, num in zip(positions, bin_min_labels, bin_max_labels, number_of_instances):
@@ -105,8 +102,8 @@ def plot_histogram(df: pd.DataFrame, ax: plt.Axes) -> None:
         ax.text(pos, ax.get_ylim()[1] * 0.5, text)
 
 
-def area_above_curve() -> None:
+def calculate_area_above_curve(df: pd.DataFrame) -> float:
     """Returns the area above the curve (mean green line)."""
     # TODO: calculate this
     # triangle_area = max_x * () / 2
-    pass
+    return 0.8

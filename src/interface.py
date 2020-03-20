@@ -1,11 +1,11 @@
 import sys
 import traceback
-from typing import Any, Callable, Dict, Tuple
+from typing import Any, Dict
 from zipfile import BadZipFile
 
 import matplotlib
 import openpyxl
-from PySide2.QtCore import QObject, QRunnable, QThreadPool, Signal, Slot
+from PySide2.QtCore import QThreadPool
 from PySide2.QtWidgets import (QApplication, QComboBox, QFileDialog, QFormLayout, QFrame, QGridLayout, QHBoxLayout,
                                QLabel, QLineEdit, QMainWindow, QMessageBox, QPushButton, QSpinBox, QVBoxLayout, QWidget)
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as Canvas, NavigationToolbar2QT as Navbar
@@ -191,18 +191,25 @@ class DynaFitGUI(QMainWindow):
             self.input_sheetname.addItems(self.data.sheetnames)
 
     def dynafit_run(self) -> None:
-        """Runs DynaFit in a separate Worker thread"""
-        # This part works as a Try block
-        worker = DynaFitWorker(func=dynafit, **self.get_dynafit_settings())
-        worker.signals.started.connect(self.dynafit_setup)
-        # This part works as an Except block
-        worker.signals.error.connect(self.dynafit_raised_exception)
-        # This part works as an Else block
-        worker.signals.success.connect(self.dynafit_no_exceptions_raised)
-        # This part works as a Finally block
-        worker.signals.finished.connect(self.dynafit_cleanup)
-        # Run DynaFit function with parameters from GUI
-        self.threadpool.start(worker)
+        """Runs DynaFit"""
+        try:
+            self.dynafit_setup()
+            dynafit_settings = self.get_dynafit_settings()
+            area_above_curve = dynafit(**dynafit_settings)
+        except Exception as e:
+            self.dynafit_raised_exception(e)
+        else:
+            self.dynafit_no_exceptions_raised(area_above_curve)
+        finally:
+            self.dynafit_cleanup()
+
+    def dynafit_setup(self) -> None:
+        """Called by DynaFitWorker when it starts running.
+        Sets up DynaFit by modifying the label on the plot button and clearing both Axes"""
+        self.plot_button.setText('Plotting...')
+        self.plot_button.setEnabled(False)
+        self.CVP_ax.clear()
+        self.histogram_ax.clear()
 
     def get_dynafit_settings(self) -> Dict[str, Any]:
         """Bundles the information and parameters selected by the user into a single
@@ -224,25 +231,19 @@ class DynaFitGUI(QMainWindow):
             'hist_ax': self.histogram_ax,
         }
 
-    def dynafit_setup(self) -> None:
-        """Called by DynaFitWorker when it starts running.
-        Sets up DynaFit by modifying the label on the plot button and clearing both Axes"""
-        self.plot_button.setText('Plotting...')
-        self.plot_button.setEnabled(False)
-        self.CVP_ax.clear()
-        self.histogram_ax.clear()
-
-    def dynafit_raised_exception(self, error_tuple: Tuple[str, str]) -> None:
+    def dynafit_raised_exception(self, error: Exception) -> None:
         """Called by DynaFitWorker if any Exception is raised.
         Clears both Axes and raises Exception as a message box"""
         self.CVP_ax.clear()
         self.histogram_ax.clear()
-        self.raise_error_as_tuple(error_tuple)
+        name = f'{error.__class__.__name__}:\n{error}'
+        trace = traceback.format_exc()
+        self.show_error_message((name, trace))
 
-    def dynafit_no_exceptions_raised(self):
+    def dynafit_no_exceptions_raised(self, area_above_curve):
         """Called by DynaFitWorker if no Exceptions are raised.
         Currently unimplemented"""
-        pass
+        self.area_above_curve_number.setText(str(area_above_curve))
 
     def dynafit_cleanup(self):
         """Called by DynaFitWorker when it finished running (regardless of Exceptions).
@@ -252,14 +253,7 @@ class DynaFitGUI(QMainWindow):
         self.histogram_ax.set_axis_off()
         self.canvas.draw()
 
-    def raise_error_as_exception(self, error: Exception) -> None:
-        """Function responsible for re-raising an error, but in a message box.
-        Argument must be an Exception"""
-        name = f'{error.__class__.__name__}:\n{error}'
-        trace = traceback.format_exc()
-        self.raise_error_as_tuple((name, trace))
-
-    def raise_error_as_tuple(self, error_tuple):
+    def show_error_message(self, error_tuple):
         """Function responsible for re-raising an error, but in a message box.
         Argument must be a a tuple containing the string of the error name and the stack trace"""
         error, trace = error_tuple
@@ -271,49 +265,6 @@ class DynaFitGUI(QMainWindow):
         self.load_data(query='data/example.xlsx')
         self.CS_start_textbox.setText('A2')
         self.GR_start_textbox.setText('B2')
-
-
-class DynaFitWorker(QRunnable):
-    """Worker thread for DynaFit analysis. Avoids unresponsive GUI."""
-    def __init__(self, func: Callable, *args, **kwargs) -> None:
-        """Init method of DynaFitWorker class"""
-        super().__init__()
-        self.func = func
-        self.args = args
-        self.kwargs = kwargs
-        self.signals = WorkerSignals()
-
-    @Slot()
-    def run(self) -> None:
-        """Runs the Worker thread"""
-        self.signals.started.emit()
-        try:
-            self.func(*self.args, **self.kwargs)
-        except Exception as e:
-            self.emit_error(e)
-        else:
-            self.signals.success.emit()
-        finally:
-            self.signals.finished.emit()
-
-    def emit_error(self, e: Exception) -> None:
-        """Function responsible for emitting an error back to the main thread.
-        Argument must be an Exception"""
-        name = f'{e.__class__.__name__}:\n{e}'
-        trace = traceback.format_exc()
-        self.signals.error.emit((name, trace))
-
-
-class WorkerSignals(QObject):
-    """Defines the signals available from a running worker thread. Supported signals are:
-       - Started: Worker has begun working. Nothing is emitted.
-       - Finished: Worker has done executing (either naturally or by an Exception). Nothing is emitted.
-       - Success: Worker has finished executing without errors. Nothing is emitted.
-       - Error: an Exception was raised. Emits a tuple containing an Exception object and the traceback as a string."""
-    started = Signal()
-    finished = Signal()
-    success = Signal()
-    error = Signal(Exception)
 
 
 class BadExcelFile(Exception):
