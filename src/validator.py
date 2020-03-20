@@ -107,8 +107,8 @@ class ExcelValidator:
                 try:
                     float(cell.value)
                 except ValueError:
-                    cell_str = f'{column}:{i}'
-                    raise BadCellValueError(f'Could not convert value {cell.value} on cell {cell_str} to number.')
+                    cell_str = f'"{column}{i}"'
+                    raise BadCellValueError(f'Could not convert value "{cell.value}" on cell {cell_str} to numerical.')
 
     @staticmethod
     def get_cell_values(rows: Tuple[Tuple[Cell]]) -> List[float]:
