@@ -13,7 +13,7 @@ from src.logic import dynafit
 # set a small font for plots
 matplotlib.rc('font', size=8)
 # set debugging flag
-DEBUG = True
+DEBUG = False
 
 
 class DynaFitGUI(QMainWindow):
