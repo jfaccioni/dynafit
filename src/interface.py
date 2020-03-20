@@ -5,7 +5,7 @@ from typing import Callable
 
 import matplotlib
 import openpyxl
-from PySide2.QtCore import QObject, QRunnable, Signal, Slot
+from PySide2.QtCore import QObject, QRunnable, QThreadPool, Signal, Slot
 from PySide2.QtWidgets import (QApplication, QComboBox, QFileDialog, QFormLayout, QFrame, QGridLayout, QHBoxLayout,
                                QLabel, QLineEdit, QMainWindow, QMessageBox, QPushButton, QSpinBox, QVBoxLayout, QWidget)
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as Canvas, NavigationToolbar2QT as Navbar
@@ -24,6 +24,7 @@ class DynaFitGUI(QMainWindow):
         """init"""
         super().__init__()
         self.resize(1080, 680)
+        self.threadpool = QThreadPool()
         self.data = None
 
         # ### MAIN SETUP
@@ -193,15 +194,12 @@ class DynaFitGUI(QMainWindow):
             self.input_sheetname.addItems(self.data.sheetnames)
 
     def dynafit_run(self):
-        self.dynafit_setup()
-        try:
-            dynafit(**self.get_dynafit_settings())
-        except Exception as e:
-            self.dynafit_raised_exception(e)
-        else:
-            self.dynafit_no_exceptions_raised()
-        finally:
-            self.dynafit_cleanup()
+        worker = Worker(func=dynafit, **self.get_dynafit_settings())
+        worker.signals.started.connect(self.dynafit_setup)
+        worker.signals.finished.connect(self.dynafit_cleanup)
+        worker.signals.success.connect(self.dynafit_no_exceptions_raised)
+        worker.signals.error.connect(self.dynafit_raised_exception)
+        self.threadpool.start(worker)
 
     def get_dynafit_settings(self):
         return {
@@ -222,27 +220,29 @@ class DynaFitGUI(QMainWindow):
         }
 
     def dynafit_setup(self):
-        self.CVP_ax.clear()
-        self.histogram_ax.clear()
         self.plot_button.setText('Plotting...')
         self.plot_button.setEnabled(False)
-
-    def dynafit_raised_exception(self, e):
-        self.show_error(e)
         self.CVP_ax.clear()
         self.histogram_ax.clear()
 
+    def dynafit_raised_exception(self, e):
+        self.CVP_ax.clear()
+        self.histogram_ax.clear()
+        self.show_error(e)
+
     def dynafit_no_exceptions_raised(self):
-        self.canvas.draw()
+        pass
 
     def dynafit_cleanup(self):
         self.plot_button.setText('Generate CVP')
         self.plot_button.setEnabled(True)
         self.histogram_ax.set_axis_off()
+        self.canvas.draw()
 
-    def show_error(self, error):
+    def show_error(self, error_tuple):
+        error, trace = error_tuple
         text = f'{error.__class__.__name__}:\n{error}'
-        box = QMessageBox(self, windowTitle='An error occurred!', text=text, detailedText=traceback.format_exc())
+        box = QMessageBox(self, windowTitle='An error occurred!', text=text, detailedText=trace)
         box.show()
 
     def debug(self):
@@ -267,28 +267,11 @@ class Worker(QRunnable):
         try:
             self.func(*self.args, **self.kwargs)
         except Exception as error:
-            trace = traceback.format_exc()
-            self.signals.error.emit((error, trace))
+            self.signals.error.emit((error, traceback.format_exc()))
         else:
             self.signals.success.emit()
         finally:
             self.signals.finished.emit()
-
-
-class Waiter(QRunnable):
-    """Wait until this is the last Worker running."""
-    def __init__(self, waiter_func: Callable) -> None:
-        super().__init__()
-        self.waiter_func = waiter_func
-        self.signals = WorkerSignals()
-
-    @Slot()
-    def run(self) -> None:
-        """Runs the Worker thread."""
-        self.signals.started.emit()
-        while self.waiter_func() > 1:
-            time.sleep(0.1)
-        self.signals.finished.emit()
 
 
 class WorkerSignals(QObject):
