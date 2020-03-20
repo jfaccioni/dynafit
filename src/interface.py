@@ -1,8 +1,11 @@
 import sys
+import time
 import traceback
+from typing import Callable
 
 import matplotlib
 import openpyxl
+from PySide2.QtCore import QObject, QRunnable, Signal, Slot
 from PySide2.QtWidgets import (QApplication, QComboBox, QFileDialog, QFormLayout, QFrame, QGridLayout, QHBoxLayout,
                                QLabel, QLineEdit, QMainWindow, QMessageBox, QPushButton, QSpinBox, QVBoxLayout, QWidget)
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as Canvas, NavigationToolbar2QT as Navbar
@@ -246,6 +249,58 @@ class DynaFitGUI(QMainWindow):
         self.load_data(query='data/Pasta para Ju.xlsx')
         self.CS_start_textbox.setText('A4')
         self.GR_start_textbox.setText('B4')
+
+
+class Worker(QRunnable):
+    """Worker thread for DynaFit analysis. Avoids unresponsive GUI."""
+    def __init__(self, func: Callable, *args, **kwargs) -> None:
+        super().__init__()
+        self.func = func
+        self.args = args
+        self.kwargs = kwargs
+        self.signals = WorkerSignals()
+
+    @Slot()
+    def run(self) -> None:
+        """Runs the Worker thread."""
+        self.signals.started.emit()
+        try:
+            self.func(*self.args, **self.kwargs)
+        except Exception as error:
+            trace = traceback.format_exc()
+            self.signals.error.emit((error, trace))
+        else:
+            self.signals.success.emit()
+        finally:
+            self.signals.finished.emit()
+
+
+class Waiter(QRunnable):
+    """Wait until this is the last Worker running."""
+    def __init__(self, waiter_func: Callable) -> None:
+        super().__init__()
+        self.waiter_func = waiter_func
+        self.signals = WorkerSignals()
+
+    @Slot()
+    def run(self) -> None:
+        """Runs the Worker thread."""
+        self.signals.started.emit()
+        while self.waiter_func() > 1:
+            time.sleep(0.1)
+        self.signals.finished.emit()
+
+
+class WorkerSignals(QObject):
+    """Defines the signals available from a running worker thread. Supported signals are:
+         Started: Worker has begun working. Nothing is emitted.
+         Finished: Worker has done executing (either naturally or by an Exception). Nothing is emitted.
+         Success: Worker has finished executing without errors. Nothing is emitted.
+         Error: an Exception was raised. Emits a tuple containing an Exception object and the traceback as a string."""
+    started = Signal()
+    finished = Signal()
+    success = Signal()
+    error = Signal(Exception)
 
 
 if __name__ == '__main__':
