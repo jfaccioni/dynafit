@@ -120,19 +120,19 @@ class DynaFitGUI(QMainWindow):
         self.options_frame.setLayout(QFormLayout())
         # Max colony size parameter
         self.maxbin_colsize_label = QLabel(self, text='Max binned colony size')
-        self.maxbin_colsize_num = QSpinBox(self, minimum=0, value=5, maximum=20, singleStep=1)
+        self.maxbin_colsize_num = QSpinBox(self, minimum=0, value=5, maximum=100, singleStep=1)
         self.options_frame.layout().addRow(self.maxbin_colsize_label, self.maxbin_colsize_num)
         # Number of bins parameter
         self.nbins_label = QLabel(self, text='Number of bins for remaining population')
-        self.nbins_num = QSpinBox(self, minimum=0, value=5, maximum=20, singleStep=1)
+        self.nbins_num = QSpinBox(self, minimum=0, value=5, maximum=100, singleStep=1)
         self.options_frame.layout().addRow(self.nbins_label, self.nbins_num)
         # Number of repeats parameter
         self.nrepeats_label = QLabel(self, text='Number of repeated samples for each run/CS')
-        self.nrepeats_num = QSpinBox(self, minimum=0, value=10, maximum=100, singleStep=1)
+        self.nrepeats_num = QSpinBox(self, minimum=0, value=10, maximum=10000, singleStep=1)
         self.options_frame.layout().addRow(self.nrepeats_label, self.nrepeats_num)
         # Sample size parameter
         self.samplesize_label = QLabel(self, text='Sample size')
-        self.samplesize_num = QSpinBox(self, minimum=0, value=20, maximum=100, singleStep=1)
+        self.samplesize_num = QSpinBox(self, minimum=0, value=20, maximum=10000, singleStep=1)
         self.options_frame.layout().addRow(self.samplesize_label, self.samplesize_num)
         # Add section above to left column
         left_column.addWidget(self.options_frame)
