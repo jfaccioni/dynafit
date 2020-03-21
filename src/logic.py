@@ -16,6 +16,7 @@ def dynafit(data: Workbook, sheetname: str, cs_start_cell: str, cs_end_cell: str
     ev = ExcelValidator(data=data, sheetname=sheetname, cs_start_cell=cs_start_cell, cs_end_cell=cs_end_cell,
                         gr_start_cell=gr_start_cell, gr_end_cell=gr_end_cell)
     df = ev.data
+    # df = filter_data(df)
     # Run DynaFit analysis
     binned_df = add_bins(df=df, max_binned_colony_size=max_binned_colony_size, bins=bins)
     bootstrapped_df = bootstrap_data(df=binned_df, repeats=repeats, sample_size=sample_size)
@@ -33,6 +34,11 @@ def dynafit(data: Workbook, sheetname: str, cs_start_cell: str, cs_end_cell: str
     cvp_ax.set_xlabel('log2(Colony Size)')
     cvp_ax.set_ylabel('log2(Growth Rate variance)')
     return area_above_curve(mean_line=mean_line, start_end=start_end)
+
+
+def filter_data(df: pd.DataFrame) -> pd.DataFrame:
+    """Filter low CS values (colonies with less than 1 cell should not exist)"""
+    return df.loc[df['CS'] >= 1]
 
 
 def add_bins(df: pd.DataFrame, max_binned_colony_size: int, bins: int) -> pd.DataFrame:
