@@ -8,15 +8,15 @@ from openpyxl import Workbook
 from src.validator import ExcelValidator
 
 
-def dynafit(data: Workbook, sheetname: str, cs_start_cell: str, cs_end_cell: str, gr_start_cell: str, gr_end_cell: str,
-            max_binned_colony_size: int, bins: int, repeats: int, sample_size: int, fig: plt.Figure, cvp_ax: plt.Axes,
-            hist_ax: plt.Axes) -> float:
+def dynafit(data: Workbook, filename: str, sheetname: str, cs_start_cell: str, cs_end_cell: str, gr_start_cell: str,
+            gr_end_cell: str, max_binned_colony_size: int, bins: int, repeats: int, sample_size: int, fig: plt.Figure,
+            cvp_ax: plt.Axes, hist_ax: plt.Axes) -> float:
     """Main function of this script"""
     # Validate input data
     ev = ExcelValidator(data=data, sheetname=sheetname, cs_start_cell=cs_start_cell, cs_end_cell=cs_end_cell,
                         gr_start_cell=gr_start_cell, gr_end_cell=gr_end_cell)
     df = ev.data
-    # df = filter_data(df)
+    df = filter_bad_data(df)
     # Run DynaFit analysis
     binned_df = add_bins(df=df, max_binned_colony_size=max_binned_colony_size, bins=bins)
     bootstrapped_df = bootstrap_data(df=binned_df, repeats=repeats, sample_size=sample_size)
@@ -25,18 +25,23 @@ def dynafit(data: Workbook, sheetname: str, cs_start_cell: str, cs_end_cell: str
     mean_line = get_mean_line_arrays(df=bootstrapped_df)
     start_end = get_start_end_values(mean_line=mean_line)
     # Plot DynaFit results
-    plot_bootstrap_scatter(df=bootstrapped_df, ax=cvp_ax)
     plot_supporting_lines(start_end=start_end, ax=cvp_ax)
+    plot_bootstrap_scatter(df=bootstrapped_df, ax=cvp_ax, max_binned_colony_size=max_binned_colony_size)
     plot_mean_line(mean_line=mean_line, ax=cvp_ax)
     plot_histogram(df=binned_df, ax=hist_ax)
+    area_above_curve = calculate_area_above_curve(mean_line=mean_line, start_end=start_end)
     # Format figure
-    fig.suptitle(f'CVP: sampling repeats={repeats}, sample size={sample_size}')
+    fig.suptitle(f'file={filename}, sheet={sheetname}, '
+                 f'max binned CS={max_binned_colony_size}, bins={bins}, '
+                 f'sampling repeats={repeats}, sample size={sample_size}', fontsize=8)
     cvp_ax.set_xlabel('log2(Colony Size)')
     cvp_ax.set_ylabel('log2(Growth Rate variance)')
-    return area_above_curve(mean_line=mean_line, start_end=start_end)
+    cvp_ax.text(0.1, 0.1, s=f'AAC = {round(area_above_curve, 5)}', bbox={'facecolor': 'red', 'alpha': 0.5},
+                transform=cvp_ax.transAxes)
+    return area_above_curve
 
 
-def filter_data(df: pd.DataFrame) -> pd.DataFrame:
+def filter_bad_data(df: pd.DataFrame) -> pd.DataFrame:
     """Filter low CS values (colonies with less than 1 cell should not exist)"""
     return df.loc[df['CS'] >= 1]
 
@@ -70,11 +75,12 @@ def add_log_columns(df: pd.DataFrame) -> None:
     df['log2_GR_var'] = np.log2(df['GR_var'])
 
 
-def plot_bootstrap_scatter(df: pd.DataFrame, ax: plt.Axes) -> None:
+def plot_bootstrap_scatter(df: pd.DataFrame, ax: plt.Axes, max_binned_colony_size: int) -> None:
     """Plots bootstrap result"""
     xs = df['log2_CS_mean']
     ys = df['log2_GR_var']
-    ax.scatter(xs, ys, marker='.', edgecolor='k', facecolor='gray')
+    facecolors = df['bins'].apply(lambda curr_bin: 'gray' if curr_bin > max_binned_colony_size else 'red')
+    ax.scatter(xs, ys, marker='.', edgecolor='k', facecolor=facecolors, alpha=0.5)
 
 
 def get_mean_line_arrays(df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
@@ -105,7 +111,7 @@ def plot_supporting_lines(ax: plt.Axes, start_end: Tuple[float, float, float, fl
     linear_y = -1 * end_x + start_y  # y = ax + b, a=1, b=start_y
     ax.plot([start_x, end_x], [start_y, linear_y], color='red', lw=3)
     # vertical black line (Y axis)
-    ax.axvline(start_x, color='black', lw=3)
+    ax.axvline(start_x, color='darkgray', lw=3, zorder=0)
 
 
 def plot_histogram(df: pd.DataFrame, ax: plt.Axes) -> None:
@@ -124,7 +130,8 @@ def plot_histogram(df: pd.DataFrame, ax: plt.Axes) -> None:
         ax.text(pos, ax.get_ylim()[1] * 0.5, text)
 
 
-def area_above_curve(mean_line: Tuple[np.ndarray, np.ndarray], start_end: Tuple[float, float, float, float]) -> float:
+def calculate_area_above_curve(mean_line: Tuple[np.ndarray, np.ndarray],
+                               start_end: Tuple[float, float, float, float]) -> float:
     """Returns the area above the curve (mean green line)."""
     xs, ys = mean_line
     start_x, end_x, start_y, end_y = start_end

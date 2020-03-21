@@ -1,3 +1,4 @@
+import os
 import sys
 import traceback
 from typing import Any, Dict
@@ -81,34 +82,34 @@ class DynaFitGUI(QMainWindow):
 
         # --Cell range frame--
         # Region where user selects the ranges of cells containing CS and GR data
-        left_column.addWidget(QLabel(self, text='Cell range selection', styleSheet='font-weight: 600'))
+        left_column.addWidget(QLabel(self, text='Data columns selection', styleSheet='font-weight: 600'))
         self.cell_range_frame = QFrame(self, frameShape=QFrame.Box)
         self.cell_range_frame.setLayout(QGridLayout())
         # CS label
-        self.CS_label = QLabel(self, text='Select Colony Size column (blank for entire column)', wordWrap=True)
+        self.CS_label = QLabel(self, text='Select Colony Size column', wordWrap=True)
         self.cell_range_frame.layout().addWidget(self.CS_label, 0, 0, 1, 2)
         # CS start
         self.CS_start_label = QLabel(self, text='From:')
         self.cell_range_frame.layout().addWidget(self.CS_start_label, 1, 0)
-        self.CS_start_textbox = QLineEdit(self, placeholderText="A1")
+        self.CS_start_textbox = QLineEdit(self, placeholderText="")
         self.cell_range_frame.layout().addWidget(self.CS_start_textbox, 1, 1)
         # CS end
         self.CS_end_label = QLabel(self, text='To:')
         self.cell_range_frame.layout().addWidget(self.CS_end_label, 2, 0)
-        self.CS_end_textbox = QLineEdit(self, placeholderText="None")
+        self.CS_end_textbox = QLineEdit(self, placeholderText="Entire Column")
         self.cell_range_frame.layout().addWidget(self.CS_end_textbox, 2, 1)
         # GR label
-        self.GR_label = QLabel(self, text='Select Growth Rate column (blank for entire column)', wordWrap=True)
+        self.GR_label = QLabel(self, text='Select Growth Rate column', wordWrap=True)
         self.cell_range_frame.layout().addWidget(self.GR_label, 0, 2, 1, 2)
         # GR start
         self.GR_start_label = QLabel(self, text='From:')
         self.cell_range_frame.layout().addWidget(self.GR_start_label, 1, 2)
-        self.GR_start_textbox = QLineEdit(self, placeholderText="A1")
+        self.GR_start_textbox = QLineEdit(self, placeholderText="")
         self.cell_range_frame.layout().addWidget(self.GR_start_textbox, 1, 3)
         # GR end
         self.GR_end_label = QLabel(self, text='To:')
         self.cell_range_frame.layout().addWidget(self.GR_end_label, 2, 2)
-        self.GR_end_textbox = QLineEdit(self, placeholderText="None")
+        self.GR_end_textbox = QLineEdit(self, placeholderText="Entire Column")
         self.cell_range_frame.layout().addWidget(self.GR_end_textbox, 2, 3)
         # Add section above to left column
         left_column.addWidget(self.cell_range_frame)
@@ -119,19 +120,21 @@ class DynaFitGUI(QMainWindow):
         self.options_frame = QFrame(self, frameShape=QFrame.Box)
         self.options_frame.setLayout(QFormLayout())
         # Max colony size parameter
-        self.maxbin_colsize_label = QLabel(self, text='Max binned colony size')
+        text = 'Max binned colony size: colonies up to this colony size are placed in individual groups'
+        self.maxbin_colsize_label = QLabel(self, text=text, wordWrap=True)
         self.maxbin_colsize_num = QSpinBox(self, minimum=0, value=5, maximum=100, singleStep=1)
         self.options_frame.layout().addRow(self.maxbin_colsize_label, self.maxbin_colsize_num)
         # Number of bins parameter
-        self.nbins_label = QLabel(self, text='Number of bins for remaining population')
+        text = 'Number of bins: remaining colonies are equally distributed in these many groups'
+        self.nbins_label = QLabel(self, text=text, wordWrap=True)
         self.nbins_num = QSpinBox(self, minimum=0, value=5, maximum=100, singleStep=1)
         self.options_frame.layout().addRow(self.nbins_label, self.nbins_num)
         # Number of repeats parameter
-        self.nrepeats_label = QLabel(self, text='Number of repeated samples for each run/CS')
+        self.nrepeats_label = QLabel(self, text='Number of bootstrapping repeats')
         self.nrepeats_num = QSpinBox(self, minimum=0, value=10, maximum=10000, singleStep=1)
         self.options_frame.layout().addRow(self.nrepeats_label, self.nrepeats_num)
         # Sample size parameter
-        self.samplesize_label = QLabel(self, text='Sample size')
+        self.samplesize_label = QLabel(self, text='Bootstrapping sample size')
         self.samplesize_num = QSpinBox(self, minimum=0, value=20, maximum=10000, singleStep=1)
         self.options_frame.layout().addRow(self.samplesize_label, self.samplesize_num)
         # Add section above to left column
@@ -139,7 +142,7 @@ class DynaFitGUI(QMainWindow):
 
         # --Plot frame--
         # Region where the button to plot is located, as well as the calculated AAC
-        left_column.addWidget(QLabel(self, text='Plot options', styleSheet='font-weight: 600'))
+        left_column.addWidget(QLabel(self, text='Plot and results', styleSheet='font-weight: 600'))
         self.plot_frame = QFrame(self, frameShape=QFrame.Box)
         self.plot_frame.setLayout(QGridLayout())
         # Plot button
@@ -186,7 +189,8 @@ class DynaFitGUI(QMainWindow):
         except BadZipFile:
             self.raise_error_as_exception(BadExcelFile('Cannot load input Excel file. Is it corrupted?'))
         else:
-            self.input_filename.setText(f'{query.split("/")[-1]}')
+            filename = os.path.basename(query)
+            self.input_filename.setText(filename)
             self.input_sheetname.clear()
             self.input_sheetname.addItems(self.data.sheetnames)
 
@@ -217,6 +221,7 @@ class DynaFitGUI(QMainWindow):
         (this is delegated to the validator.py module)"""
         return {
             'data': self.data,
+            'filename': os.path.splitext(self.input_filename.text())[0],
             'sheetname': self.input_sheetname.currentText(),
             'cs_start_cell': self.CS_start_textbox.text(),
             'cs_end_cell': self.CS_end_textbox.text(),
