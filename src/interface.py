@@ -7,9 +7,9 @@ from zipfile import BadZipFile
 import matplotlib
 import openpyxl
 from PySide2.QtCore import QThreadPool
-from PySide2.QtWidgets import (QApplication, QComboBox, QFileDialog, QFormLayout, QFrame, QGridLayout, QHBoxLayout,
-                               QRadioButton, QButtonGroup, QLabel, QLineEdit, QMainWindow, QMessageBox, QPushButton,
-                               QSpinBox, QVBoxLayout, QWidget, QDoubleSpinBox)
+from PySide2.QtWidgets import (QApplication, QComboBox, QDoubleSpinBox, QFileDialog, QFormLayout, QFrame, QGridLayout,
+                               QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMessageBox, QPushButton, QRadioButton,
+                               QSpinBox, QVBoxLayout, QWidget)
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as Canvas, NavigationToolbar2QT as Navbar
 from matplotlib.pyplot import Figure
 
@@ -156,17 +156,17 @@ class DynaFitGUI(QMainWindow):
 
         # --Plot frame--
         # Region where the button to plot is located, as well as the calculated AAC
-        plotgrid = QGridLayout()
+        plot_grid = QGridLayout()
         # Plot button
         self.plot_button = QPushButton(self, text='Plot CVP with above parameters')
         self.plot_button.clicked.connect(self.dynafit_run)
-        plotgrid.addWidget(self.plot_button, 0, 0, 1, 2)
+        plot_grid.addWidget(self.plot_button, 0, 0, 1, 2)
         # AAC label and number
         self.area_above_curve_label = QLabel(self, text='Measured area above curve:', styleSheet='font-weight: 600')
-        plotgrid.addWidget(self.area_above_curve_label, 1, 0)
+        plot_grid.addWidget(self.area_above_curve_label, 1, 0)
         self.area_above_curve_number = QLabel(self, text='None')
-        plotgrid.addWidget(self.area_above_curve_number, 1, 1)
-        left_column.addLayout(plotgrid)
+        plot_grid.addWidget(self.area_above_curve_number, 1, 1)
+        left_column.addLayout(plot_grid)
 
         # ### RIGHT COLUMN
 
@@ -197,7 +197,7 @@ class DynaFitGUI(QMainWindow):
     def load_data(self, query: str) -> None:
         """Loads input data into memory, storing it in the GUI's self.data attribute"""
         try:
-            self.data = openpyxl.load_workbook(query)
+            self.data = openpyxl.load_workbook(query, data_only=True)
         except BadZipFile:
             self.raise_error_as_exception(BadExcelFile('Cannot load input Excel file. Is it corrupted?'))
         else:
@@ -248,7 +248,7 @@ class DynaFitGUI(QMainWindow):
             'filename': os.path.splitext(self.input_filename.text())[0],
             'sheetname': self.input_sheetname.currentText(),
             'is_raw_colony_sizes': self.cs1_cs2_button.isChecked(),
-            'time_delta': self.time_interval_num(),
+            'time_delta': self.time_interval_num.value(),
             'cs_start_cell': self.CS_start_textbox.text(),
             'cs_end_cell': self.CS_end_textbox.text(),
             'gr_start_cell': self.GR_start_textbox.text(),
