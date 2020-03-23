@@ -8,15 +8,17 @@ from openpyxl import Workbook
 from src.validator import ExcelValidator
 
 
-def dynafit(data: Workbook, filename: str, sheetname: str, cs_start_cell: str, cs_end_cell: str, gr_start_cell: str,
-            gr_end_cell: str, max_binned_colony_size: int, bins: int, repeats: int, sample_size: int, fig: plt.Figure,
-            cvp_ax: plt.Axes, hist_ax: plt.Axes) -> float:
+def dynafit(data: Workbook, filename: str, sheetname: str, is_raw_colony_sizes: bool, time_delta: float,
+            cs_start_cell: str,  cs_end_cell: str, gr_start_cell: str, gr_end_cell: str, max_binned_colony_size: int,
+            bins: int, repeats: int, sample_size: int, fig: plt.Figure, cvp_ax: plt.Axes, hist_ax: plt.Axes) -> float:
     """Main function of this script"""
     # Validate input data
     ev = ExcelValidator(data=data, sheetname=sheetname, cs_start_cell=cs_start_cell, cs_end_cell=cs_end_cell,
                         gr_start_cell=gr_start_cell, gr_end_cell=gr_end_cell)
     df = ev.data
-    df = filter_bad_data(df)
+    if is_raw_colony_sizes is True:
+        df = calculate_growth_rate(df=df, time_delta=time_delta)
+    df = filter_bad_data(df=df)
     # Run DynaFit analysis
     binned_df = add_bins(df=df, max_binned_colony_size=max_binned_colony_size, bins=bins)
     bootstrapped_df = bootstrap_data(df=binned_df, repeats=repeats, sample_size=sample_size)
@@ -39,6 +41,12 @@ def dynafit(data: Workbook, filename: str, sheetname: str, cs_start_cell: str, c
     cvp_ax.text(0.1, 0.1, s=f'AAC = {round(area_above_curve, 5)}', bbox={'facecolor': 'red', 'alpha': 0.5},
                 transform=cvp_ax.transAxes)
     return area_above_curve
+
+
+def calculate_growth_rate(df: pd.DataFrame, time_delta: float) -> pd.DataFrame:
+    """Calculates GR values from CS1 and CS2"""
+    growth_rate = (np.log2(df['GR']) - np.log2(df['CS'])) / (time_delta / 24)
+    return df.assign(GR=growth_rate)
 
 
 def filter_bad_data(df: pd.DataFrame) -> pd.DataFrame:

@@ -8,7 +8,8 @@ import matplotlib
 import openpyxl
 from PySide2.QtCore import QThreadPool
 from PySide2.QtWidgets import (QApplication, QComboBox, QFileDialog, QFormLayout, QFrame, QGridLayout, QHBoxLayout,
-                               QLabel, QLineEdit, QMainWindow, QMessageBox, QPushButton, QSpinBox, QVBoxLayout, QWidget)
+                               QRadioButton, QButtonGroup, QLabel, QLineEdit, QMainWindow, QMessageBox, QPushButton,
+                               QSpinBox, QVBoxLayout, QWidget, QDoubleSpinBox)
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as Canvas, NavigationToolbar2QT as Navbar
 from matplotlib.pyplot import Figure
 
@@ -71,48 +72,61 @@ class DynaFitGUI(QMainWindow):
         self.input_filename = QLabel(self, text='None')
         self.input_frame.layout().addWidget(self.input_filename, 1, 1)
         # Input sheetname and label
-        self.input_sheetname_label = QLabel(self, text='Sheetname to analyse:', styleSheet='font-weight: 600')
+        self.input_sheetname_label = QLabel(self, text='Sheet to analyse:', styleSheet='font-weight: 600')
         self.input_sheetname = QComboBox(self)
         self.input_sheetname.addItem('No data yet')
         self.input_frame.layout().addWidget(self.input_sheetname_label, 2, 0)
         self.input_frame.layout().addWidget(self.input_sheetname, 2, 1)
         # Add section above to left column
-        self.input_frame.layout()
         left_column.addWidget(self.input_frame)
 
-        # --Cell range frame--
-        # Region where user selects the ranges of cells containing CS and GR data
-        left_column.addWidget(QLabel(self, text='Data columns selection', styleSheet='font-weight: 600'))
-        self.cell_range_frame = QFrame(self, frameShape=QFrame.Box)
-        self.cell_range_frame.setLayout(QGridLayout())
+        # --Data type/range frame--
+        # Region where user selects whether data represents CS1+CS2 or CS+GR and the respective ranges
+        left_column.addWidget(QLabel(self, text='Data type and range', styleSheet='font-weight: 600'))
+        self.data_frame = QFrame(self, frameShape=QFrame.Box)
+        self.data_frame.setLayout(QGridLayout())
+        # CS1 CS2 button
+        self.cs1_cs2_button = QRadioButton(self, text='Initial and final colony sizes', checked=True)
+        self.cs1_cs2_button.clicked.connect(self.cs1_cs2_setup)
+        self.data_frame.layout().addWidget(self.cs1_cs2_button, 0, 0, 1, 2)
+        # CS GR button
+        self.cs_gr_button = QRadioButton(self, text='Initial colony size and growth rate')
+        self.cs_gr_button.clicked.connect(self.cs_gr_setup)
+        self.data_frame.layout().addWidget(self.cs_gr_button, 1, 0, 1, 2)
+        # Time interval label
+        self.time_interval_label = QLabel(self, text='Time delta (hours):', wordWrap=True)
+        self.data_frame.layout().addWidget(self.time_interval_label, 0, 2, 1, 2)
+        # Time interval value
+        self.time_interval_num = QDoubleSpinBox(self, minimum=0.0, value=24.0, maximum=1000.0, singleStep=1.0)
+        self.data_frame.layout().addWidget(self.time_interval_num, 1, 2, 1, 2)
         # CS label
-        self.CS_label = QLabel(self, text='Select Colony Size column', wordWrap=True)
-        self.cell_range_frame.layout().addWidget(self.CS_label, 0, 0, 1, 2)
+        self.CS_label = QLabel(self, text='Colony Size 1 column', wordWrap=True)
+        self.data_frame.layout().addWidget(self.CS_label, 2, 0, 1, 2)
         # CS start
         self.CS_start_label = QLabel(self, text='From:')
-        self.cell_range_frame.layout().addWidget(self.CS_start_label, 1, 0)
+        self.data_frame.layout().addWidget(self.CS_start_label, 3, 0)
         self.CS_start_textbox = QLineEdit(self, placeholderText="")
-        self.cell_range_frame.layout().addWidget(self.CS_start_textbox, 1, 1)
+        self.data_frame.layout().addWidget(self.CS_start_textbox, 3, 1)
         # CS end
         self.CS_end_label = QLabel(self, text='To:')
-        self.cell_range_frame.layout().addWidget(self.CS_end_label, 2, 0)
+        self.data_frame.layout().addWidget(self.CS_end_label, 4, 0)
         self.CS_end_textbox = QLineEdit(self, placeholderText="Entire Column")
-        self.cell_range_frame.layout().addWidget(self.CS_end_textbox, 2, 1)
+        self.data_frame.layout().addWidget(self.CS_end_textbox, 4, 1)
         # GR label
-        self.GR_label = QLabel(self, text='Select Growth Rate column', wordWrap=True)
-        self.cell_range_frame.layout().addWidget(self.GR_label, 0, 2, 1, 2)
+        self.GR_label = QLabel(self, text='Colony Size 2 column', wordWrap=True)
+        self.data_frame.layout().addWidget(self.GR_label, 2, 2, 1, 2)
         # GR start
         self.GR_start_label = QLabel(self, text='From:')
-        self.cell_range_frame.layout().addWidget(self.GR_start_label, 1, 2)
+        self.data_frame.layout().addWidget(self.GR_start_label, 3, 2)
         self.GR_start_textbox = QLineEdit(self, placeholderText="")
-        self.cell_range_frame.layout().addWidget(self.GR_start_textbox, 1, 3)
+        self.data_frame.layout().addWidget(self.GR_start_textbox, 3, 3)
         # GR end
         self.GR_end_label = QLabel(self, text='To:')
-        self.cell_range_frame.layout().addWidget(self.GR_end_label, 2, 2)
+        self.data_frame.layout().addWidget(self.GR_end_label, 4, 2)
         self.GR_end_textbox = QLineEdit(self, placeholderText="Entire Column")
-        self.cell_range_frame.layout().addWidget(self.GR_end_textbox, 2, 3)
+        self.data_frame.layout().addWidget(self.GR_end_textbox, 4, 3)
         # Add section above to left column
-        left_column.addWidget(self.cell_range_frame)
+        left_column.addWidget(self.data_frame)
 
         # --Options frame--
         # Region where the user selects parameters for the CVP
@@ -142,19 +156,17 @@ class DynaFitGUI(QMainWindow):
 
         # --Plot frame--
         # Region where the button to plot is located, as well as the calculated AAC
-        left_column.addWidget(QLabel(self, text='Plot and results', styleSheet='font-weight: 600'))
-        self.plot_frame = QFrame(self, frameShape=QFrame.Box)
-        self.plot_frame.setLayout(QGridLayout())
+        plotgrid = QGridLayout()
         # Plot button
         self.plot_button = QPushButton(self, text='Plot CVP with above parameters')
         self.plot_button.clicked.connect(self.dynafit_run)
-        self.plot_frame.layout().addWidget(self.plot_button, 0, 0, 1, 2)
+        plotgrid.addWidget(self.plot_button, 0, 0, 1, 2)
         # AAC label and number
         self.area_above_curve_label = QLabel(self, text='Measured area above curve:', styleSheet='font-weight: 600')
-        self.plot_frame.layout().addWidget(self.area_above_curve_label, 1, 0)
+        plotgrid.addWidget(self.area_above_curve_label, 1, 0)
         self.area_above_curve_number = QLabel(self, text='None')
-        self.plot_frame.layout().addWidget(self.area_above_curve_number, 1, 1)
-        left_column.addWidget(self.plot_frame)
+        plotgrid.addWidget(self.area_above_curve_number, 1, 1)
+        left_column.addLayout(plotgrid)
 
         # ### RIGHT COLUMN
 
@@ -194,6 +206,18 @@ class DynaFitGUI(QMainWindow):
             self.input_sheetname.clear()
             self.input_sheetname.addItems(self.data.sheetnames)
 
+    def cs1_cs2_setup(self) -> None:
+        """Changes interface when the user chooses data ranges representing CS1 and CS2"""
+        self.time_interval_num.setEnabled(True)
+        self.CS_label.setText('Colony size 1 column')
+        self.GR_label.setText('Colony size 2 column')
+
+    def cs_gr_setup(self) -> None:
+        """Changes interface when the user chooses data ranges representing CS and GR"""
+        self.time_interval_num.setEnabled(False)
+        self.CS_label.setText('Colony size column')
+        self.GR_label.setText('Growth rate column')
+
     def dynafit_run(self) -> None:
         """Runs DynaFit"""
         try:
@@ -223,6 +247,8 @@ class DynaFitGUI(QMainWindow):
             'data': self.data,
             'filename': os.path.splitext(self.input_filename.text())[0],
             'sheetname': self.input_sheetname.currentText(),
+            'is_raw_colony_sizes': self.cs1_cs2_button.isChecked(),
+            'time_delta': self.time_interval_num(),
             'cs_start_cell': self.CS_start_textbox.text(),
             'cs_end_cell': self.CS_end_textbox.text(),
             'gr_start_cell': self.GR_start_textbox.text(),
