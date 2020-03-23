@@ -15,6 +15,9 @@ class ExcelValidator:
         # Checks if any data has been loaded at all
         self.validate_input(data=data)
         self.ws = data[sheetname]
+        # Add character '1' column strings (typing 'A' implies starting from cell '1A'
+        cs_start_cell = self.convert_column_to_first_cell(cs_start_cell)
+        gr_start_cell = self.convert_column_to_first_cell(gr_start_cell)
         # Structures cell ranges in a dictionary
         self.ranges = {
             'CS': [cs_start_cell.strip().upper(), cs_end_cell.strip().upper()],
@@ -22,6 +25,14 @@ class ExcelValidator:
         }
         # Validates data as a whole
         self.data = self.validation_routine()
+
+    def convert_column_to_first_cell(self, cell_str: str) -> str:
+        """Converts and returns an Excel column accessor such as "A" to a first row cell accessor ("A1").
+        Returns the cell_string itself if it is not a column accessor."""
+        if cell_str != '':
+            if len(self.extract_digits(cell_str)) == 0:
+                return cell_str + '1'
+        return cell_str
 
     @staticmethod
     def validate_input(data: Optional[Workbook]) -> None:
