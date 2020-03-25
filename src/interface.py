@@ -172,7 +172,7 @@ class DynaFitGUI(QMainWindow):
 
         # --Plot canvas--
         # Region where plots are displayed
-        self.fig = Figure(facecolor="white")
+        self.fig = Figure(facecolor='white')
         self.canvas = Canvas(self.fig)
         self.canvas.setParent(self)
         # Axes instance used to plot CVP
@@ -199,7 +199,7 @@ class DynaFitGUI(QMainWindow):
         try:
             self.data = openpyxl.load_workbook(query, data_only=True)
         except BadZipFile:
-            self.raise_error_as_exception(BadExcelFile('Cannot load input Excel file. Is it corrupted?'))
+            self.dynafit_raised_exception(BadExcelFile('Cannot load input Excel file. Is it corrupted?'))
         else:
             filename = os.path.basename(query)
             self.input_filename.setText(filename)
