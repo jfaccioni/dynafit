@@ -1,15 +1,18 @@
 import os
 import sys
 import traceback
+from csv import writer
+from io import StringIO
 from typing import Any, Dict
 from zipfile import BadZipFile
 
 import matplotlib
 import openpyxl
-from PySide2.QtCore import QThreadPool
+from PySide2.QtCore import QEvent, QThreadPool
+from PySide2.QtGui import QKeySequence
 from PySide2.QtWidgets import (QApplication, QComboBox, QDoubleSpinBox, QFileDialog, QFormLayout, QFrame, QGridLayout,
-                               QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMessageBox, QPushButton, QRadioButton,
-                               QSpinBox, QVBoxLayout, QWidget)
+                               QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow, QMessageBox, QPushButton,
+                               QRadioButton, QSpinBox, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget, qApp)
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as Canvas, NavigationToolbar2QT as Navbar
 from matplotlib.pyplot import Figure
 
@@ -160,12 +163,16 @@ class DynaFitGUI(QMainWindow):
         # Plot button
         self.plot_button = QPushButton(self, text='Plot CVP with above parameters')
         self.plot_button.clicked.connect(self.dynafit_run)
-        plot_grid.addWidget(self.plot_button, 0, 0, 1, 2)
-        # AAC label and number
-        self.area_above_curve_label = QLabel(self, text='Measured area above curve:', styleSheet='font-weight: 600')
-        plot_grid.addWidget(self.area_above_curve_label, 1, 0)
-        self.area_above_curve_number = QLabel(self, text='None')
-        plot_grid.addWidget(self.area_above_curve_number, 1, 1)
+        plot_grid.addWidget(self.plot_button)
+        # CoDy table of values
+        self.cody_table = QTableWidget(self, rowCount=7, columnCount=2)
+        self.cody_table.installEventFilter(self)
+        self.cody_table.setHorizontalHeaderItem(0, QTableWidgetItem('CoDy'))
+        self.cody_table.setHorizontalHeaderItem(1, QTableWidgetItem('Value'))
+        self.cody_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        self.cody_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        plot_grid.addWidget(self.cody_table)
+        # Add section above to left column
         left_column.addLayout(plot_grid)
 
         # ### RIGHT COLUMN
@@ -223,11 +230,11 @@ class DynaFitGUI(QMainWindow):
         try:
             self.dynafit_setup()
             dynafit_settings = self.get_dynafit_settings()
-            area_above_curve = dynafit(**dynafit_settings)
+            cody_dict = dynafit(**dynafit_settings)
         except Exception as e:
             self.dynafit_raised_exception(e)
         else:
-            self.dynafit_no_exceptions_raised(area_above_curve)
+            self.dynafit_no_exceptions_raised(cody_dict)
         finally:
             self.dynafit_cleanup()
 
@@ -271,10 +278,13 @@ class DynaFitGUI(QMainWindow):
         trace = traceback.format_exc()
         self.show_error_message((name, trace))
 
-    def dynafit_no_exceptions_raised(self, area_above_curve):
+    def dynafit_no_exceptions_raised(self, cody_dict: Dict[str, float]):
         """Called by DynaFitWorker if no Exceptions are raised.
         Currently unimplemented"""
-        self.area_above_curve_number.setText(str(area_above_curve))
+        self.cody_table.clearContents()
+        for row_number, (cody_name, cody_value) in enumerate(cody_dict.items()):
+            self.cody_table.setItem(row_number, 0, QTableWidgetItem(cody_name))
+            self.cody_table.setItem(row_number, 1, QTableWidgetItem(str(cody_value)))
 
     def dynafit_cleanup(self):
         """Called by DynaFitWorker when it finished running (regardless of Exceptions).
@@ -296,6 +306,35 @@ class DynaFitGUI(QMainWindow):
         self.load_data(query='data/example.xlsx')
         self.CS_start_textbox.setText('A2')
         self.GR_start_textbox.setText('B2')
+
+    # the following methods allow for clipboard copy of CoDy table
+    # from: https://stackoverflow.com/questions/40469607/
+    # how-to-copy-paste-multiple-items-form-qtableview-created-by-qstandarditemmodel
+
+    # add event filter
+    def eventFilter(self, source, event):
+        """Event filter"""
+        if event.type() == QEvent.KeyPress and event.matches(QKeySequence.Copy):
+            self.copy_selection()
+            return True
+        return super().eventFilter(source, event)
+
+    # add copy method
+    def copy_selection(self):
+        selection = self.cody_table.selectedIndexes()
+        if selection:
+            rows = sorted(index.row() for index in selection)
+            columns = sorted(index.column() for index in selection)
+            rowcount = rows[-1] - rows[0] + 1
+            colcount = columns[-1] - columns[0] + 1
+            table = [[''] * colcount for _ in range(rowcount)]
+            for index in selection:
+                row = index.row() - rows[0]
+                column = index.column() - columns[0]
+                table[row][column] = index.data()
+            stream = StringIO()
+            writer(stream).writerows(table)
+            qApp.clipboard().setText(stream.getvalue())
 
 
 class BadExcelFile(Exception):
