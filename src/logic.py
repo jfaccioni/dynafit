@@ -32,7 +32,7 @@ def dynafit(data: Workbook, filename: str, sheetname: str, is_raw_colony_sizes: 
     plot_mean_line(mean_line=mean_line, ax=cvp_ax)
     plot_histogram(df=binned_df, ax=hist_ax)
     # Format labels
-    fig.suptitle('CVP')
+    fig.suptitle(f'CVP - Exp: {filename}, Sheet: {sheetname}')
     cvp_ax.set_xlabel('log2(Colony Size)')
     cvp_ax.set_ylabel('log2(Growth Rate variance)')
     # Get results values

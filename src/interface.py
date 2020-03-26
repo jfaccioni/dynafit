@@ -350,7 +350,10 @@ class DynaFitGUI(QMainWindow):
     def save_to_excel_dialog(self):
         if self.results is None:
             self.dynafit_raised_exception(ValueError('No results yet!'))
-        query, _ = QFileDialog.getSaveFileName(self, 'Select file to save to', '', 'Excel Spreadsheet (*.xlsx)')
+            return
+        placeholder = f'{self.result_table.item(0, 1).text()}_{self.result_table.item(1, 1).text()}.xlsx'
+        query, _ = QFileDialog.getSaveFileName(self, 'Select file to save to', placeholder,
+                                               'Excel Spreadsheet (*.xlsx)')
         if query:
             self.save_excel(path=query)
 
@@ -362,7 +365,10 @@ class DynaFitGUI(QMainWindow):
     def save_to_csv_dialog(self):
         if self.results is None:
             self.dynafit_raised_exception(ValueError('No results yet!'))
-        query, _ = QFileDialog.getSaveFileName(self, 'Select file to save to', '', 'Comma-separated values (*.csv)')
+            return
+        placeholder = f'{self.result_table.item(0, 1).text()}_{self.result_table.item(1, 1).text()}.csv'
+        query, _ = QFileDialog.getSaveFileName(self, 'Select file to save to', placeholder,
+                                               'Comma-separated values (*.csv)')
         if query:
             self.save_csv(path=query)
 
