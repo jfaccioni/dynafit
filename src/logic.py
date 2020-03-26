@@ -48,6 +48,10 @@ def dynafit(data: Workbook, filename: str, sheetname: str, is_raw_colony_sizes: 
 def calculate_growth_rate(df: pd.DataFrame, time_delta: float) -> pd.DataFrame:
     """Calculates GR values from CS1 and CS2"""
     growth_rate = (np.log2(df['GR']) - np.log2(df['CS'])) / (time_delta / 24)
+    if growth_rate.isna().any():  # happens if the log of CS1 or CS2 is negative - which doesn't make sense anyway
+        raise ValueError('Growth rate could not be calculated from the given colony size ranges. '
+                         'Did you mean to select Colony Size and Growth Rate instead? '
+                         'Please check your column ranges.')
     return df.assign(GR=growth_rate)
 
 
