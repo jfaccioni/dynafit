@@ -8,6 +8,7 @@ from zipfile import BadZipFile
 
 import matplotlib
 import openpyxl
+import pandas as pd
 from PySide2.QtCore import QEvent, QThreadPool
 from PySide2.QtGui import QKeySequence
 from PySide2.QtWidgets import (QApplication, QComboBox, QDoubleSpinBox, QFileDialog, QFormLayout, QFrame, QGridLayout,
@@ -32,6 +33,7 @@ class DynaFitGUI(QMainWindow):
         self.resize(1080, 680)
         self.threadpool = QThreadPool()
         self.data = None
+        self.results = None
 
         # ### MAIN SETUP
 
@@ -163,15 +165,21 @@ class DynaFitGUI(QMainWindow):
         # Plot button
         self.plot_button = QPushButton(self, text='Plot CVP with above parameters')
         self.plot_button.clicked.connect(self.dynafit_run)
-        plot_grid.addWidget(self.plot_button)
+        plot_grid.addWidget(self.plot_button, 0, 0, 1, 2)
         # CoDy table of values
-        self.cody_table = QTableWidget(self, rowCount=7, columnCount=2)
-        self.cody_table.installEventFilter(self)
-        self.cody_table.setHorizontalHeaderItem(0, QTableWidgetItem('CoDy'))
-        self.cody_table.setHorizontalHeaderItem(1, QTableWidgetItem('Value'))
-        self.cody_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
-        self.cody_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
-        plot_grid.addWidget(self.cody_table)
+        self.result_table = QTableWidget(self, rowCount=0, columnCount=2)
+        self.result_table.setHorizontalHeaderItem(0, QTableWidgetItem('CoDy'))
+        self.result_table.setHorizontalHeaderItem(1, QTableWidgetItem('Value'))
+        self.result_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        self.result_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.result_table.installEventFilter(self)
+        plot_grid.addWidget(self.result_table, 1, 0, 4, 2)
+        self.to_excel_button = QPushButton(self, text='To Excel')
+        self.to_excel_button.clicked.connect(self.save_to_excel_dialog)
+        plot_grid.addWidget(self.to_excel_button, 5, 0, 1, 1)
+        self.to_csv_button = QPushButton(self, text='To csv')
+        self.to_csv_button.clicked.connect(self.save_to_csv_dialog)
+        plot_grid.addWidget(self.to_csv_button, 5, 1, 1, 1)
         # Add section above to left column
         left_column.addLayout(plot_grid)
 
@@ -278,13 +286,15 @@ class DynaFitGUI(QMainWindow):
         trace = traceback.format_exc()
         self.show_error_message((name, trace))
 
-    def dynafit_no_exceptions_raised(self, cody_dict: Dict[str, float]):
+    def dynafit_no_exceptions_raised(self, results: Dict[str, float]):
         """Called by DynaFitWorker if no Exceptions are raised.
         Currently unimplemented"""
-        self.cody_table.clearContents()
-        for row_number, (cody_name, cody_value) in enumerate(cody_dict.items()):
-            self.cody_table.setItem(row_number, 0, QTableWidgetItem(cody_name))
-            self.cody_table.setItem(row_number, 1, QTableWidgetItem(str(cody_value)))
+        self.result_table.clearContents()
+        self.result_table.setRowCount(len(results))
+        self.results = pd.DataFrame({'Parameter': list(results.keys()), 'Value': list(results.values())})
+        for index, (name, value) in self.results.iterrows():
+            self.result_table.setItem(index, 0, QTableWidgetItem(name))
+            self.result_table.setItem(index, 1, QTableWidgetItem(str(value)))
 
     def dynafit_cleanup(self):
         """Called by DynaFitWorker when it finished running (regardless of Exceptions).
@@ -306,6 +316,7 @@ class DynaFitGUI(QMainWindow):
         self.load_data(query='data/example.xlsx')
         self.CS_start_textbox.setText('A2')
         self.GR_start_textbox.setText('B2')
+        self.cs_gr_button.setChecked(True)
 
     # the following methods allow for clipboard copy of CoDy table
     # from: https://stackoverflow.com/questions/40469607/
@@ -321,7 +332,7 @@ class DynaFitGUI(QMainWindow):
 
     # add copy method
     def copy_selection(self):
-        selection = self.cody_table.selectedIndexes()
+        selection = self.result_table.selectedIndexes()
         if selection:
             rows = sorted(index.row() for index in selection)
             columns = sorted(index.column() for index in selection)
@@ -335,6 +346,30 @@ class DynaFitGUI(QMainWindow):
             stream = StringIO()
             writer(stream).writerows(table)
             qApp.clipboard().setText(stream.getvalue())
+
+    def save_to_excel_dialog(self):
+        if self.results is None:
+            self.dynafit_raised_exception(ValueError('No results yet!'))
+        query, _ = QFileDialog.getSaveFileName(self, 'Select file to save to', '', 'Excel Spreadsheet (*.xlsx)')
+        if query:
+            self.save_excel(path=query)
+
+    def save_excel(self, path: str) -> None:
+        if not path.endswith('.xlsx'):
+            path = path + '.xlsx'
+        self.results.to_excel(path, index=None)
+
+    def save_to_csv_dialog(self):
+        if self.results is None:
+            self.dynafit_raised_exception(ValueError('No results yet!'))
+        query, _ = QFileDialog.getSaveFileName(self, 'Select file to save to', '', 'Comma-separated values (*.csv)')
+        if query:
+            self.save_csv(path=query)
+
+    def save_csv(self, path: str) -> None:
+        if not path.endswith('.csv'):
+            path = path + '.csv'
+        self.results.to_csv(path, index=None)
 
 
 class BadExcelFile(Exception):

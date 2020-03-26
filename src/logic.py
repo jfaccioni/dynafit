@@ -1,4 +1,4 @@
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -11,7 +11,7 @@ from src.validator import ExcelValidator
 def dynafit(data: Workbook, filename: str, sheetname: str, is_raw_colony_sizes: bool, time_delta: float,
             cs_start_cell: str,  cs_end_cell: str, gr_start_cell: str, gr_end_cell: str, max_binned_colony_size: int,
             bins: int, repeats: int, sample_size: int, fig: plt.Figure, cvp_ax: plt.Axes,
-            hist_ax: plt.Axes) -> Dict[str, float]:
+            hist_ax: plt.Axes) -> Dict[str, Any]:
     """Main function of this script. Returns a dictionary of calculated CoDy values"""
     # Validate input data
     ev = ExcelValidator(data=data, sheetname=sheetname, cs_start_cell=cs_start_cell, cs_end_cell=cs_end_cell,
@@ -31,17 +31,18 @@ def dynafit(data: Workbook, filename: str, sheetname: str, is_raw_colony_sizes: 
     plot_bootstrap_scatter(df=bootstrapped_df, ax=cvp_ax, max_binned_colony_size=max_binned_colony_size)
     plot_mean_line(mean_line=mean_line, ax=cvp_ax)
     plot_histogram(df=binned_df, ax=hist_ax)
-    # Get CoDy values
-    cody_dict = dict()
-    for i in range(1, 7):
-        cody_dict[f'CoDy {i}'] = calculate_cody(mean_line=mean_line, cody_n=i)
-    cody_dict['CoDy inf'] = calculate_cody(mean_line=mean_line, cody_n=None)
-    # Format figure
-    fig.suptitle(f'file={filename}, sheet={sheetname}, max binned CS={max_binned_colony_size}, bins={bins}, '
-                 f'sampling repeats={repeats}, sample size={sample_size}', fontsize=8)
+    # Format labels
+    fig.suptitle('CVP')
     cvp_ax.set_xlabel('log2(Colony Size)')
     cvp_ax.set_ylabel('log2(Growth Rate variance)')
-    return cody_dict
+    # Get results values
+    results = {'filename': filename, 'sheet': sheetname, 'max binned colony size': max_binned_colony_size, 'bins': bins,
+               'repeats': repeats, 'sample_size': sample_size, 'sample size': sample_size}
+    # Get CoDy values
+    for i in range(1, 7):
+        results[f'CoDy {i}'] = calculate_cody(mean_line=mean_line, cody_n=i)
+    results['CoDy inf'] = calculate_cody(mean_line=mean_line, cody_n=None)
+    return results
 
 
 def calculate_growth_rate(df: pd.DataFrame, time_delta: float) -> pd.DataFrame:
