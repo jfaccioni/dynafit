@@ -22,7 +22,7 @@ from src.logic import dynafit
 # Set a small font for plots
 matplotlib.rc('font', size=8)
 # Set debugging flag
-DEBUG = False
+DEBUG = True
 
 
 class DynaFitGUI(QMainWindow):
@@ -168,7 +168,7 @@ class DynaFitGUI(QMainWindow):
         plot_grid.addWidget(self.plot_button, 0, 0, 1, 2)
         # CoDy table of values
         self.result_table = QTableWidget(self, rowCount=0, columnCount=2)
-        self.result_table.setHorizontalHeaderItem(0, QTableWidgetItem('CoDy'))
+        self.result_table.setHorizontalHeaderItem(0, QTableWidgetItem('Parameter'))
         self.result_table.setHorizontalHeaderItem(1, QTableWidgetItem('Value'))
         self.result_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.result_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)

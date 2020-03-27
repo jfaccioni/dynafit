@@ -1,0 +1,6 @@
+# 0.0.1
+- Added support for calculating CoDy values (1 to 6 and inf)
+- Added table for viewing parameters and calculated CoDy values, along with options to export table to xlsx and csv
+
+# 0.0.0a
+- Initial release
