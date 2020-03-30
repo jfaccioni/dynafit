@@ -7,10 +7,13 @@ from openpyxl import Workbook
 
 from src.validator import ExcelValidator
 
+# Value from which to throw a warning of low N
+N_WARNING_LEVEL = 20
+
 
 def dynafit(data: Workbook, filename: str, sheetname: str, is_raw_colony_sizes: bool, time_delta: float,
             cs_start_cell: str,  cs_end_cell: str, gr_start_cell: str, gr_end_cell: str, max_binned_colony_size: int,
-            bins: int, repeats: int, sample_size: int, fig: plt.Figure, cvp_ax: plt.Axes,
+            bins: int, repeats: int, show_violin: bool, fig: plt.Figure, cvp_ax: plt.Axes,
             hist_ax: plt.Axes) -> Dict[str, Any]:
     """Main function of this script. Returns a dictionary of calculated CoDy values"""
     # Validate input data
@@ -22,26 +25,26 @@ def dynafit(data: Workbook, filename: str, sheetname: str, is_raw_colony_sizes: 
     df = filter_bad_data(df=df)
     # Run DynaFit analysis
     binned_df = add_bins(df=df, max_binned_colony_size=max_binned_colony_size, bins=bins)
-    bootstrapped_df = bootstrap_data(df=binned_df, repeats=repeats, sample_size=sample_size)
+    bootstrapped_df = bootstrap_data(df=binned_df, repeats=repeats)
     add_log_columns(df=bootstrapped_df)
-    # Calculate plot parameters
-    mean_line = get_mean_line_arrays(df=bootstrapped_df)
     # Plot DynaFit results
-    plot_supporting_lines(mean_line=mean_line, ax=cvp_ax)
+    plot_supporting_lines(df=bootstrapped_df, ax=cvp_ax)
+    if show_violin:
+        plot_bootstrap_violins(df=bootstrapped_df, ax=cvp_ax, max_binned_colony_size=max_binned_colony_size)
     plot_bootstrap_scatter(df=bootstrapped_df, ax=cvp_ax, max_binned_colony_size=max_binned_colony_size)
-    plot_mean_line(mean_line=mean_line, ax=cvp_ax)
+    plot_mean_line(df=bootstrapped_df, ax=cvp_ax)
     plot_histogram(df=binned_df, ax=hist_ax)
     # Format labels
     fig.suptitle(f'CVP - Exp: {filename}, Sheet: {sheetname}')
     cvp_ax.set_xlabel('log2(Colony Size)')
     cvp_ax.set_ylabel('log2(Growth Rate variance)')
     # Get results values
-    results = {'filename': filename, 'sheet': sheetname, 'max binned colony size': max_binned_colony_size, 'bins': bins,
-               'repeats': repeats, 'sample_size': sample_size, 'sample size': sample_size}
+    results = {'filename': filename, 'sheet': sheetname, 'max binned colony size': max_binned_colony_size,
+               'bins': bins, 'repeats': repeats}
     # Get CoDy values
     for i in range(1, 7):
-        results[f'CoDy {i}'] = calculate_cody(mean_line=mean_line, cody_n=i)
-    results['CoDy inf'] = calculate_cody(mean_line=mean_line, cody_n=None)
+        results[f'CoDy {i}'] = calculate_cody(df=bootstrapped_df, cody_n=i)
+    results['CoDy inf'] = calculate_cody(df=bootstrapped_df, cody_n=None)
     return results
 
 
@@ -74,13 +77,16 @@ def add_bins(df: pd.DataFrame, max_binned_colony_size: int, bins: int) -> pd.Dat
     return df.assign(bins=pd.concat([single_bins, multiple_bins]))
 
 
-def bootstrap_data(df: pd.DataFrame, repeats: int, sample_size: int) -> pd.DataFrame:
+def bootstrap_data(df: pd.DataFrame, repeats: int) -> pd.DataFrame:
     """Performs bootstrapping"""
     columns = ['CS_mean', 'GR_var', 'bins']
     output_df = pd.DataFrame(columns=columns)
     for bin_number, bin_values in df.groupby('bins'):
+        n = len(bin_values)
+        if n < N_WARNING_LEVEL:
+            print(f'Warning: group {bin_number} has only {n} instances.')
         for repeat in range(repeats):
-            sample = bin_values.sample(n=sample_size, replace=True)
+            sample = bin_values.sample(n=n, replace=True)
             row = pd.Series([sample['CS'].mean(), sample['GR'].var(), bin_number], index=columns)
             output_df = output_df.append(row, ignore_index=True)
     return output_df
@@ -92,35 +98,9 @@ def add_log_columns(df: pd.DataFrame) -> None:
     df['log2_GR_var'] = np.log2(df['GR_var'])
 
 
-def plot_bootstrap_scatter(df: pd.DataFrame, ax: plt.Axes, max_binned_colony_size: int) -> None:
-    """Plots bootstrap result"""
-    xs = df['log2_CS_mean']
-    ys = df['log2_GR_var']
-    facecolors = df['bins'].apply(lambda curr_bin: 'gray' if curr_bin > max_binned_colony_size else 'red')
-    ax.scatter(xs, ys, marker='.', edgecolor='k', facecolor=facecolors, alpha=0.5)
-
-
-def get_mean_line_arrays(df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
-    xs = df.groupby('bins').mean()['log2_CS_mean'].values
-    ys = df.groupby('bins').mean()['log2_GR_var'].values
-    return xs, ys
-
-
-def get_start_end_values(line: Tuple[np.ndarray, np.ndarray]) -> Tuple[float, float, float, float]:
-    """Returns the max and min XY values of the mean line"""
-    xs, ys = line
-    start_x, end_x = xs[0], xs[-1]
-    start_y, end_y = ys[0], ys[-1]
-    return start_x, end_x, start_y, end_y
-
-
-def plot_mean_line(mean_line: Tuple[np.ndarray, np.ndarray], ax: plt.Axes) -> None:
-    """Plots mean line for all data in ax."""
-    ax.plot(*mean_line, color='green', alpha=0.9, lw=3)
-
-
-def plot_supporting_lines(ax: plt.Axes, mean_line: Tuple[np.ndarray, np.ndarray]) -> None:
+def plot_supporting_lines(df: pd.DataFrame, ax: plt.Axes) -> None:
     """Plots the three supporting lines of the CVP."""
+    mean_line = get_mean_line_arrays(df=df)
     start_x, end_x, start_y, _ = get_start_end_values(line=mean_line)
     # horizontal blue line (H0)
     ax.plot([start_x, end_x], [start_y, start_y], color='blue', lw=3)
@@ -129,6 +109,31 @@ def plot_supporting_lines(ax: plt.Axes, mean_line: Tuple[np.ndarray, np.ndarray]
     ax.plot([start_x, end_x], [start_y, linear_y], color='red', lw=3)
     # vertical black line (Y axis)
     ax.axvline(start_x, color='darkgray', lw=3, zorder=0)
+
+
+def plot_bootstrap_violins(df: pd.DataFrame, ax: plt.Axes, max_binned_colony_size: int) -> None:
+    """Plots bootstrap result as violins"""
+    xs, _ = get_mean_line_arrays(df=df)
+    ys = [df.loc[df['bins'] == b]['log2_GR_var'] for b in sorted(df['bins'].unique())]
+    parts = ax.violinplot(positions=xs, dataset=ys, showmeans=False, showmedians=False, showextrema=False)
+    for i, body in enumerate(parts['bodies'], 1):
+        body.set_facecolor('red') if i <= max_binned_colony_size else body.set_facecolor('gray')
+        body.set_edgecolor('black')
+        body.set_alpha(0.3)
+
+
+def plot_bootstrap_scatter(df: pd.DataFrame, ax: plt.Axes, max_binned_colony_size: int) -> None:
+    """Plots bootstrap result as scatter"""
+    xs = df['log2_CS_mean']
+    ys = df['log2_GR_var']
+    facecolors = df['bins'].apply(lambda curr_bin: 'gray' if curr_bin > max_binned_colony_size else 'red')
+    ax.scatter(xs, ys, marker='.', edgecolor='k', facecolor=facecolors, alpha=0.3)
+
+
+def plot_mean_line(df: pd.DataFrame, ax: plt.Axes) -> None:
+    """Plots mean line for all data in ax."""
+    mean_line = get_mean_line_arrays(df=df)
+    ax.plot(*mean_line, color='green', alpha=0.9, lw=3)
 
 
 def plot_histogram(df: pd.DataFrame, ax: plt.Axes) -> None:
@@ -147,15 +152,29 @@ def plot_histogram(df: pd.DataFrame, ax: plt.Axes) -> None:
         ax.text(pos, ax.get_ylim()[1] * 0.5, text)
 
 
-def calculate_cody(mean_line: Tuple[np.ndarray, np.ndarray], cody_n: Optional[int]) -> float:
+def get_mean_line_arrays(df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
+    xs = df.groupby('bins').mean()['log2_CS_mean'].values
+    ys = df.groupby('bins').mean()['log2_GR_var'].values
+    return xs, ys
+
+
+def get_start_end_values(line: Tuple[np.ndarray, np.ndarray]) -> Tuple[float, float, float, float]:
+    """Returns the max and min XY values of the mean line"""
+    xs, ys = line
+    start_x, end_x = xs[0], xs[-1]
+    start_y, end_y = ys[0], ys[-1]
+    return start_x, end_x, start_y, end_y
+
+
+def calculate_cody(df: pd.DataFrame, cody_n: Optional[int]) -> float:
     """Returns the area above the curve (mean green line) up to a maximal x position of 2**cody_n. If rcodiff
      is none, use the whole range of XY values instead"""
-    xs, ys = mean_line
+    xs, ys = mean_line = get_mean_line_arrays(df=df)
     start_x, end_x, start_y, _ = get_start_end_values(line=mean_line)
     if cody_n is not None:  # Cap off CoDy value
         end_x, end_y = cody_n, np.interp(cody_n, xs, ys)
-        xs = [x for x in xs if x <= end_x]
-        ys = ys[:len(xs)]
+        xs = [x for x in xs if x < end_x] + [end_x]
+        ys = ys[:len(xs)] + [end_y]
     linear_y = -1 * end_x + start_y  # y = ax + b, a=1, b=start_y
     triangle_area = (abs(end_x - start_x) * abs(start_y - linear_y)) / 2
     return trapezium_integration(xs=xs, ys=ys) / triangle_area

@@ -11,9 +11,10 @@ import openpyxl
 import pandas as pd
 from PySide2.QtCore import QEvent, QThreadPool
 from PySide2.QtGui import QKeySequence
-from PySide2.QtWidgets import (QApplication, QComboBox, QDoubleSpinBox, QFileDialog, QFormLayout, QFrame, QGridLayout,
-                               QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow, QMessageBox, QPushButton,
-                               QRadioButton, QSpinBox, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget, qApp)
+from PySide2.QtWidgets import (QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFormLayout, QFrame,
+                               QGridLayout, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow, QMessageBox,
+                               QPushButton, QRadioButton, QSpinBox, QTableWidget, QTableWidgetItem, QVBoxLayout,
+                               QWidget, qApp)
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as Canvas, NavigationToolbar2QT as Navbar
 from matplotlib.pyplot import Figure
 
@@ -150,12 +151,8 @@ class DynaFitGUI(QMainWindow):
         self.options_frame.layout().addRow(self.nbins_label, self.nbins_num)
         # Number of repeats parameter
         self.nrepeats_label = QLabel(self, text='Number of bootstrapping repeats')
-        self.nrepeats_num = QSpinBox(self, minimum=0, value=10, maximum=10000, singleStep=1)
+        self.nrepeats_num = QSpinBox(self, minimum=0, value=50, maximum=1_000_000, singleStep=1)
         self.options_frame.layout().addRow(self.nrepeats_label, self.nrepeats_num)
-        # Sample size parameter
-        self.samplesize_label = QLabel(self, text='Bootstrapping sample size')
-        self.samplesize_num = QSpinBox(self, minimum=0, value=20, maximum=10000, singleStep=1)
-        self.options_frame.layout().addRow(self.samplesize_label, self.samplesize_num)
         # Add section above to left column
         left_column.addWidget(self.options_frame)
 
@@ -165,7 +162,9 @@ class DynaFitGUI(QMainWindow):
         # Plot button
         self.plot_button = QPushButton(self, text='Plot CVP with above parameters')
         self.plot_button.clicked.connect(self.dynafit_run)
-        plot_grid.addWidget(self.plot_button, 0, 0, 1, 2)
+        plot_grid.addWidget(self.plot_button, 0, 0, 1, 1)
+        self.violin_checkbox = QCheckBox(self, text='Add violin distribution')
+        plot_grid.addWidget(self.violin_checkbox, 0, 1, 1, 1)
         # CoDy table of values
         self.result_table = QTableWidget(self, rowCount=0, columnCount=2)
         self.result_table.setHorizontalHeaderItem(0, QTableWidgetItem('Parameter'))
@@ -174,10 +173,10 @@ class DynaFitGUI(QMainWindow):
         self.result_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self.result_table.installEventFilter(self)
         plot_grid.addWidget(self.result_table, 1, 0, 4, 2)
-        self.to_excel_button = QPushButton(self, text='To Excel')
+        self.to_excel_button = QPushButton(self, text='Results to Excel')
         self.to_excel_button.clicked.connect(self.save_to_excel_dialog)
         plot_grid.addWidget(self.to_excel_button, 5, 0, 1, 1)
-        self.to_csv_button = QPushButton(self, text='To csv')
+        self.to_csv_button = QPushButton(self, text='Results to csv')
         self.to_csv_button.clicked.connect(self.save_to_csv_dialog)
         plot_grid.addWidget(self.to_csv_button, 5, 1, 1, 1)
         # Add section above to left column
@@ -271,7 +270,7 @@ class DynaFitGUI(QMainWindow):
             'max_binned_colony_size': self.maxbin_colsize_num.value(),
             'bins': self.nbins_num.value(),
             'repeats': self.nrepeats_num.value(),
-            'sample_size': self.samplesize_num.value(),
+            'show_violin': self.violin_checkbox.isChecked(),
             'fig': self.fig,
             'cvp_ax': self.CVP_ax,
             'hist_ax': self.histogram_ax,
@@ -317,6 +316,7 @@ class DynaFitGUI(QMainWindow):
         self.CS_start_textbox.setText('A2')
         self.GR_start_textbox.setText('B2')
         self.cs_gr_button.setChecked(True)
+        self.cs_gr_setup()
 
     # the following methods allow for clipboard copy of CoDy table
     # from: https://stackoverflow.com/questions/40469607/
