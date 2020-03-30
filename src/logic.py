@@ -63,12 +63,13 @@ def filter_bad_data(df: pd.DataFrame) -> pd.DataFrame:
 def add_bins(df: pd.DataFrame, max_binned_colony_size: int, bins: int) -> pd.DataFrame:
     """Returns the data DataFrame with a "bins" column, which divides the population of values in
     bins with a close number of instances in them"""
-    df['bins'] = df['CS']
-    bin_condition = df['bins'] > max_binned_colony_size
-    binned_data = pd.qcut(df.loc[bin_condition]['CS'], bins, labels=False)
-    binned_data += max_binned_colony_size + 1
-    binned_data = pd.concat([binned_data, df.loc[~bin_condition]['bins']])
-    return df.assign(bins=binned_data)
+    bin_condition = df['CS'] > max_binned_colony_size
+    single_bins = df.loc[~bin_condition]['CS']
+    multiple_bins = pd.qcut(df.loc[bin_condition]['CS'], bins, labels=False) + (max_binned_colony_size + 1)
+    single_intervals = pd.interval_range(start=0, end=max_binned_colony_size)
+    multiple_intervals = pd.qcut(df.loc[bin_condition]['CS'], bins)
+    return df.assign(bins=pd.concat([single_bins, multiple_bins]),
+                     intervals=pd.concat([single_intervals, multiple_intervals]))
 
 
 def bootstrap_data(df: pd.DataFrame, repeats: int, sample_size: int) -> pd.DataFrame:

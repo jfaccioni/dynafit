@@ -349,7 +349,7 @@ class DynaFitGUI(QMainWindow):
 
     def save_to_excel_dialog(self):
         if self.results is None:
-            self.dynafit_raised_exception(ValueError('No results yet!'))
+            self.dynafit_raised_exception(ValueError('No results yet. Please click on the "Plot CVP" button first.'))
             return
         placeholder = f'{self.result_table.item(0, 1).text()}_{self.result_table.item(1, 1).text()}.xlsx'
         query, _ = QFileDialog.getSaveFileName(self, 'Select file to save to', placeholder,
