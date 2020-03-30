@@ -18,12 +18,12 @@ from PySide2.QtWidgets import (QApplication, QCheckBox, QComboBox, QDoubleSpinBo
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as Canvas, NavigationToolbar2QT as Navbar
 from matplotlib.pyplot import Figure
 
-from src.logic import dynafit
+from logic import dynafit
 
 # Set a small font for plots
 matplotlib.rc('font', size=8)
 # Set debugging flag
-DEBUG = True
+DEBUG = False
 
 
 class DynaFitGUI(QMainWindow):

@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from openpyxl import Workbook
 
-from src.validator import ExcelValidator
+from validator import ExcelValidator
 
 # Value from which to throw a warning of low N
 N_WARNING_LEVEL = 20
