@@ -71,10 +71,7 @@ def add_bins(df: pd.DataFrame, max_binned_colony_size: int, bins: int) -> pd.Dat
         mes = (f'Could not divide the large CS population into {bins} unique groups. ' 
                'Please reduce the value of the "number_of_bins" parameter and try again.')
         raise TooManyBinsError(mes)
-    single_intervals = pd.interval_range(start=0, end=max_binned_colony_size)
-    multiple_intervals = pd.qcut(df.loc[bin_condition]['CS'], bins)
-    return df.assign(bins=pd.concat([single_bins, multiple_bins]),
-                     intervals=pd.concat([single_intervals, multiple_intervals]))
+    return df.assign(bins=pd.concat([single_bins, multiple_bins]))
 
 
 def bootstrap_data(df: pd.DataFrame, repeats: int, sample_size: int) -> pd.DataFrame:
