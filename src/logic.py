@@ -65,7 +65,12 @@ def add_bins(df: pd.DataFrame, max_binned_colony_size: int, bins: int) -> pd.Dat
     bins with a close number of instances in them"""
     bin_condition = df['CS'] > max_binned_colony_size
     single_bins = df.loc[~bin_condition]['CS']
-    multiple_bins = pd.qcut(df.loc[bin_condition]['CS'], bins, labels=False) + (max_binned_colony_size + 1)
+    try:
+        multiple_bins = pd.qcut(df.loc[bin_condition]['CS'], bins, labels=False) + (max_binned_colony_size + 1)
+    except ValueError:
+        mes = (f'Could not divide the large CS population into {bins} unique groups. ' 
+               'Please reduce the value of the "number_of_bins" parameter and try again.')
+        raise TooManyBinsError(mes)
     single_intervals = pd.interval_range(start=0, end=max_binned_colony_size)
     multiple_intervals = pd.qcut(df.loc[bin_condition]['CS'], bins)
     return df.assign(bins=pd.concat([single_bins, multiple_bins]),
@@ -171,3 +176,9 @@ def trapezium_integration(xs: np.ndarray, ys: np.ndarray):
         square = (next_x - x) * (ys[0] - y)
         triangle = (next_x - x) * (y - next_y) / 2
         integrated_area += (square + triangle)
+
+
+class TooManyBinsError(Exception):
+    """Exception raised when samples cannot be found in the input file."""
+    def __init__(self, *args):
+        super().__init__(*args)
