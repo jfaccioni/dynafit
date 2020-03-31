@@ -45,7 +45,7 @@ def dynafit(data: Workbook, filename: str, sheetname: str, is_raw_colony_sizes: 
     for i in range(1, 7):
         results[f'CoDy {i}'] = round(calculate_cody(df=bootstrapped_df, cody_n=i), 4)
     results['CoDy inf'] = round(calculate_cody(df=bootstrapped_df, cody_n=None), 4)
-    results['X Values'] = 'Y values'
+    results['Mean X values'] = 'Mean Y values'
     xs, ys = get_mean_line_arrays(df=bootstrapped_df)
     for x, y in zip(xs, ys):
         results[str(round(x, 4))] = round(y, 4)
