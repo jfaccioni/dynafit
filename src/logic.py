@@ -199,6 +199,7 @@ def get_start_end_values(line: Tuple[np.ndarray, np.ndarray]) -> Tuple[float, fl
     return start_x, end_x, start_y, end_y
 
 
+# TODO: error here when calculating CoDy for lower and upper CIs! (unrealistic values)
 def calculate_cody(df: pd.DataFrame, cody_n: Optional[int], xvals: Optional[List[float]]) -> float:
     """Returns the area above the curve (mean green line) up to a maximal x position of 2**cody_n. If rcodiff
      is none, use the whole range of XY values instead"""
