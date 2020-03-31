@@ -1,9 +1,10 @@
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from openpyxl import Workbook
+from scipy.stats import sem, t
 
 from src.validator import ExcelValidator
 
@@ -13,9 +14,10 @@ N_WARNING_LEVEL = 20
 
 def dynafit(data: Workbook, filename: str, sheetname: str, is_raw_colony_sizes: bool, time_delta: float,
             cs_start_cell: str,  cs_end_cell: str, gr_start_cell: str, gr_end_cell: str, max_binned_colony_size: int,
-            bins: int, repeats: int, show_violin: bool, fig: plt.Figure, cvp_ax: plt.Axes,
-            hist_ax: plt.Axes) -> Dict[str, Any]:
+            bins: int, repeats: int, show_violin: bool, show_ci: bool, confidence: float, fig: plt.Figure,
+            cvp_ax: plt.Axes, hist_ax: plt.Axes) -> Dict[str, Any]:
     """Main function of this script. Returns a dictionary of calculated CoDy values"""
+    upp = low = None
     # Validate input data
     ev = ExcelValidator(data=data, sheetname=sheetname, cs_start_cell=cs_start_cell, cs_end_cell=cs_end_cell,
                         gr_start_cell=gr_start_cell, gr_end_cell=gr_end_cell)
@@ -31,6 +33,8 @@ def dynafit(data: Workbook, filename: str, sheetname: str, is_raw_colony_sizes: 
     plot_supporting_lines(df=bootstrapped_df, ax=cvp_ax)
     if show_violin:
         plot_bootstrap_violins(df=bootstrapped_df, ax=cvp_ax, max_binned_colony_size=max_binned_colony_size)
+    if show_ci:
+        upp, low = plot_confidence_intervals(df=bootstrapped_df, confidence=confidence, ax=cvp_ax)
     plot_bootstrap_scatter(df=bootstrapped_df, ax=cvp_ax, max_binned_colony_size=max_binned_colony_size)
     plot_mean_line(df=bootstrapped_df, ax=cvp_ax)
     plot_histogram(df=binned_df, ax=hist_ax)
@@ -43,8 +47,16 @@ def dynafit(data: Workbook, filename: str, sheetname: str, is_raw_colony_sizes: 
                'bins': bins, 'repeats': repeats}
     # Get CoDy values
     for i in range(1, 7):
-        results[f'CoDy {i}'] = round(calculate_cody(df=bootstrapped_df, cody_n=i), 4)
-    results['CoDy inf'] = round(calculate_cody(df=bootstrapped_df, cody_n=None), 4)
+        results[f'CoDy {i}'] = round(calculate_cody(df=bootstrapped_df, cody_n=i, xvals=None), 4)
+    results['CoDy inf'] = round(calculate_cody(df=bootstrapped_df, cody_n=None, xvals=None), 4)
+    if show_ci:
+        for i in range(1, 7):
+            results[f'CoDy {i} upper CI'] = round(calculate_cody(df=bootstrapped_df, cody_n=i, xvals=upp), 4)
+        results['CoDy inf upper CI'] = round(calculate_cody(df=bootstrapped_df, cody_n=None, xvals=upp), 4)
+        for i in range(1, 7):
+            results[f'CoDy {i} lower CI'] = round(calculate_cody(df=bootstrapped_df, cody_n=i, xvals=low), 4)
+        results['CoDy inf lower CI'] = round(calculate_cody(df=bootstrapped_df, cody_n=None, xvals=low), 4)
+
     results['Mean X values'] = 'Mean Y values'
     xs, ys = get_mean_line_arrays(df=bootstrapped_df)
     for x, y in zip(xs, ys):
@@ -140,6 +152,23 @@ def plot_mean_line(df: pd.DataFrame, ax: plt.Axes) -> None:
     ax.plot(*mean_line, color='green', alpha=0.9, lw=3)
 
 
+def plot_confidence_intervals(df: pd.DataFrame, confidence: float, ax: plt.Axes) -> Tuple[List[float], List[float]]:
+    """Plots CI"""
+    xs, ys = get_mean_line_arrays(df=df)
+    upper_ci = []
+    lower_ci = []
+    for bin_number, bin_values in df.groupby('bins'):
+        variance = bin_values['log2_GR_var']
+        n = len(variance)
+        m = variance.mean()
+        std_err = sem(variance)
+        h = std_err * t.ppf((1 + confidence) / 2, n - 1)
+        upper_ci.append(m + h)
+        lower_ci.append(m - h)
+    ax.fill_between(xs, upper_ci, lower_ci, color='gray', alpha=0.5)
+    return upper_ci, lower_ci
+
+
 def plot_histogram(df: pd.DataFrame, ax: plt.Axes) -> None:
     """Plots a histogram of the colony size, indicating the "cuts" made by the binning process"""
     ax.hist(np.log2(df['CS']))
@@ -170,11 +199,13 @@ def get_start_end_values(line: Tuple[np.ndarray, np.ndarray]) -> Tuple[float, fl
     return start_x, end_x, start_y, end_y
 
 
-def calculate_cody(df: pd.DataFrame, cody_n: Optional[int]) -> float:
+def calculate_cody(df: pd.DataFrame, cody_n: Optional[int], xvals: Optional[List[float]]) -> float:
     """Returns the area above the curve (mean green line) up to a maximal x position of 2**cody_n. If rcodiff
      is none, use the whole range of XY values instead"""
-    xs, ys = mean_line = get_mean_line_arrays(df=df)
-    start_x, end_x, start_y, _ = get_start_end_values(line=mean_line)
+    xs, ys = get_mean_line_arrays(df=df)
+    start_x, end_x, start_y, _ = get_start_end_values(line=(xs, ys))
+    if xvals is not None:
+        xs = xvals
     if cody_n is not None:  # Cap off CoDy value
         end_x, end_y = cody_n, np.interp(cody_n, xs, ys)
         xs = [x for x in xs if x < end_x] + [end_x]

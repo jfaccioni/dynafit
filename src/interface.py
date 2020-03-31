@@ -151,7 +151,7 @@ class DynaFitGUI(QMainWindow):
         self.options_frame.layout().addRow(self.nbins_label, self.nbins_num)
         # Number of repeats parameter
         self.nrepeats_label = QLabel(self, text='Number of bootstrapping repeats')
-        self.nrepeats_num = QSpinBox(self, minimum=0, value=50, maximum=1_000_000, singleStep=1)
+        self.nrepeats_num = QSpinBox(self, minimum=0, value=100, maximum=1_000_000, singleStep=1)
         self.options_frame.layout().addRow(self.nrepeats_label, self.nrepeats_num)
         # Add section above to left column
         left_column.addWidget(self.options_frame)
@@ -160,11 +160,20 @@ class DynaFitGUI(QMainWindow):
         # Region where the button to plot is located, as well as the calculated AAC
         plot_grid = QGridLayout()
         # Plot button
-        self.plot_button = QPushButton(self, text='Plot CVP with above parameters')
+        self.plot_button = QPushButton(self, text='Plot CVP')
         self.plot_button.clicked.connect(self.dynafit_run)
         plot_grid.addWidget(self.plot_button, 0, 0, 1, 1)
-        self.violin_checkbox = QCheckBox(self, text='Add violin distribution')
+        # Violin checkbox
+        self.violin_checkbox = QCheckBox(self, text='Violins')
         plot_grid.addWidget(self.violin_checkbox, 0, 1, 1, 1)
+        # CI checkbox
+        self.ci_checkbox = QCheckBox(self, text='CI')
+        self.ci_checkbox.clicked.connect(self.confidence_setup)
+        plot_grid.addWidget(self.ci_checkbox, 0, 2, 1, 1)
+        # CI value
+        self.confidence_num = QDoubleSpinBox(self, minimum=0, value=0.95, maximum=1.0, singleStep=0.01)
+        self.confidence_num.setEnabled(False)
+        plot_grid.addWidget(self.confidence_num, 0, 3, 1, 1)
         # CoDy table of values
         self.result_table = QTableWidget(self, rowCount=0, columnCount=2)
         self.result_table.setHorizontalHeaderItem(0, QTableWidgetItem('Parameter'))
@@ -172,13 +181,15 @@ class DynaFitGUI(QMainWindow):
         self.result_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.result_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self.result_table.installEventFilter(self)
-        plot_grid.addWidget(self.result_table, 1, 0, 4, 2)
+        plot_grid.addWidget(self.result_table, 1, 0, 4, 4)
+        # Excel export button
         self.to_excel_button = QPushButton(self, text='Results to Excel')
         self.to_excel_button.clicked.connect(self.save_to_excel_dialog)
-        plot_grid.addWidget(self.to_excel_button, 5, 0, 1, 1)
+        plot_grid.addWidget(self.to_excel_button, 5, 0, 1, 2)
+        # CSV export button
         self.to_csv_button = QPushButton(self, text='Results to csv')
         self.to_csv_button.clicked.connect(self.save_to_csv_dialog)
-        plot_grid.addWidget(self.to_csv_button, 5, 1, 1, 1)
+        plot_grid.addWidget(self.to_csv_button, 5, 2, 1, 2)
         # Add section above to left column
         left_column.addLayout(plot_grid)
 
@@ -232,6 +243,13 @@ class DynaFitGUI(QMainWindow):
         self.CS_label.setText('Colony size column')
         self.GR_label.setText('Growth rate column')
 
+    def confidence_setup(self) -> None:
+        """Changes interface when the user clicks on the CI radio button"""
+        if self.ci_checkbox.isChecked():
+            self.confidence_num.setEnabled(True)
+        else:
+            self.confidence_num.setEnabled(False)
+
     def dynafit_run(self) -> None:
         """Runs DynaFit"""
         try:
@@ -271,6 +289,8 @@ class DynaFitGUI(QMainWindow):
             'bins': self.nbins_num.value(),
             'repeats': self.nrepeats_num.value(),
             'show_violin': self.violin_checkbox.isChecked(),
+            'show_ci': self.ci_checkbox.isChecked(),
+            'confidence': self.confidence_num.value(),
             'fig': self.fig,
             'cvp_ax': self.CVP_ax,
             'hist_ax': self.histogram_ax,
@@ -298,7 +318,7 @@ class DynaFitGUI(QMainWindow):
     def dynafit_cleanup(self):
         """Called by DynaFitWorker when it finished running (regardless of Exceptions).
         Restores label on the plot button and removes the axis lines from the histogram"""
-        self.plot_button.setText('Plot CVP with above parameters')
+        self.plot_button.setText('Plot CVP')
         self.plot_button.setEnabled(True)
         self.histogram_ax.set_axis_off()
         self.canvas.draw()
