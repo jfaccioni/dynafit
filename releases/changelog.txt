@@ -1,3 +1,6 @@
+# 0.0.3
+- Added XY values from mean line (green) to the results table
+
 # 0.0.2
 - Added support for violin plots
 - Removed option for bootstrapping sample size (uses group size now)
