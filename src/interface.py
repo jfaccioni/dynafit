@@ -151,7 +151,8 @@ class DynaFitGUI(QMainWindow):
         self.options_frame.layout().addRow(self.nbins_label, self.nbins_num)
         # Number of repeats parameter
         self.nrepeats_label = QLabel(self, text='Number of bootstrapping repeats')
-        self.nrepeats_num = QSpinBox(self, minimum=0, value=100, maximum=1_000_000, singleStep=1)
+        self.nrepeats_num = QSpinBox(self, minimum=0, maximum=1_000_000, singleStep=1)
+        self.nrepeats_num.setValue(100)
         self.options_frame.layout().addRow(self.nrepeats_label, self.nrepeats_num)
         # Add section above to left column
         left_column.addWidget(self.options_frame)
