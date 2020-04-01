@@ -30,7 +30,7 @@ def dynafit(data: Workbook, filename: str, sheetname: str, is_raw_colony_sizes: 
     bootstrapped_df = bootstrap_data(df=binned_df, repeats=repeats)
     add_log_columns(df=bootstrapped_df)
     # Plot DynaFit results
-    plot_supporting_lines(df=bootstrapped_df, ax=cvp_ax)
+    plot_supporting_lines(df=bootstrapped_df, ax=cvp_ax)  # TODO: add CI for supporting lines
     if show_violin:
         plot_bootstrap_violins(df=bootstrapped_df, ax=cvp_ax, max_binned_colony_size=max_binned_colony_size)
     if show_ci:
@@ -46,7 +46,7 @@ def dynafit(data: Workbook, filename: str, sheetname: str, is_raw_colony_sizes: 
     results = {'filename': filename, 'sheet': sheetname, 'max binned colony size': max_binned_colony_size,
                'bins': bins, 'repeats': repeats}
     # Get CoDy values
-    for i in range(1, 7):
+    for i in range(1, 7):  # TODO: change CoDy[Inf] to CoDy[max_x_value]!
         results[f'CoDy {i}'] = round(calculate_cody(df=bootstrapped_df, cody_n=i, xvals=None), 4)
     results['CoDy inf'] = round(calculate_cody(df=bootstrapped_df, cody_n=None, xvals=None), 4)
     if show_ci:
