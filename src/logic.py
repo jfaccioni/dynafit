@@ -9,6 +9,7 @@ from scipy.stats import sem, t
 from src.validator import ExcelValidator
 
 # Value from which to throw a warning of low N
+# TODO: change this to actual GUI message
 N_WARNING_LEVEL = 20
 
 
