@@ -14,8 +14,8 @@ N_WARNING_LEVEL = 20
 
 def dynafit(data: Workbook, filename: str, sheetname: str, is_raw_colony_sizes: bool, time_delta: float,
             cs_start_cell: str,  cs_end_cell: str, gr_start_cell: str, gr_end_cell: str, max_binned_colony_size: int,
-            bins: int, repeats: int, show_violin: bool, show_ci: bool, confidence: float, fig: plt.Figure,
-            cvp_ax: plt.Axes, hist_ax: plt.Axes) -> Dict[str, Any]:
+            bins: int, repeats: int, show_violin: bool, show_ci: bool, filter_outliers: bool, confidence: float,
+            fig: plt.Figure, cvp_ax: plt.Axes, hist_ax: plt.Axes) -> Dict[str, Any]:
     """Main function of this script. Returns a dictionary of calculated CoDy values"""
     upp = low = None
     # Validate input data
@@ -25,6 +25,8 @@ def dynafit(data: Workbook, filename: str, sheetname: str, is_raw_colony_sizes: 
     if is_raw_colony_sizes is True:
         df = calculate_growth_rate(df=df, time_delta=time_delta)
     df = filter_bad_data(df=df)
+    if filter_outliers is True:
+        df = perform_outlier_filtering(df=df)
     # Run DynaFit analysis
     binned_df = add_bins(df=df, max_binned_colony_size=max_binned_colony_size, bins=bins)
     bootstrapped_df = bootstrap_data(df=binned_df, repeats=repeats)
@@ -70,13 +72,23 @@ def calculate_growth_rate(df: pd.DataFrame, time_delta: float) -> pd.DataFrame:
     if growth_rate.isna().any():  # happens if the log of CS1 or CS2 is negative - which doesn't make sense anyway
         raise ValueError('Growth rate could not be calculated from the given colony size ranges. '
                          'Did you mean to select Colony Size and Growth Rate instead? '
-                         'Please check your column ranges.')
+                         'Please check your selected column ranges.')
     return df.assign(GR=growth_rate)
 
 
 def filter_bad_data(df: pd.DataFrame) -> pd.DataFrame:
     """Filter low CS values (colonies with less than 1 cell should not exist)"""
     return df.loc[df['CS'] >= 1]
+
+
+def perform_outlier_filtering(df: pd.DataFrame) -> pd.DataFrame:
+    """Filters GR outliers"""
+    q1, q3 = df['GR'].quantile([0.25, 0.75])
+    iqr = abs(q3-q1)
+    tf = 3
+    upper_cutoff = q3 + (iqr * tf)
+    lower_cutoff = q1 - (iqr * tf)
+    return df.loc[df['GR'].between(lower_cutoff, upper_cutoff)]
 
 
 def add_bins(df: pd.DataFrame, max_binned_colony_size: int, bins: int) -> pd.DataFrame:

@@ -304,6 +304,7 @@ class DynaFitGUI(QMainWindow):
             'repeats': self.bootstrap_repeats.value(),
             'show_violin': self.violin_checkbox.isChecked(),
             'show_ci': self.ci_checkbox.isChecked(),
+            'filter_outliers': self.outliers_checkbox.isChecked(),
             'confidence': self.confidence_num.value(),
             'fig': self.fig,
             'cvp_ax': self.CVP_ax,
