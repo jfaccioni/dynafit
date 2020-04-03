@@ -3,15 +3,15 @@ import sys
 import traceback
 from csv import writer
 from io import StringIO
-from typing import Any, Dict
+from typing import Any, Dict, List, Tuple
 from zipfile import BadZipFile
-
+from itertools import zip_longest
 import matplotlib
 import openpyxl
 import pandas as pd
 from PySide2.QtCore import QEvent, QThreadPool
 from PySide2.QtGui import QKeySequence
-from PySide2.QtWidgets import (QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFormLayout, QFrame,
+from PySide2.QtWidgets import (QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFrame,
                                QGridLayout, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow, QMessageBox,
                                QPushButton, QRadioButton, QSpinBox, QTableWidget, QTableWidgetItem, QVBoxLayout,
                                QWidget, qApp)
@@ -195,11 +195,15 @@ class DynaFitGUI(QMainWindow):
         self.to_csv_button.setDisabled(True)
         plot_grid.addWidget(self.to_csv_button, 0, 2, 1, 1)
         # CoDy table of values
-        self.result_table = QTableWidget(self, rowCount=0, columnCount=2)
+        self.result_table = QTableWidget(self, rowCount=0, columnCount=4)
         self.result_table.setHorizontalHeaderItem(0, QTableWidgetItem('Parameter'))
         self.result_table.setHorizontalHeaderItem(1, QTableWidgetItem('Value'))
+        self.result_table.setHorizontalHeaderItem(2, QTableWidgetItem('Mean X'))
+        self.result_table.setHorizontalHeaderItem(3, QTableWidgetItem('Mean Y'))
         self.result_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.result_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.result_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+        self.result_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
         self.result_table.installEventFilter(self)
         plot_grid.addWidget(self.result_table, 1, 0, 3, 3)
         # Add section above to left column
@@ -320,17 +324,20 @@ class DynaFitGUI(QMainWindow):
         trace = traceback.format_exc()
         self.show_error_message((name, trace))
 
-    def dynafit_no_exceptions_raised(self, results: Dict[str, float]):
+    def dynafit_no_exceptions_raised(self, return_value: Tuple[Dict[str, Any], List[str], List[str]]):
         """Called by DynaFitWorker if no Exceptions are raised.
         Currently unimplemented"""
+        results, xs, ys = return_value
         self.to_excel_button.setEnabled(True)
         self.to_csv_button.setEnabled(True)
         self.result_table.clearContents()
-        self.result_table.setRowCount(len(results))
+        self.result_table.setRowCount(max(len(results), len(xs), len(ys)))
         self.results = pd.DataFrame({'Parameter': list(results.keys()), 'Value': list(results.values())})
-        for index, (name, value) in self.results.iterrows():
+        for (index, (name, value)), x, y in zip_longest(self.results.iterrows(), xs, ys, fillvalue=''):
             self.result_table.setItem(index, 0, QTableWidgetItem(name))
             self.result_table.setItem(index, 1, QTableWidgetItem(str(value)))
+            self.result_table.setItem(index, 2, QTableWidgetItem(str(x)))
+            self.result_table.setItem(index, 3, QTableWidgetItem(str(y)))
 
     def dynafit_cleanup(self):
         """Called by DynaFitWorker when it finished running (regardless of Exceptions).

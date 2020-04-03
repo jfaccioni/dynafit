@@ -15,7 +15,7 @@ N_WARNING_LEVEL = 20
 def dynafit(data: Workbook, filename: str, sheetname: str, is_raw_colony_sizes: bool, time_delta: float,
             cs_start_cell: str,  cs_end_cell: str, gr_start_cell: str, gr_end_cell: str, max_binned_colony_size: int,
             bins: int, repeats: int, show_violin: bool, show_ci: bool, filter_outliers: bool, confidence: float,
-            fig: plt.Figure, cvp_ax: plt.Axes, hist_ax: plt.Axes) -> Dict[str, Any]:
+            fig: plt.Figure, cvp_ax: plt.Axes, hist_ax: plt.Axes) -> Tuple[Dict[str, Any], List[str], List[str]]:
     """Main function of this script. Returns a dictionary of calculated CoDy values"""
     upp = low = None
     # Validate input data
@@ -32,11 +32,12 @@ def dynafit(data: Workbook, filename: str, sheetname: str, is_raw_colony_sizes: 
     bootstrapped_df = bootstrap_data(df=binned_df, repeats=repeats)
     add_log_columns(df=bootstrapped_df)
     # Plot DynaFit results
-    plot_supporting_lines(df=bootstrapped_df, ax=cvp_ax)  # TODO: add CI for supporting lines
-    if show_violin:
-        plot_bootstrap_violins(df=bootstrapped_df, ax=cvp_ax, max_binned_colony_size=max_binned_colony_size)
+    plot_supporting_lines(df=bootstrapped_df, ax=cvp_ax)
     if show_ci:
         upp, low = plot_confidence_intervals(df=bootstrapped_df, confidence=confidence, ax=cvp_ax)
+        plot_supporting_lines_ci(df=bootstrapped_df, ax=cvp_ax, upper=upp[0], lower=low[0])
+    if show_violin:
+        plot_bootstrap_violins(df=bootstrapped_df, ax=cvp_ax, max_binned_colony_size=max_binned_colony_size)
     plot_bootstrap_scatter(df=bootstrapped_df, ax=cvp_ax, max_binned_colony_size=max_binned_colony_size)
     plot_mean_line(df=bootstrapped_df, ax=cvp_ax)
     plot_histogram(df=binned_df, ax=hist_ax)
@@ -48,22 +49,22 @@ def dynafit(data: Workbook, filename: str, sheetname: str, is_raw_colony_sizes: 
     results = {'filename': filename, 'sheet': sheetname, 'max binned colony size': max_binned_colony_size,
                'bins': bins, 'repeats': repeats}
     # Get CoDy values
-    for i in range(1, 7):  # TODO: change CoDy[Inf] to CoDy[max_x_value]!
-        results[f'CoDy {i}'] = round(calculate_cody(df=bootstrapped_df, cody_n=i, xvals=None), 4)
-    results['CoDy inf'] = round(calculate_cody(df=bootstrapped_df, cody_n=None, xvals=None), 4)
+    max_x_value = round(get_mean_line_arrays(df=bootstrapped_df)[0][-1], 2)
+    cody_range = [i for i in range(1, 7) if i < max_x_value]
+    for i in cody_range:
+        results[f'CoDy {i}'] = round(calculate_cody(df=bootstrapped_df, cody_n=i, yvals=None), 4)
+    results[f'CoDy {max_x_value}'] = round(calculate_cody(df=bootstrapped_df, cody_n=None, yvals=None), 4)
     if show_ci:
-        for i in range(1, 7):
-            results[f'CoDy {i} upper CI'] = round(calculate_cody(df=bootstrapped_df, cody_n=i, xvals=upp), 4)
-        results['CoDy inf upper CI'] = round(calculate_cody(df=bootstrapped_df, cody_n=None, xvals=upp), 4)
-        for i in range(1, 7):
-            results[f'CoDy {i} lower CI'] = round(calculate_cody(df=bootstrapped_df, cody_n=i, xvals=low), 4)
-        results['CoDy inf lower CI'] = round(calculate_cody(df=bootstrapped_df, cody_n=None, xvals=low), 4)
-
-    results['Mean X values'] = 'Mean Y values'
+        for i in cody_range:
+            results[f'CoDy {i} upper CI'] = round(calculate_cody(df=bootstrapped_df, cody_n=i, yvals=upp), 4)
+        results[f'CoDy {max_x_value} upper CI'] = round(calculate_cody(df=bootstrapped_df, cody_n=None, yvals=upp), 4)
+        for i in cody_range:
+            results[f'CoDy {i} lower CI'] = round(calculate_cody(df=bootstrapped_df, cody_n=i, yvals=low), 4)
+        results[f'CoDy {max_x_value} lower CI'] = round(calculate_cody(df=bootstrapped_df, cody_n=None, yvals=low), 4)
     xs, ys = get_mean_line_arrays(df=bootstrapped_df)
-    for x, y in zip(xs, ys):
-        results[str(round(x, 4))] = round(y, 4)
-    return results
+    xs = [str(round(x, 4)) for x in xs]
+    ys = [str(round(y, 4)) for y in ys]
+    return results, xs, ys
 
 
 def calculate_growth_rate(df: pd.DataFrame, time_delta: float) -> pd.DataFrame:
@@ -139,6 +140,18 @@ def plot_supporting_lines(df: pd.DataFrame, ax: plt.Axes) -> None:
     ax.axvline(start_x, color='darkgray', lw=3, zorder=0)
 
 
+def plot_supporting_lines_ci(df: pd.DataFrame, ax: plt.Axes, upper: float, lower: float) -> None:
+    """Plots the CI for the supporting lines of the CVP."""
+    mean_line = get_mean_line_arrays(df=df)
+    start_x, end_x, start_y, _ = get_start_end_values(line=mean_line)
+    # horizontal blue line (H0)
+    ax.fill_between([start_x, end_x], [upper, upper], [lower, lower], color='blue', alpha=0.3)
+    # diagonal red line (H1)
+    upper_linear_y = -1 * end_x + upper  # y = ax + b, a=1, b=start_y
+    lower_linear_y = -1 * end_x + lower  # y = ax + b, a=1, b=start_y
+    ax.fill_between([start_x, end_x], [upper, upper_linear_y], [lower, lower_linear_y], color='red', alpha=0.3)
+
+
 def plot_bootstrap_violins(df: pd.DataFrame, ax: plt.Axes, max_binned_colony_size: int) -> None:
     """Plots bootstrap result as violins"""
     xs, _ = get_mean_line_arrays(df=df)
@@ -211,14 +224,13 @@ def get_start_end_values(line: Tuple[np.ndarray, np.ndarray]) -> Tuple[float, fl
     return start_x, end_x, start_y, end_y
 
 
-# TODO: error here when calculating CoDy for lower and upper CIs! (unrealistic values)
-def calculate_cody(df: pd.DataFrame, cody_n: Optional[int], xvals: Optional[List[float]]) -> float:
+def calculate_cody(df: pd.DataFrame, cody_n: Optional[int], yvals: Optional[List[float]]) -> float:
     """Returns the area above the curve (mean green line) up to a maximal x position of 2**cody_n. If rcodiff
      is none, use the whole range of XY values instead"""
     xs, ys = get_mean_line_arrays(df=df)
+    if yvals is not None:
+        ys = yvals
     start_x, end_x, start_y, _ = get_start_end_values(line=(xs, ys))
-    if xvals is not None:
-        xs = xvals
     if cody_n is not None:  # Cap off CoDy value
         end_x, end_y = cody_n, np.interp(cody_n, xs, ys)
         xs = [x for x in xs if x < end_x] + [end_x]
