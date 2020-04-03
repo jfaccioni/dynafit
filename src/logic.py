@@ -9,7 +9,6 @@ from scipy.stats import sem, t
 from src.validator import ExcelValidator
 
 # Value from which to throw a warning of low N
-# TODO: change this to actual GUI message
 N_WARNING_LEVEL = 20
 
 
@@ -109,16 +108,20 @@ def add_bins(df: pd.DataFrame, max_binned_colony_size: int, bins: int) -> pd.Dat
 
 def bootstrap_data(df: pd.DataFrame, repeats: int) -> pd.DataFrame:
     """Performs bootstrapping"""
+    warns = []
     columns = ['CS_mean', 'GR_var', 'bins']
     output_df = pd.DataFrame(columns=columns)
     for bin_number, bin_values in df.groupby('bins'):
         n = len(bin_values)
         if n < N_WARNING_LEVEL:
-            print(f'Warning: group {bin_number} has only {n} instances.')
+            warns.append((bin_number, n))
         for repeat in range(repeats):
             sample = bin_values.sample(n=n, replace=True)
             row = pd.Series([sample['CS'].mean(), sample['GR'].var(), bin_number], index=columns)
             output_df = output_df.append(row, ignore_index=True)
+    for bin_number, n in warns:
+        # TODO: change this to actual GUI message
+        print(f'Warning: group {bin_number} has small N (only {n} instances')
     return output_df
 
 

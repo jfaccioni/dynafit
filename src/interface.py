@@ -332,8 +332,8 @@ class DynaFitGUI(QMainWindow):
         self.to_csv_button.setEnabled(True)
         self.result_table.clearContents()
         self.result_table.setRowCount(max(len(results), len(xs), len(ys)))
-        self.results = pd.DataFrame({'Parameter': list(results.keys()), 'Value': list(results.values())})
-        for (index, (name, value)), x, y in zip_longest(self.results.iterrows(), xs, ys, fillvalue=''):
+        for index, (name, value, x, y) in enumerate(zip_longest(list(results.keys()), list(results.values()), xs, ys,
+                                                                fillvalue='')):
             self.result_table.setItem(index, 0, QTableWidgetItem(name))
             self.result_table.setItem(index, 1, QTableWidgetItem(str(value)))
             self.result_table.setItem(index, 2, QTableWidgetItem(str(x)))
