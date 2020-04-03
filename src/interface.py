@@ -3,12 +3,12 @@ import sys
 import traceback
 from csv import writer
 from io import StringIO
+from itertools import zip_longest
 from typing import Any, Dict, List, Tuple
 from zipfile import BadZipFile
-from itertools import zip_longest
+
 import matplotlib
 import openpyxl
-import pandas as pd
 from PySide2.QtCore import QEvent, QThreadPool
 from PySide2.QtGui import QKeySequence
 from PySide2.QtWidgets import (QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFrame,
