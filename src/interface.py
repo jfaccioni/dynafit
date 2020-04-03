@@ -101,33 +101,33 @@ class DynaFitGUI(QMainWindow):
         self.data_frame.layout().addWidget(self.cs_gr_button, 1, 0, 1, 2)
         # Time interval label
         self.time_interval_label = QLabel(self, text='Time delta (hours):', wordWrap=True)
-        self.data_frame.layout().addWidget(self.time_interval_label, 0, 2, 1, 2)
+        self.data_frame.layout().addWidget(self.time_interval_label, 0, 2, 1, 1)
         # Time interval value
         self.time_interval_num = QDoubleSpinBox(self, minimum=0.0, value=24.0, maximum=1000.0, singleStep=1.0)
-        self.data_frame.layout().addWidget(self.time_interval_num, 1, 2, 1, 2)
+        self.data_frame.layout().addWidget(self.time_interval_num, 0, 3, 1, 1)
         # CS label
-        self.CS_label = QLabel(self, text='Colony Size 1 column', wordWrap=True)
+        self.CS_label = QLabel(self, text='Initial colony size column', wordWrap=True)
         self.data_frame.layout().addWidget(self.CS_label, 2, 0, 1, 2)
         # CS start
-        self.CS_start_label = QLabel(self, text='From:')
+        self.CS_start_label = QLabel(self, text='From cell:')
         self.data_frame.layout().addWidget(self.CS_start_label, 3, 0)
         self.CS_start_textbox = QLineEdit(self, placeholderText="")
         self.data_frame.layout().addWidget(self.CS_start_textbox, 3, 1)
         # CS end
-        self.CS_end_label = QLabel(self, text='To:')
+        self.CS_end_label = QLabel(self, text='To cell:')
         self.data_frame.layout().addWidget(self.CS_end_label, 4, 0)
         self.CS_end_textbox = QLineEdit(self, placeholderText="Entire Column")
         self.data_frame.layout().addWidget(self.CS_end_textbox, 4, 1)
         # GR label
-        self.GR_label = QLabel(self, text='Colony Size 2 column', wordWrap=True)
+        self.GR_label = QLabel(self, text='Final colony size column', wordWrap=True)
         self.data_frame.layout().addWidget(self.GR_label, 2, 2, 1, 2)
         # GR start
-        self.GR_start_label = QLabel(self, text='From:')
+        self.GR_start_label = QLabel(self, text='From cell:')
         self.data_frame.layout().addWidget(self.GR_start_label, 3, 2)
         self.GR_start_textbox = QLineEdit(self, placeholderText="")
         self.data_frame.layout().addWidget(self.GR_start_textbox, 3, 3)
         # GR end
-        self.GR_end_label = QLabel(self, text='To:')
+        self.GR_end_label = QLabel(self, text='To cell:')
         self.data_frame.layout().addWidget(self.GR_end_label, 4, 2)
         self.GR_end_textbox = QLineEdit(self, placeholderText="Entire Column")
         self.data_frame.layout().addWidget(self.GR_end_textbox, 4, 3)
@@ -138,22 +138,42 @@ class DynaFitGUI(QMainWindow):
         # Region where the user selects parameters for the CVP
         left_column.addWidget(QLabel(self, text='Parameter selection', styleSheet='font-weight: 600'))
         self.options_frame = QFrame(self, frameShape=QFrame.Box)
-        self.options_frame.setLayout(QFormLayout())
-        # Max colony size parameter
-        text = 'Max binned colony size: colonies up to this colony size are placed in individual groups'
-        self.maxbin_colsize_label = QLabel(self, text=text, wordWrap=True)
-        self.maxbin_colsize_num = QSpinBox(self, minimum=0, value=5, maximum=100, singleStep=1)
-        self.options_frame.layout().addRow(self.maxbin_colsize_label, self.maxbin_colsize_num)
+        self.options_frame.setLayout(QGridLayout())
+        # Max individual colony size parameter
+        tooltip = 'Colonies up to this colony size are placed in individual groups'
+        self.max_individual_cs_label = QLabel(self, text='Max individual colony groups', wordWrap=True)
+        self.max_individual_cs_label.setToolTip(tooltip)
+        self.options_frame.layout().addWidget(self.max_individual_cs_label, 0, 0, 1, 1)
+        self.max_individual_cs = QSpinBox(self, minimum=0, value=5, maximum=100, singleStep=1)
+        self.max_individual_cs.setToolTip(tooltip)
+        self.options_frame.layout().addWidget(self.max_individual_cs, 0, 1, 1, 1)
         # Number of bins parameter
-        text = 'Number of bins: remaining colonies are equally distributed in these many groups'
-        self.nbins_label = QLabel(self, text=text, wordWrap=True)
-        self.nbins_num = QSpinBox(self, minimum=0, value=5, maximum=100, singleStep=1)
-        self.options_frame.layout().addRow(self.nbins_label, self.nbins_num)
-        # Number of repeats parameter
-        self.nrepeats_label = QLabel(self, text='Number of bootstrapping repeats')
-        self.nrepeats_num = QSpinBox(self, minimum=0, maximum=1_000_000, singleStep=1)
-        self.nrepeats_num.setValue(100)
-        self.options_frame.layout().addRow(self.nrepeats_label, self.nrepeats_num)
+        tooltip = 'Remaining colonies are equally distributed in these many groups'
+        self.large_colony_groups_label = QLabel(self, text='Large colony groups')
+        self.large_colony_groups_label.setToolTip(tooltip)
+        self.options_frame.layout().addWidget(self.large_colony_groups_label, 0, 2, 1, 1)
+        self.large_colony_groups = QSpinBox(self, minimum=0, value=5, maximum=100, singleStep=1)
+        self.large_colony_groups.setToolTip(tooltip)
+        self.options_frame.layout().addWidget(self.large_colony_groups, 0, 3, 1, 1)
+        # Number of bootstrap repeats parameter
+        self.bootstrap_repeats_label = QLabel(self, text='Bootstrap repeats')
+        self.bootstrap_repeats = QSpinBox(self, minimum=0, maximum=1_000_000, singleStep=1)
+        self.bootstrap_repeats.setValue(100)
+        self.options_frame.layout().addWidget(self.bootstrap_repeats_label, 1, 0, 1, 1)
+        self.options_frame.layout().addWidget(self.bootstrap_repeats, 1, 1, 1, 1)
+        # Confidence interval parameter
+        self.ci_checkbox = QCheckBox(self, text='Use conf. int.')
+        self.ci_checkbox.clicked.connect(self.confidence_setup)
+        self.options_frame.layout().addWidget(self.ci_checkbox, 1, 2, 1, 1)
+        self.confidence_num = QDoubleSpinBox(self, minimum=0, value=0.95, maximum=1.0, singleStep=0.01)
+        self.confidence_num.setEnabled(False)
+        self.options_frame.layout().addWidget(self.confidence_num, 1, 3, 1, 1)
+        # Filter outliers parameter
+        self.outliers_checkbox = QCheckBox(self, text='Filter outliers before plotting')
+        self.options_frame.layout().addWidget(self.outliers_checkbox, 2, 0, 1, 2)
+        # Plot violins parameter
+        self.violin_checkbox = QCheckBox(self, text='Add violins to plot')
+        self.options_frame.layout().addWidget(self.violin_checkbox, 2, 2, 1, 2)
         # Add section above to left column
         left_column.addWidget(self.options_frame)
 
@@ -164,17 +184,16 @@ class DynaFitGUI(QMainWindow):
         self.plot_button = QPushButton(self, text='Plot CVP')
         self.plot_button.clicked.connect(self.dynafit_run)
         plot_grid.addWidget(self.plot_button, 0, 0, 1, 1)
-        # Violin checkbox
-        self.violin_checkbox = QCheckBox(self, text='Violins')
-        plot_grid.addWidget(self.violin_checkbox, 0, 1, 1, 1)
-        # CI checkbox
-        self.ci_checkbox = QCheckBox(self, text='CI')
-        self.ci_checkbox.clicked.connect(self.confidence_setup)
-        plot_grid.addWidget(self.ci_checkbox, 0, 2, 1, 1)
-        # CI value
-        self.confidence_num = QDoubleSpinBox(self, minimum=0, value=0.95, maximum=1.0, singleStep=0.01)
-        self.confidence_num.setEnabled(False)
-        plot_grid.addWidget(self.confidence_num, 0, 3, 1, 1)
+        # Excel export button
+        self.to_excel_button = QPushButton(self, text='Save to Excel')
+        self.to_excel_button.clicked.connect(self.save_to_excel_dialog)
+        self.to_excel_button.setDisabled(True)
+        plot_grid.addWidget(self.to_excel_button, 0, 1, 1, 1)
+        # CSV export button
+        self.to_csv_button = QPushButton(self, text='Save to csv')
+        self.to_csv_button.clicked.connect(self.save_to_csv_dialog)
+        self.to_csv_button.setDisabled(True)
+        plot_grid.addWidget(self.to_csv_button, 0, 2, 1, 1)
         # CoDy table of values
         self.result_table = QTableWidget(self, rowCount=0, columnCount=2)
         self.result_table.setHorizontalHeaderItem(0, QTableWidgetItem('Parameter'))
@@ -182,15 +201,7 @@ class DynaFitGUI(QMainWindow):
         self.result_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.result_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self.result_table.installEventFilter(self)
-        plot_grid.addWidget(self.result_table, 1, 0, 4, 4)
-        # Excel export button
-        self.to_excel_button = QPushButton(self, text='Results to Excel')
-        self.to_excel_button.clicked.connect(self.save_to_excel_dialog)
-        plot_grid.addWidget(self.to_excel_button, 5, 0, 1, 2)
-        # CSV export button
-        self.to_csv_button = QPushButton(self, text='Results to csv')
-        self.to_csv_button.clicked.connect(self.save_to_csv_dialog)
-        plot_grid.addWidget(self.to_csv_button, 5, 2, 1, 2)
+        plot_grid.addWidget(self.result_table, 1, 0, 3, 3)
         # Add section above to left column
         left_column.addLayout(plot_grid)
 
@@ -234,12 +245,14 @@ class DynaFitGUI(QMainWindow):
 
     def cs1_cs2_setup(self) -> None:
         """Changes interface when the user chooses data ranges representing CS1 and CS2"""
+        self.time_interval_label.setEnabled(True)
         self.time_interval_num.setEnabled(True)
-        self.CS_label.setText('Colony size 1 column')
-        self.GR_label.setText('Colony size 2 column')
+        self.CS_label.setText('Initial colony size column')
+        self.GR_label.setText('Final colony size column')
 
     def cs_gr_setup(self) -> None:
         """Changes interface when the user chooses data ranges representing CS and GR"""
+        self.time_interval_label.setEnabled(False)
         self.time_interval_num.setEnabled(False)
         self.CS_label.setText('Colony size column')
         self.GR_label.setText('Growth rate column')
@@ -286,9 +299,9 @@ class DynaFitGUI(QMainWindow):
             'cs_end_cell': self.CS_end_textbox.text(),
             'gr_start_cell': self.GR_start_textbox.text(),
             'gr_end_cell': self.GR_end_textbox.text(),
-            'max_binned_colony_size': self.maxbin_colsize_num.value(),
-            'bins': self.nbins_num.value(),
-            'repeats': self.nrepeats_num.value(),
+            'max_binned_colony_size': self.max_individual_cs.value(),
+            'bins': self.large_colony_groups.value(),
+            'repeats': self.bootstrap_repeats.value(),
             'show_violin': self.violin_checkbox.isChecked(),
             'show_ci': self.ci_checkbox.isChecked(),
             'confidence': self.confidence_num.value(),
@@ -309,6 +322,8 @@ class DynaFitGUI(QMainWindow):
     def dynafit_no_exceptions_raised(self, results: Dict[str, float]):
         """Called by DynaFitWorker if no Exceptions are raised.
         Currently unimplemented"""
+        self.to_excel_button.setEnabled(True)
+        self.to_csv_button.setEnabled(True)
         self.result_table.clearContents()
         self.result_table.setRowCount(len(results))
         self.results = pd.DataFrame({'Parameter': list(results.keys()), 'Value': list(results.values())})
