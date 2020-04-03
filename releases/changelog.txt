@@ -1,3 +1,14 @@
+# 0.0.4
+- The program no longer attempts to calculate CoDy values for colony size values beyond the max X value
+- Renamed "CoDy Inf" to "CoDy max X value"
+- Added optional confidence interval (CI) functionality:
+  - Mean line CI
+  - Supporting lines CI (H0 and H1)
+  - CoDy CI
+- Added option to remove GR outliers before bootstrap
+- Visually refactored interface
+- Refactored results table: XY values now have their own columns
+
 # 0.0.3
 - Added XY values from mean line (green) to the results table
 
