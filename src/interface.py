@@ -3,6 +3,7 @@ import sys
 import traceback
 from csv import writer
 from io import StringIO
+import pandas as pd
 from itertools import zip_longest
 from typing import Any, Dict, List, Tuple
 from zipfile import BadZipFile
@@ -18,12 +19,12 @@ from PySide2.QtWidgets import (QApplication, QCheckBox, QComboBox, QDoubleSpinBo
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as Canvas, NavigationToolbar2QT as Navbar
 from matplotlib.pyplot import Figure
 
-from src.logic import dynafit
+from logic import dynafit
 
 # Set a small font for plots
 matplotlib.rc('font', size=8)
 # Set debugging flag
-DEBUG = True
+DEBUG = False
 
 
 class DynaFitGUI(QMainWindow):
@@ -338,6 +339,17 @@ class DynaFitGUI(QMainWindow):
             self.result_table.setItem(index, 1, QTableWidgetItem(str(value)))
             self.result_table.setItem(index, 2, QTableWidgetItem(str(x)))
             self.result_table.setItem(index, 3, QTableWidgetItem(str(y)))
+        largest_list = max(len(results), len(xs), len(ys))
+        parameters = list(results.keys()) + [None for _ in range(largest_list - len(results))]
+        values = list(results.values()) + [None for _ in range(largest_list - len(results))]
+        xvals = [float(x) for x in xs] + [None for _ in range(largest_list - len(xs))]
+        yvals = [float(y) for y in ys] + [None for _ in range(largest_list - len(xs))]
+        self.results = pd.DataFrame({
+            'Parameter': parameters,
+            'Value': values,
+            'Mean X Values': xvals,
+            'Mean Y Values': yvals,
+        })
 
     def dynafit_cleanup(self):
         """Called by DynaFitWorker when it finished running (regardless of Exceptions).
