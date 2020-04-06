@@ -3,13 +3,14 @@ import sys
 import traceback
 from csv import writer
 from io import StringIO
-import pandas as pd
 from itertools import zip_longest
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, Tuple
 from zipfile import BadZipFile
 
 import matplotlib
+import numpy as np
 import openpyxl
+import pandas as pd
 from PySide2.QtCore import QEvent, QThreadPool
 from PySide2.QtGui import QKeySequence
 from PySide2.QtWidgets import (QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFrame,
@@ -161,18 +162,18 @@ class DynaFitGUI(QMainWindow):
         self.bootstrap_repeats_spinbox.setValue(100)
         self.options_frame.layout().addWidget(self.bootstrap_repeats_spinbox, 1, 1, 1, 1)
         # Confidence interval parameter
-        self.conf_int_checkbox = QCheckBox(self, text='Use conf. int.')
-        self.conf_int_checkbox.clicked.connect(self.confidence_setup)
-        self.options_frame.layout().addWidget(self.conf_int_checkbox, 1, 2, 1, 1)
-        self.conf_int_num = QDoubleSpinBox(self, minimum=0, value=0.950, maximum=0.999, singleStep=0.010, decimals=3)
-        self.conf_int_num.setEnabled(False)
-        self.options_frame.layout().addWidget(self.conf_int_num, 1, 3, 1, 1)
+        self.add_conf_int_checkbox = QCheckBox(self, text='Use conf. int.')
+        self.add_conf_int_checkbox.clicked.connect(self.confidence_setup)
+        self.options_frame.layout().addWidget(self.add_conf_int_checkbox, 1, 2, 1, 1)
+        self.conf_int_spinbox = QDoubleSpinBox(self, minimum=0, value=0.95, maximum=0.999, singleStep=0.01, decimals=3)
+        self.conf_int_spinbox.setEnabled(False)
+        self.options_frame.layout().addWidget(self.conf_int_spinbox, 1, 3, 1, 1)
         # Filter outliers parameter
-        self.outliers_checkbox = QCheckBox(self, text='Filter outliers before plotting')
-        self.options_frame.layout().addWidget(self.outliers_checkbox, 2, 0, 1, 2)
+        self.remove_outliers_checkbox = QCheckBox(self, text='Filter outliers before plotting')
+        self.options_frame.layout().addWidget(self.remove_outliers_checkbox, 2, 0, 1, 2)
         # Plot violins parameter
-        self.violins_checkbox = QCheckBox(self, text='Add violins to plot')
-        self.options_frame.layout().addWidget(self.violins_checkbox, 2, 2, 1, 2)
+        self.add_violins_checkbox = QCheckBox(self, text='Add violins to plot')
+        self.options_frame.layout().addWidget(self.add_violins_checkbox, 2, 2, 1, 2)
         # Add section above to left column
         left_column.addWidget(self.options_frame)
 
@@ -197,7 +198,7 @@ class DynaFitGUI(QMainWindow):
         self.results_table = QTableWidget(self, rowCount=0, columnCount=4)
         for index, column_name in enumerate(['Parameter', 'Value', 'Mean X', 'Mean Y']):
             self.results_table.setHorizontalHeaderItem(index, QTableWidgetItem(column_name))
-        self.results_table.horizontalHeader().setSectionResizeMode(index, QHeaderView.Stretch)
+            self.results_table.horizontalHeader().setSectionResizeMode(index, QHeaderView.Stretch)
         self.results_table.installEventFilter(self)
         plot_grid.addWidget(self.results_table, 1, 0, 3, 3)
         # Add section above to left column
@@ -258,10 +259,10 @@ class DynaFitGUI(QMainWindow):
 
     def confidence_setup(self) -> None:
         """Changes interface widgets when the user clicks on the confidence interval radio button."""
-        if self.conf_int_checkbox.isChecked():
-            self.conf_int_num.setEnabled(True)
+        if self.add_conf_int_checkbox.isChecked():
+            self.conf_int_spinbox.setEnabled(True)
         else:
-            self.conf_int_num.setEnabled(False)
+            self.conf_int_spinbox.setEnabled(False)
 
     def dynafit_run(self) -> None:
         """Runs DynaFit (main function from logic.py)."""
@@ -290,19 +291,19 @@ class DynaFitGUI(QMainWindow):
             'data': self.data,
             'filename': os.path.splitext(self.input_filename_label.text())[0],
             'sheetname': self.input_sheetname_combobox.currentText(),
-            'is_raw_colony_sizes': self.cs1_cs2_button.isChecked(),
+            'need_to_calculate_gr': self.cs1_cs2_button.isChecked(),
             'time_delta': self.time_interval_spinbox.value(),
             'cs_start_cell': self.CS_start_textbox.text(),
             'cs_end_cell': self.CS_end_textbox.text(),
             'gr_start_cell': self.GR_start_textbox.text(),
             'gr_end_cell': self.GR_end_textbox.text(),
-            'max_binned_colony_size': self.max_individual_cs_spinbox.value(),
-            'bins': self.large_colony_groups_spinbox.value(),
-            'repeats': self.bootstrap_repeats_spinbox.value(),
-            'show_violin': self.violins_checkbox.isChecked(),
-            'show_ci': self.conf_int_checkbox.isChecked(),
-            'filter_outliers': self.outliers_checkbox.isChecked(),
-            'confidence': self.conf_int_num.value(),
+            'individual_colonies': self.max_individual_cs_spinbox.value(),
+            'large_colony_groups': self.large_colony_groups_spinbox.value(),
+            'bootstrap_repeats': self.bootstrap_repeats_spinbox.value(),
+            'add_confidence_interval': self.add_conf_int_checkbox.isChecked(),
+            'confidence_value': self.conf_int_spinbox.value(),
+            'remove_outliers': self.remove_outliers_checkbox.isChecked(),
+            'add_violin': self.add_violins_checkbox.isChecked(),
             'fig': self.fig,
             'cvp_ax': self.cvp_ax,
             'hist_ax': self.histogram_ax,
@@ -314,32 +315,30 @@ class DynaFitGUI(QMainWindow):
         self.histogram_ax.clear()
         self.raise_error(error)
 
-    def dynafit_no_exceptions_raised(self, results: Tuple[Dict[str, Any], List[float], List[float]]) -> None:
+    def dynafit_no_exceptions_raised(self, results: Tuple[Dict[str, Any], np.array, np.array]) -> None:
         """Called if no errors are raised during the DynaFit analysis. Writes/saves the results from DynaFit."""
         self.to_excel_button.setEnabled(True)
         self.to_csv_button.setEnabled(True)
         self.results_table.clearContents()
-        table_length = max(len(r) for r in results)
-        self.results_table.setRowCount(table_length)
+        size = max(len(r) for r in results)
+        self.results_table.setRowCount(size)
         result_dict, xs, ys = results
         self.set_results_table(result_dict=result_dict, xs=xs, ys=ys)
-        self.set_results_dataframe(result_dict=result_dict, xs=xs, ys=ys, table_length=table_length)
+        self.set_results_dataframe(result_dict=result_dict, xs=xs, ys=ys, size=size)
 
-    def set_results_table(self, result_dict: Dict[str, Any], xs: List[float], ys: List[float]) -> None:
+    def set_results_table(self, result_dict: Dict[str, Any], xs: np.ndarray, ys: np.ndarray) -> None:
         """Sets values obtained from DynaFit analysis onto results table."""
         for row_index, ((name, value), x, y) in enumerate(zip_longest(result_dict.items(), xs, ys, fillvalue='')):
             for column_index, element in enumerate([name, value, x, y]):
                 self.results_table.setItem(row_index, column_index, QTableWidgetItem(str(element)))
 
-    def set_results_dataframe(self, result_dict: Dict[str, Any], xs: List[float], ys: List[float],
-                              table_length: int) -> None:
+    def set_results_dataframe(self, result_dict: Dict[str, Any], xs: np.ndarray, ys: np.ndarray,  size: int) -> None:
         """Saves DynaFit results as a pandas DataFrame (used for Excel/csv export)."""
-        parameters = list(result_dict.keys()) + [None for _ in range(table_length - len(result_dict))]
-        values = list(result_dict.values()) + [None for _ in range(table_length - len(result_dict))]
-        xvals = [float(x) for x in xs] + [None for _ in range(table_length - len(xs))]
-        yvals = [float(y) for y in ys] + [None for _ in range(table_length - len(xs))]
-        self.results = pd.DataFrame({'Parameter': parameters, 'Value': values, 'Mean X Values': xvals,
-                                     'Mean Y Values': yvals})
+        params = list(result_dict.keys()) + [None for _ in range(size - len(result_dict))]
+        values = list(result_dict.values()) + [None for _ in range(size - len(result_dict))]
+        xs = list(xs) + [None for _ in range(size - len(xs))]
+        ys = list(ys) + [None for _ in range(size - len(xs))]
+        self.results = pd.DataFrame({'Parameter': params, 'Value': values, 'Mean X Values': xs, 'Mean Y Values': ys})
 
     def dynafit_cleanup(self) -> None:
         """Called when DynaFit analysis finishes running (regardless of errors). Restores label on the plot
@@ -355,7 +354,7 @@ class DynaFitGUI(QMainWindow):
             self.raise_error(ValueError('No results yet. Please click on the "Plot CVP" button first.'))
             return
         placeholder = f'{self.results_table.item(0, 1).text()}_{self.results_table.item(1, 1).text()}.xlsx'
-        query, _ = QFileDialog.getSaveFileName(self, 'Select file to save to', placeholder,
+        query, _ = QFileDialog.getSaveFileName(self, 'Select file to save results', placeholder,
                                                'Excel Spreadsheet (*.xlsx)')
         if query:
             self.save_excel(path=query, placeholder=placeholder)
@@ -372,7 +371,7 @@ class DynaFitGUI(QMainWindow):
             self.raise_error(ValueError('No results yet. Please click on the "Plot CVP" button first.'))
             return
         placeholder = f'{self.results_table.item(0, 1).text()}_{self.results_table.item(1, 1).text()}.csv'
-        query, _ = QFileDialog.getSaveFileName(self, 'Select file to save to', placeholder,
+        query, _ = QFileDialog.getSaveFileName(self, 'Select file to save results', placeholder,
                                                'Comma-separated values (*.csv)')
         if query:
             self.save_csv(path=query)
