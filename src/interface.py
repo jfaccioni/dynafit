@@ -24,7 +24,7 @@ from src.logic import dynafit
 # Set a small font for plots
 matplotlib.rc('font', size=8)
 # Set debugging flag
-DEBUG = False
+DEBUG = True
 
 
 class DynaFitGUI(QMainWindow):
@@ -401,7 +401,7 @@ class DynaFitGUI(QMainWindow):
         self.CS_start_textbox.setText('A2')
         self.GR_start_textbox.setText('B2')
         self.cs_gr_button.setChecked(True)
-        self.cs_gr_button.clicked()
+        self.cs_gr_setup()
 
     # The following methods allows the result table to be copied to the clipboard. Source:
     # https://stackoverflow.com/questions/40469607/
