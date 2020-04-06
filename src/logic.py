@@ -34,6 +34,7 @@ def dynafit(data: Workbook, filename: str, sheetname: str, need_to_calculate_gr:
         df = filter_outliers(df=df)
     # Bin samples into groups and plot the resulting histogram
     binned_df = add_bins(df=df, individual_colonies=individual_colonies, bins=large_colony_groups)
+    # TODO: implement warning (GUI blocking) when a bin contains a small number of colonies!
     plot_histogram(df=binned_df, ax=hist_ax)
     # Perform DynaFit bootstrap
     bootstrapped_df = bootstrap_data(df=binned_df, repeats=bootstrap_repeats)

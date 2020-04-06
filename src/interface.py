@@ -382,6 +382,9 @@ class DynaFitGUI(QMainWindow):
             path = path + '.csv'
         self.results.to_csv(path, index=None)
 
+    def small_sample_warning(self, sample_dict: Dict[str, int]) -> None:
+        pass  # TODO: implement warning (GUI blocking) when a bin contains a small number of colonies!
+
     def raise_error(self, error: Exception) -> None:
         """Generic function for catching errors and re-raising them as properly formatted message boxes."""
         name = f'{error.__class__.__name__}:\n{error}'
