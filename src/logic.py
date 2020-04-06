@@ -37,7 +37,7 @@ def dynafit(data: Workbook, filename: str, sheetname: str, need_to_calculate_gr:
     plot_histogram(df=binned_df, ax=hist_ax)
     # Perform DynaFit bootstrap
     bootstrapped_df = bootstrap_data(df=binned_df, repeats=bootstrap_repeats)
-    add_log_columns(df=bootstrapped_df)
+    bootstrapped_df = add_log_columns(df=bootstrapped_df)
     # Extract and plot mean values
     xs, ys = get_mean_line_arrays(df=bootstrapped_df)
     plot_mean_line(xs=xs, ys=ys, ax=cvp_ax)

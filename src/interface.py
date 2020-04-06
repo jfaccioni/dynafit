@@ -337,7 +337,7 @@ class DynaFitGUI(QMainWindow):
         params = list(result_dict.keys()) + [None for _ in range(size - len(result_dict))]
         values = list(result_dict.values()) + [None for _ in range(size - len(result_dict))]
         xs = list(xs) + [None for _ in range(size - len(xs))]
-        ys = list(ys) + [None for _ in range(size - len(xs))]
+        ys = list(ys) + [None for _ in range(size - len(ys))]
         self.results = pd.DataFrame({'Parameter': params, 'Value': values, 'Mean X Values': xs, 'Mean Y Values': ys})
 
     def dynafit_cleanup(self) -> None:
