@@ -154,41 +154,34 @@ class ExcelValidator:
 
 class NoExcelFileError(Exception):
     """Exception raised when user runs DynaFit with no input file."""
-    def __init__(self, *args):
-        super().__init__(*args)
+    pass
 
 
 class EmptyCellError(Exception):
     """Exception raised when mandatory cell is empty."""
-    def __init__(self, *args):
-        super().__init__(*args)
+    pass
 
 
 class BadCellStringError(Exception):
     """Exception raised when cell does not correspond to a valid Excel cell accessor."""
-    def __init__(self, *args):
-        super().__init__(*args)
+    pass
 
 
 class MismatchedColumnsError(Exception):
     """Exception raised when samples cannot be found in the input file."""
-    def __init__(self, *args):
-        super().__init__(*args)
+    pass
 
 
 class MismatchedRowsError(Exception):
     """Exception raised when samples cannot be found in the input file."""
-    def __init__(self, *args):
-        super().__init__(*args)
+    pass
 
 
 class BadCellValueError(Exception):
     """Exception raised when a cell value cannot be coerced into a float."""
-    def __init__(self, *args):
-        super().__init__(*args)
+    pass
 
 
 class DifferentSizeError(Exception):
     """Exception raised when samples cannot be found in the input file."""
-    def __init__(self, *args):
-        super().__init__(*args)
+    pass

@@ -15,7 +15,7 @@ N_WARNING_LEVEL = 20
 def dynafit(data: Workbook, filename: str, sheetname: str, is_raw_colony_sizes: bool, time_delta: float,
             cs_start_cell: str,  cs_end_cell: str, gr_start_cell: str, gr_end_cell: str, max_binned_colony_size: int,
             bins: int, repeats: int, show_violin: bool, show_ci: bool, filter_outliers: bool, confidence: float,
-            fig: plt.Figure, cvp_ax: plt.Axes, hist_ax: plt.Axes) -> Tuple[Dict[str, Any], List[str], List[str]]:
+            fig: plt.Figure, cvp_ax: plt.Axes, hist_ax: plt.Axes) -> Tuple[Dict[str, Any], List[float], List[float]]:
     """Main function of this script. Returns a dictionary of calculated CoDy values"""
     upp = low = None
     # Validate input data
@@ -62,8 +62,8 @@ def dynafit(data: Workbook, filename: str, sheetname: str, is_raw_colony_sizes: 
             results[f'CoDy {i} lower CI'] = round(calculate_cody(df=bootstrapped_df, cody_n=i, yvals=low), 4)
         results[f'CoDy {max_x_value} lower CI'] = round(calculate_cody(df=bootstrapped_df, cody_n=None, yvals=low), 4)
     xs, ys = get_mean_line_arrays(df=bootstrapped_df)
-    xs = [str(round(x, 4)) for x in xs]
-    ys = [str(round(y, 4)) for y in ys]
+    xs = [round(x, 4) for x in xs]
+    ys = [round(y, 4) for y in ys]
     return results, xs, ys
 
 
