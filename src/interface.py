@@ -435,7 +435,6 @@ class DynaFitGUI(QMainWindow):
 
 class CorruptedExcelFile(Exception):
     """Exception raised when openpyxl cannot parse the input Excel file."""
-    pass
 
 
 if __name__ == '__main__':

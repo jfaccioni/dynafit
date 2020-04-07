@@ -11,7 +11,7 @@ class ExcelValidator:
     The validation methods aim to raise a specific, user-informative exception, if they fail."""
     def __init__(self, data: Optional[Workbook], sheetname: str, cs_start_cell: str, cs_end_cell: str,
                  gr_start_cell: str, gr_end_cell: str) -> None:
-        """Init method of ExcelValidator class"""
+        """Init method of ExcelValidator class."""
         # Checks if any data has been loaded at all
         self.validate_input(data=data)
         self.ws = data[sheetname]
@@ -40,7 +40,7 @@ class ExcelValidator:
         if data is None:
             raise NoExcelFileError('Please select an Excel spreadsheet as the input file')
 
-    def validation_routine(self):
+    def validation_routine(self) -> pd.DataFrame:
         """Method responsible for calling downstream validation methods. Validation steps includes:
         - Checking if the start cell is empty
         - Checking if the start and end cells are valid Excel cells
@@ -53,7 +53,9 @@ class ExcelValidator:
 
         If no Exceptions were raised during validation, this method returns a pandas DataFrame in the format:
           CS: <colony size values>,
-          GR: <growth rate values>"""
+          GR: <growth rate values>
+        As an implementation detail, the GR column may actually be the final colony size column, if the user
+        chose to let the program calculate the growth rate instead. This will be later overwritten by DynaFit."""
         data = {}  # To be converted to a pandas DataFrame at the end
         for name, (start, end) in self.ranges.items():
             if end:  # User wants range from start cell to end cell
@@ -70,7 +72,7 @@ class ExcelValidator:
         return pd.DataFrame(data)
 
     def validate_cell_string(self, cell_str: str) -> None:
-        """Validates a cell string in an Excel spreadsheet"""
+        """Validates a cell string in an Excel spreadsheet. Raises an appropriate error if the validation fails."""
         if cell_str == '':  # Guaranteed only to happen on start cells
             raise EmptyCellError(f'Start cell cannot be empty')
         if not self.is_valid_excel(cell_str=cell_str):
@@ -78,16 +80,18 @@ class ExcelValidator:
 
     @staticmethod
     def is_valid_excel(cell_str: str) -> bool:
-        """Returns whether the string cell_str is a valid Excel cell accessor. This implies that"""
+        """Returns whether the string cell_str is a valid Excel cell accessor. This implies that it is an
+        alphanumerical string, with all numbers appearing after all letters."""
         #  cell_str must be exclusively composed of letters and numbers
         if not cell_str.isalnum():
             return False
         # All letters in cell_str come before all numbers. Source:
-        # https://stackoverflow.com/questions/60758670/check-if-a-python-string-is-a-valid-excel-cell
+        # https://stackoverflow.com/questions/60758670/
         return bool(re.match("[A-Z]+\d+$", cell_str))
 
     def validate_cell_range(self, start: str, end: str) -> None:
-        """Validates range of cells (from start cell to end cell) in an Excel spreadsheet"""
+        """Validates range of cells (from start cell to end cell) in an Excel spreadsheet. Raises an appropriate
+        error if the validation fails."""
         for cell_str in (start, end):
             self.validate_cell_string(cell_str=cell_str)
         if not self.ranges_share_same_column(start=start, end=end):
@@ -96,20 +100,20 @@ class ExcelValidator:
             raise MismatchedRowsError(f'Start cell {start} comes after end cell {end}')
 
     def ranges_share_same_column(self, start: str, end: str) -> bool:
-        """Returns whether the start and end cells share the same column letter"""
+        """Returns whether the start and end cells share the same column letter."""
         start_letters = self.extract_letters(start)
         end_letters = self.extract_letters(end)
         return start_letters == end_letters
 
     def end_cell_comes_after_start_cell(self, start: str, end: str) -> bool:
-        """Returns whether the row number of the end cell comes after the row number of the start cell"""
+        """Returns whether the row number of the end cell comes after the row number of the start cell."""
         start_numbers = self.extract_digits(start)
         end_numbers = self.extract_digits(end)
         return int(start_numbers) < int(end_numbers)
 
     def validate_cell_values(self, start: str, cell_rows: Tuple[Tuple[Cell]]) -> None:
-        """Validates each cell in a cell range by checking whether the value inside each cell can be
-        cast into a float (after ignoring None values and empty strings)"""
+        """Validates each cell in a cell range by checking whether the value inside each cell can be cast into
+        a float. None values and empty strings are ignored in this process."""
         column = self.extract_letters(start)
         num = int(self.extract_digits(start))
         for i, row in enumerate(cell_rows, start=num):
@@ -123,30 +127,30 @@ class ExcelValidator:
 
     @staticmethod
     def get_cell_values(rows: Tuple[Tuple[Cell]]) -> List[float]:
-        """Returns the values of cells in a column (tuple of tuples) casted to float, ignoring None values
-        and empty strings"""
+        """Returns the values of cells in a column (tuple of tuples) casted to float. None values and empty strings
+        are ignored in this process."""
         return [float(row[0].value) for row in rows if row[0].value not in (None, '')]
 
     def get_end_cell(self, start: str) -> str:
-        """Given a valid cell string, returns the cell string at the end of the column in an Excel spreadsheet.
-        Max row if looked up on the currently loaded worksheet"""
+        """Given a valid cell string, returns the cell string at the end of the column (same column + max row)
+        of the Excel spreadsheet associated with the ExcelValidator instance."""
         letter = self.extract_letters(start)
         number = self.ws.max_row
         return f'{letter}{number}'
 
     @staticmethod
     def extract_letters(s: str) -> str:
-        """Returns the letter portion of an alphanumerical string s"""
+        """Returns the letter portion of an alphanumerical string."""
         return ''.join(char for char in s if char.isalpha())
 
     @staticmethod
     def extract_digits(s: str) -> str:
-        """Returns the digit portion of an alphanumerical string s"""
+        """Returns the digit portion of an alphanumerical string."""
         return ''.join(char for char in s if char.isdigit())
 
     @staticmethod
     def validate_values_size(data: Dict[str, List[float]]) -> None:
-        """Checks whether the data has same size on both of its columns (CS and GR)"""
+        """Checks whether the data has same size on both of its columns (CS and GR)."""
         l1, l2 = [len(vs) for vs in data.values()]
         if l1 != l2:
             raise DifferentSizeError('CS and GR cell ranges have different lengths (after removing blank/empty cells)')
@@ -154,34 +158,27 @@ class ExcelValidator:
 
 class NoExcelFileError(Exception):
     """Exception raised when user runs DynaFit with no input file."""
-    pass
 
 
 class EmptyCellError(Exception):
     """Exception raised when mandatory cell is empty."""
-    pass
 
 
 class BadCellStringError(Exception):
     """Exception raised when cell does not correspond to a valid Excel cell accessor."""
-    pass
 
 
 class MismatchedColumnsError(Exception):
     """Exception raised when samples cannot be found in the input file."""
-    pass
 
 
 class MismatchedRowsError(Exception):
     """Exception raised when samples cannot be found in the input file."""
-    pass
 
 
 class BadCellValueError(Exception):
     """Exception raised when a cell value cannot be coerced into a float."""
-    pass
 
 
 class DifferentSizeError(Exception):
     """Exception raised when samples cannot be found in the input file."""
-    pass

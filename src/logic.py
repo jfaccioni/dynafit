@@ -312,5 +312,3 @@ def trapezium_integration(xs: np.ndarray, ys: np.ndarray) -> float:
 
 class TooManyBinsError(Exception):
     """Exception raised when samples cannot be found in the input file."""
-    def __init__(self, *args):
-        super().__init__(*args)
