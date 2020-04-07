@@ -1,3 +1,4 @@
+from collections import namedtuple
 from typing import Any, Dict, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
@@ -12,7 +13,8 @@ from src.validator import ExcelValidator
 N_WARNING_LEVEL = 20
 # Vectorized round function
 round_arr = np.vectorize(round)
-
+# namedtuple encapsulating the return value
+DynaFitReturn = namedtuple("DynaFitReturn", [''])
 
 def dynafit(data: Workbook, filename: str, sheetname: str, need_to_calculate_gr: bool, time_delta: float,
             cs_start_cell: str, cs_end_cell: str, gr_start_cell: str, gr_end_cell: str, individual_colonies: int,
@@ -32,6 +34,9 @@ def dynafit(data: Workbook, filename: str, sheetname: str, need_to_calculate_gr:
     df = filter_bad_data(df=df)
     if remove_outliers is True:
         df = filter_outliers(df=df)
+    small_n_bins = check_for_small_sample_sizes(df=df)
+    if small_n_bins:
+
     # Bin samples into groups and plot the resulting histogram
     binned_df = add_bins(df=df, individual_colonies=individual_colonies, bins=large_colony_groups)
     # TODO: implement warning (GUI blocking) when a bin contains a small number of colonies!
@@ -126,9 +131,6 @@ def bootstrap_data(df: pd.DataFrame, repeats: int) -> pd.DataFrame:
             sample = bin_values.sample(n=n, replace=True)
             row = pd.Series([sample['CS'].mean(), sample['GR'].var(), bin_number], index=columns)
             output_df = output_df.append(row, ignore_index=True)
-    for bin_number, n in warns:
-        # TODO: change this to actual GUI message
-        print(f'Warning: group {bin_number} has small N (only {n} instances')
     return output_df
 
 
@@ -312,3 +314,7 @@ def trapezium_integration(xs: np.ndarray, ys: np.ndarray) -> float:
 
 class TooManyBinsError(Exception):
     """Exception raised when samples cannot be found in the input file."""
+
+
+class AbortedByUser(Exception):
+    """Exception raised when user aborts the execution of DynaFit analysis."""
