@@ -15,6 +15,7 @@
       <w>maxbin</w>
       <w>navbar</w>
       <w>nbins</w>
+      <w>ndarray</w>
       <w>nrepeats</w>
       <w>nruns</w>
       <w>openpyxl</w>

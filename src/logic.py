@@ -1,5 +1,5 @@
 from collections import namedtuple
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -7,24 +7,37 @@ import pandas as pd
 from openpyxl import Workbook
 from scipy.stats import sem, t
 
+from src.utils import get_missing_coord, get_start_end_values
 from src.validator import ExcelValidator
 
 # Value from which to throw a warning of low N
 N_WARNING_LEVEL = 20
 # Vectorized round function
 round_arr = np.vectorize(round)
-# namedtuple encapsulating the return value
-DynaFitReturn = namedtuple("DynaFitReturn", [''])
+
+PlotResults = namedtuple(
+    "PlotResults", [
+        'mean_xs',  # np.ndarray
+        'mean_ys',  # np.ndarray
+        'upper_ys',  # np.ndarray
+        'lower_ys',  # np.ndarray
+        'scatter_xs',  # np.ndarray
+        'scatter_ys',  # np.ndarray
+        'scatter_colors',  # np.ndarray
+        'violin_colors',   # int
+        'violin_ys'  # np.ndarray
+    ]
+)
+
 
 def dynafit(data: Workbook, filename: str, sheetname: str, need_to_calculate_gr: bool, time_delta: float,
             cs_start_cell: str, cs_end_cell: str, gr_start_cell: str, gr_end_cell: str, individual_colonies: int,
             large_colony_groups: int, bootstrap_repeats: int, add_confidence_interval: bool, confidence_value: float,
-            remove_outliers: bool, add_violin: bool,  fig: plt.Figure, cvp_ax: plt.Axes,
-            hist_ax: plt.Axes) -> Tuple[Dict[str, Any], np.array, np.array]:
+            remove_outliers: bool, add_violin: bool, hist_ax: plt.Axes) -> Tuple[PlotResults, pd.DataFrame]:
     """Main DynaFit function"""
     # Store parameters used for DynaFit analysis
-    results = {'file': filename, 'sheet': sheetname, 'max individual colony size': individual_colonies,
-               'number of large colony groups': large_colony_groups, 'bootstrapping repeats': bootstrap_repeats}
+    results_dict = {'file': filename, 'sheet': sheetname, 'max individual colony size': individual_colonies,
+                    'number of large colony groups': large_colony_groups, 'bootstrapping repeats': bootstrap_repeats}
     # Validate input data
     df = ExcelValidator(data=data, sheetname=sheetname, cs_start_cell=cs_start_cell, cs_end_cell=cs_end_cell,
                         gr_start_cell=gr_start_cell, gr_end_cell=gr_end_cell).data
@@ -34,47 +47,53 @@ def dynafit(data: Workbook, filename: str, sheetname: str, need_to_calculate_gr:
     df = filter_bad_data(df=df)
     if remove_outliers is True:
         df = filter_outliers(df=df)
-    small_n_bins = check_for_small_sample_sizes(df=df)
-    if small_n_bins:
+    # small_n_bins = check_for_small_sample_sizes(df=df)
+    # if small_n_bins:
+    #    pass
 
     # Bin samples into groups and plot the resulting histogram
-    binned_df = add_bins(df=df, individual_colonies=individual_colonies, bins=large_colony_groups)
-    # TODO: implement warning (GUI blocking) when a bin contains a small number of colonies!
-    plot_histogram(df=binned_df, ax=hist_ax)
+    df = add_bins(df=df, individual_colonies=individual_colonies, bins=large_colony_groups)
+    plot_histogram(df=df, ax=hist_ax)
+
     # Perform DynaFit bootstrap
-    bootstrapped_df = bootstrap_data(df=binned_df, repeats=bootstrap_repeats)
-    bootstrapped_df = add_log_columns(df=bootstrapped_df)
-    # Extract and plot mean values
-    xs, ys = get_mean_line_arrays(df=bootstrapped_df)
-    plot_mean_line(xs=xs, ys=ys, ax=cvp_ax)
-    plot_supporting_lines(xs=xs, ys=ys, ax=cvp_ax)
-    # Extract and plot bootstrapping distributions
-    plot_bootstrap_scatter(df=bootstrapped_df, ax=cvp_ax, individual_colonies=individual_colonies)
-    if add_violin:
-        plot_bootstrap_violins(df=bootstrapped_df, xs=xs, ax=cvp_ax, individual_colonies=individual_colonies)
-    # Add CoDy values to results dictionary
+    df = bootstrap_data(df=df, repeats=bootstrap_repeats)
+    df = add_log_columns(df=df)
+
+    # Base results
+    xs, ys = get_mean_line_arrays(df=df)
+    scatter_xs = df['log2_CS_mean'].values
+    scatter_ys = df['log2_GR_var'].values
+    scatter_colors = df['bins'].apply(lambda curr_bin: 'gray' if curr_bin > individual_colonies else 'red').values
+
+    # Add CoDy values to dataframe_results dictionary
     max_x_value = round(max(xs), 2)
     cody_range = [i for i in range(1, 7) if i < max_x_value]
     for i in cody_range:
-        results[f'CoDy {i}'] = round(calculate_cody(xs=xs, ys=ys, cody_n=i), 4)
-    results[f'CoDy {max_x_value}'] = round(calculate_cody(xs=xs, ys=ys, cody_n=None), 4)
-    # Execute only if CI needs to be calculated
+        results_dict[f'CoDy {i}'] = round(calculate_cody(xs=xs, ys=ys, cody_n=i), 4)
+    results_dict[f'CoDy {max_x_value}'] = round(calculate_cody(xs=xs, ys=ys, cody_n=None), 4)
+
+    # Violins
+    violin_ys, violin_colors = None, None
+    if add_violin:
+        violin_ys = [df.loc[df['bins'] == b]['log2_GR_var'].values for b in sorted(df['bins'].unique())]
+        violin_colors = individual_colonies
+
+    # CI
+    upper_ys, lower_ys = None, None
     if add_confidence_interval:
-        # Extract and plot CI values
-        upper_ys, lower_ys = get_confidence_interval_values(df=bootstrapped_df, confidence_value=confidence_value)
-        plot_mean_line_ci(xs=xs, upper_ys=upper_ys, lower_ys=lower_ys, ax=cvp_ax)
-        plot_supporting_lines_ci(xs=xs, upper_ys=upper_ys, lower_ys=lower_ys, ax=cvp_ax)
-        # Add CoDy CI values to results dictionary
+        upper_ys, lower_ys = get_confidence_interval_values(df=df, confidence_value=confidence_value)
+        # Add CoDy CI values to dataframe_results dictionary
         for ys, name in zip([upper_ys, lower_ys], ['upper', 'lower']):
             for i in cody_range:
-                results[f'CoDy {i} {name} CI'] = round(calculate_cody(xs=xs, ys=ys, cody_n=i), 4)
-            results[f'CoDy {max_x_value} {name} CI'] = round(calculate_cody(xs=xs, ys=ys, cody_n=None), 4)
-    # Format plot labels
-    fig.suptitle(f'CVP - Exp: {filename}, Sheet: {sheetname}')
-    cvp_ax.set_xlabel('log2(Colony Size)')
-    cvp_ax.set_ylabel('log2(Growth Rate variance)')
-    # Return results dictionary and mean XY arrays
-    return results, round_arr(xs, 4), round_arr(ys, 4)
+                results_dict[f'CoDy {i} {name} CI'] = round(calculate_cody(xs=xs, ys=ys, cody_n=i), 4)
+            results_dict[f'CoDy {max_x_value} {name} CI'] = round(calculate_cody(xs=xs, ys=ys, cody_n=None), 4)
+
+    # Get and return results
+    plot_results = PlotResults(mean_xs=xs, mean_ys=ys, upper_ys=upper_ys, lower_ys=lower_ys, scatter_xs=scatter_xs,
+                               scatter_ys=scatter_ys, scatter_colors=scatter_colors, violin_ys=violin_ys,
+                               violin_colors=violin_colors)
+    dataframe_results = results_to_dataframe(results_dict=results_dict, xs=round_arr(xs), ys=round_arr(ys))
+    return plot_results, dataframe_results
 
 
 def calculate_growth_rate(df: pd.DataFrame, time_delta: float) -> pd.DataFrame:
@@ -146,83 +165,6 @@ def get_mean_line_arrays(df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
     return xs, ys
 
 
-def plot_supporting_lines(xs: np.ndarray, ys: np.ndarray, ax: plt.Axes) -> None:
-    """Plots the three supporting lines of the CVP."""
-    start_x, end_x = get_start_end_values(array=xs)
-    start_y, end_y = get_start_end_values(array=ys)
-    plot_h0(start=start_x, end=end_x, initial_height=start_y, ax=ax)
-    plot_h1(start=start_x, end=end_x, initial_height=start_y, ax=ax)
-    plot_vertical_axis(start=start_x, ax=ax)
-
-
-def plot_h0(start: float, end: float, initial_height: float, ax: plt.Axes) -> None:
-    """Plots H0 on the CVP (horizontal blue line)"""
-    ax.plot([start, end], [initial_height, initial_height], color='blue', lw=3)
-
-
-def plot_h1(start: float, end: float, initial_height: float, ax: plt.Axes) -> None:
-    """Plots H1 on the CVP (diagonal red line)"""
-    final_height = get_missing_coord(x1=start, y1=initial_height, x2=end)
-    ax.plot([start, end], [initial_height, final_height], color='red', lw=3)
-
-
-def get_missing_coord(x1: float, y1: float, x2: float, angular_coefficient: float = -1) -> float:
-    """Returns the y2 coordinate at the point (x2, y2) of a line which has an angular coefficient of
-    "angular_coefficient" and passes through the point (x1, y1)."""
-    linear_coefficient = y1 - (angular_coefficient * x1)
-    y2 = linear_coefficient - x2
-    return y2
-
-
-def plot_vertical_axis(start: float, ax: plt.Axes) -> None:
-    """Plots a bold vertical Y axis on the left limit of the CVP plot."""
-    ax.axvline(start, color='darkgray', lw=3, zorder=0)
-
-
-def plot_supporting_lines_ci(xs: np.ndarray, upper_ys: np.ndarray, lower_ys: np.ndarray, ax: plt.Axes) -> None:
-    """Plots the CI for the supporting lines of the CVP."""
-    start_x, end_x = get_start_end_values(array=xs)
-    upper_start_y, upper_end_y = get_start_end_values(array=upper_ys)
-    lower_start_y, lower_end_y = get_start_end_values(array=lower_ys)
-    plot_h0_ci(start=start_x, end=end_x, upper=upper_start_y, lower=lower_start_y, ax=ax)
-    plot_h1_ci(start=start_x, end=end_x, upper=upper_start_y, lower=lower_start_y, ax=ax)
-
-
-def plot_h0_ci(start: float, end: float, upper: float, lower: float, ax: plt.Axes) -> None:
-    """Plots H0 confidence interval on the CVP (diagonal red line)"""
-    ax.fill_between([start, end], [upper, upper], [lower, lower], color='blue', alpha=0.3)
-
-
-def plot_h1_ci(start: float, end: float, upper: float, lower: float, ax: plt.Axes) -> None:
-    """Plots H1 confidence interval on the CVP (diagonal red line)"""
-    final_height_upper = get_missing_coord(x1=start, y1=upper, x2=end)
-    final_height_lower = get_missing_coord(x1=start, y1=lower, x2=end)
-    ax.fill_between([start, end], [upper, final_height_upper], [lower, final_height_lower], color='red', alpha=0.3)
-
-
-def plot_bootstrap_violins(df: pd.DataFrame, xs: np.ndarray, ax: plt.Axes, individual_colonies: int) -> None:
-    """Plots the bootstrap populations for each bin as violin plots."""
-    ys = [df.loc[df['bins'] == b]['log2_GR_var'] for b in sorted(df['bins'].unique())]
-    parts = ax.violinplot(positions=xs, dataset=ys, showmeans=False, showmedians=False, showextrema=False)
-    for i, body in enumerate(parts['bodies'], 1):
-        body.set_facecolor('red') if i <= individual_colonies else body.set_facecolor('gray')
-        body.set_edgecolor('black')
-        body.set_alpha(0.3)
-
-
-def plot_bootstrap_scatter(df: pd.DataFrame, ax: plt.Axes, individual_colonies: int) -> None:
-    """Plots bootstrap populations for each bin as scatter plots."""
-    xs = df['log2_CS_mean']
-    ys = df['log2_GR_var']
-    facecolors = df['bins'].apply(lambda curr_bin: 'gray' if curr_bin > individual_colonies else 'red')
-    ax.scatter(xs, ys, marker='.', edgecolor='k', facecolor=facecolors, alpha=0.3)
-
-
-def plot_mean_line(xs: np.ndarray, ys: np.ndarray, ax: plt.Axes) -> None:
-    """Plots the mean value for each bootstrapped population as a line plot."""
-    ax.plot(xs, ys, color='green', alpha=0.9, lw=3)
-
-
 def get_confidence_interval_values(df: pd.DataFrame, confidence_value: float) -> Tuple[np.ndarray, np.ndarray]:
     """Calculates and returns the a tuple of arrays representing the Y values of the upper and lower confidence
     interval for the bootstrapped population."""
@@ -239,11 +181,6 @@ def get_confidence_interval_values(df: pd.DataFrame, confidence_value: float) ->
     return np.array(upper_ys), np.array(lower_ys)
 
 
-def plot_mean_line_ci(xs: np.ndarray, upper_ys: np.ndarray, lower_ys: np.ndarray, ax: plt.Axes):
-    """Plots the confidence interval around the mean line as a line plot."""
-    ax.fill_between(xs, upper_ys, lower_ys, color='gray', alpha=0.5)
-
-
 def plot_histogram(df: pd.DataFrame, ax: plt.Axes) -> None:
     """Plots a histogram of the colony size, indicating the "cuts" and group sizes made by the binning process."""
     ax.hist(np.log2(df['CS']))
@@ -258,11 +195,6 @@ def plot_histogram(df: pd.DataFrame, ax: plt.Axes) -> None:
         ax.axvline(pos, c='k')
         text = f'{bin_min}\n{bin_max}\nn={num}'
         ax.text(pos, ax.get_ylim()[1] * 0.5, text)
-
-
-def get_start_end_values(array: Optional[List[float]] = None) -> Tuple[float, float]:
-    """Returns the first and last value of the input array."""
-    return array[0], array[-1]
 
 
 def calculate_cody(xs: np.ndarray, ys: np.ndarray, cody_n: Optional[int]) -> float:
@@ -310,6 +242,16 @@ def trapezium_integration(xs: np.ndarray, ys: np.ndarray) -> float:
         triangle = (next_x - x) * (y - next_y) / 2  # SIGNED area
         trapezium = square + triangle
         integrated_area += trapezium
+
+
+def results_to_dataframe(results_dict: Dict[str, Any], xs: np.ndarray, ys: np.ndarray) -> pd.DataFrame:
+    """Saves DynaFit dataframe_results as a pandas DataFrame (used for Excel/csv export)."""
+    size = max(len(results_dict), len(xs), len(ys))
+    params = list(results_dict.keys()) + [np.nan for _ in range(size - len(results_dict))]
+    values = list(results_dict.values()) + [np.nan for _ in range(size - len(results_dict))]
+    xs = list(xs) + [np.nan for _ in range(size - len(xs))]
+    ys = list(ys) + [np.nan for _ in range(size - len(ys))]
+    return pd.DataFrame({'Parameter': params, 'Value': values, 'Mean X Values': xs, 'Mean Y Values': ys})
 
 
 class TooManyBinsError(Exception):

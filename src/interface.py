@@ -3,12 +3,11 @@ import sys
 import traceback
 from csv import writer
 from io import StringIO
-from itertools import zip_longest
+from math import isnan
 from typing import Any, Dict, Tuple
 from zipfile import BadZipFile
 
 import matplotlib
-import numpy as np
 import openpyxl
 import pandas as pd
 from PySide2.QtCore import QEvent, QThreadPool
@@ -20,7 +19,8 @@ from PySide2.QtWidgets import (QApplication, QCheckBox, QComboBox, QDoubleSpinBo
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as Canvas, NavigationToolbar2QT as Navbar
 from matplotlib.pyplot import Figure
 
-from src.logic import dynafit
+from src.logic import PlotResults, dynafit
+from src.plotter import Plotter
 
 # Set a small font for plots
 matplotlib.rc('font', size=8)
@@ -40,7 +40,7 @@ class DynaFitGUI(QMainWindow):
         self.resize(1080, 680)
         self.threadpool = QThreadPool()
         self.data = None
-        self.results = None
+        self.dataframe_results = None
         # --Central widget--
         self.frame = QWidget(self)
         self.setCentralWidget(self.frame)
@@ -271,7 +271,11 @@ class DynaFitGUI(QMainWindow):
             dynafit_settings = self.get_dynafit_settings()
             results = dynafit(**dynafit_settings)
         except Exception as e:
-            self.dynafit_raised_exception(e)
+            if DEBUG:
+                print(e)
+                print(traceback.format_exc())
+            else:
+                self.dynafit_raised_exception(e)
         else:
             self.dynafit_no_exceptions_raised(results)
         finally:
@@ -304,8 +308,6 @@ class DynaFitGUI(QMainWindow):
             'confidence_value': self.conf_int_spinbox.value(),
             'remove_outliers': self.remove_outliers_checkbox.isChecked(),
             'add_violin': self.add_violins_checkbox.isChecked(),
-            'fig': self.fig,
-            'cvp_ax': self.cvp_ax,
             'hist_ax': self.histogram_ax,
         }
 
@@ -315,30 +317,30 @@ class DynaFitGUI(QMainWindow):
         self.histogram_ax.clear()
         self.raise_error(error)
 
-    def dynafit_no_exceptions_raised(self, results: Tuple[Dict[str, Any], np.array, np.array]) -> None:
+    def dynafit_no_exceptions_raised(self, results: Tuple[PlotResults, pd.DataFrame]) -> None:
         """Called if no errors are raised during the DynaFit analysis. Writes/saves the results from DynaFit."""
         self.to_excel_button.setEnabled(True)
         self.to_csv_button.setEnabled(True)
+        dynafit_results, table_results = results
+        self.dataframe_results = table_results
+        Plotter(cvp_ax=self.cvp_ax, hist_ax=self.histogram_ax, results=dynafit_results).plot_all()
+        filename, sheetname = self.dataframe_results.loc[0:1, 'Value']
+        self.set_figure_labels(filename=filename, sheetname=sheetname)
+        self.set_results_table()
+
+    def set_figure_labels(self, filename: str, sheetname: str):
+        self.fig.suptitle(f'CVP - Exp: {filename}, Sheet: {sheetname}')
+        self.cvp_ax.set_xlabel('log2(Colony Size)')
+        self.cvp_ax.set_ylabel('log2(Growth Rate variance)')
+
+    def set_results_table(self) -> None:
+        """Sets values obtained from DynaFit analysis onto dataframe_results table."""
         self.results_table.clearContents()
-        size = max(len(r) for r in results)
-        self.results_table.setRowCount(size)
-        result_dict, xs, ys = results
-        self.set_results_table(result_dict=result_dict, xs=xs, ys=ys)
-        self.set_results_dataframe(result_dict=result_dict, xs=xs, ys=ys, size=size)
-
-    def set_results_table(self, result_dict: Dict[str, Any], xs: np.ndarray, ys: np.ndarray) -> None:
-        """Sets values obtained from DynaFit analysis onto results table."""
-        for row_index, ((name, value), x, y) in enumerate(zip_longest(result_dict.items(), xs, ys, fillvalue='')):
-            for column_index, element in enumerate([name, value, x, y]):
-                self.results_table.setItem(row_index, column_index, QTableWidgetItem(str(element)))
-
-    def set_results_dataframe(self, result_dict: Dict[str, Any], xs: np.ndarray, ys: np.ndarray,  size: int) -> None:
-        """Saves DynaFit results as a pandas DataFrame (used for Excel/csv export)."""
-        params = list(result_dict.keys()) + [None for _ in range(size - len(result_dict))]
-        values = list(result_dict.values()) + [None for _ in range(size - len(result_dict))]
-        xs = list(xs) + [None for _ in range(size - len(xs))]
-        ys = list(ys) + [None for _ in range(size - len(ys))]
-        self.results = pd.DataFrame({'Parameter': params, 'Value': values, 'Mean X Values': xs, 'Mean Y Values': ys})
+        self.results_table.setRowCount(len(self.dataframe_results))
+        for row_index, row_contents in self.dataframe_results.iterrows():
+            for column_index, value in enumerate(row_contents):
+                value = '' if isinstance(value, float) and isnan(value) else str(value)
+                self.results_table.setItem(row_index, column_index, QTableWidgetItem(value))
 
     def dynafit_cleanup(self) -> None:
         """Called when DynaFit analysis finishes running (regardless of errors). Restores label on the plot
@@ -350,40 +352,37 @@ class DynaFitGUI(QMainWindow):
 
     def save_to_excel_dialog(self) -> None:
         """Opens a file dialog, prompting the user to select the name/location for the Excel export of the results."""
-        if self.results is None:
-            self.raise_error(ValueError('No results yet. Please click on the "Plot CVP" button first.'))
+        if self.dataframe_results is None:
+            self.raise_error(ValueError('No dataframe_results yet. Please click on the "Plot CVP" button first.'))
             return
         placeholder = f'{self.results_table.item(0, 1).text()}_{self.results_table.item(1, 1).text()}.xlsx'
-        query, _ = QFileDialog.getSaveFileName(self, 'Select file to save results', placeholder,
+        query, _ = QFileDialog.getSaveFileName(self, 'Select file to save dataframe_results', placeholder,
                                                'Excel Spreadsheet (*.xlsx)')
         if query:
             self.save_excel(path=query, placeholder=placeholder)
 
     def save_excel(self, path: str, placeholder: str) -> None:
-        """Saves the DynaFit results to the given path as an Excel spreadsheet."""
+        """Saves the DynaFit dataframe_results to the given path as an Excel spreadsheet."""
         if not path.endswith('.xlsx'):
             path = path + '.xlsx'
-        self.results.to_excel(path, index=None, sheet_name=placeholder)
+        self.dataframe_results.to_excel(path, index=None, sheet_name=placeholder)
 
     def save_to_csv_dialog(self) -> None:
         """Opens a file dialog, prompting the user to select the name/location for the csv export of the results."""
-        if self.results is None:
-            self.raise_error(ValueError('No results yet. Please click on the "Plot CVP" button first.'))
+        if self.dataframe_results is None:
+            self.raise_error(ValueError('No dataframe_results yet. Please click on the "Plot CVP" button first.'))
             return
         placeholder = f'{self.results_table.item(0, 1).text()}_{self.results_table.item(1, 1).text()}.csv'
-        query, _ = QFileDialog.getSaveFileName(self, 'Select file to save results', placeholder,
+        query, _ = QFileDialog.getSaveFileName(self, 'Select file to save dataframe_results', placeholder,
                                                'Comma-separated values (*.csv)')
         if query:
             self.save_csv(path=query)
 
     def save_csv(self, path: str) -> None:
-        """Saves the DynaFit results to the given path as a csv file."""
+        """Saves the DynaFit dataframe_results to the given path as a csv file."""
         if not path.endswith('.csv'):
             path = path + '.csv'
-        self.results.to_csv(path, index=None)
-
-    def small_sample_warning(self, sample_dict: Dict[str, int]) -> None:
-        pass  # TODO: implement warning (GUI blocking) when a bin contains a small number of colonies!
+        self.dataframe_results.to_csv(path, index=None)
 
     def raise_error(self, error: Exception) -> None:
         """Generic function for catching errors and re-raising them as properly formatted message boxes."""
@@ -409,14 +408,14 @@ class DynaFitGUI(QMainWindow):
     # https://stackoverflow.com/questions/40469607/
 
     def eventFilter(self, source: QWidget, event: QEvent) -> bool:
-        """Event filter for results table."""
+        """Event filter for dataframe_results table."""
         if event.type() == QEvent.KeyPress and event.matches(QKeySequence.Copy):
             self.copy_selection()
             return True
         return super().eventFilter(source, event)
 
     def copy_selection(self) -> None:
-        """Copies selection on the results table to the clipboard (csv-formatted)."""
+        """Copies selection on the dataframe_results table to the clipboard (csv-formatted)."""
         selected_indexes = self.results_table.selectedIndexes()
         if selected_indexes:
             rows = sorted(index.row() for index in selected_indexes)
