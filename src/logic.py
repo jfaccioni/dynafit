@@ -1,12 +1,14 @@
-from collections import namedtuple
+import time
+from itertools import count
 from typing import Any, Dict, Optional, Tuple
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from PySide2.QtCore import QEvent, Signal
 from openpyxl import Workbook
 from scipy.stats import sem, t
 
+from src.plotter import Plotter
 from src.utils import get_missing_coord, get_start_end_values
 from src.validator import ExcelValidator
 
@@ -15,25 +17,12 @@ N_WARNING_LEVEL = 20
 # Vectorized round function
 round_arr = np.vectorize(round)
 
-PlotResults = namedtuple(
-    "PlotResults", [
-        'mean_xs',  # np.ndarray
-        'mean_ys',  # np.ndarray
-        'upper_ys',  # np.ndarray
-        'lower_ys',  # np.ndarray
-        'scatter_xs',  # np.ndarray
-        'scatter_ys',  # np.ndarray
-        'scatter_colors',  # np.ndarray
-        'violin_colors',   # int
-        'violin_ys'  # np.ndarray
-    ]
-)
-
 
 def dynafit(data: Workbook, filename: str, sheetname: str, need_to_calculate_gr: bool, time_delta: float,
             cs_start_cell: str, cs_end_cell: str, gr_start_cell: str, gr_end_cell: str, individual_colonies: int,
             large_colony_groups: int, bootstrap_repeats: int, add_confidence_interval: bool, confidence_value: float,
-            remove_outliers: bool, add_violin: bool, hist_ax: plt.Axes) -> Tuple[PlotResults, pd.DataFrame]:
+            remove_outliers: bool, add_violin: bool, progress_callback: Signal,
+            ss_warning_callback: Signal) -> Tuple[Plotter, pd.DataFrame, Tuple[str, str]]:
     """Main DynaFit function"""
     # Store parameters used for DynaFit analysis
     results_dict = {'file': filename, 'sheet': sheetname, 'max individual colony size': individual_colonies,
@@ -47,37 +36,38 @@ def dynafit(data: Workbook, filename: str, sheetname: str, need_to_calculate_gr:
     df = filter_bad_data(df=df)
     if remove_outliers is True:
         df = filter_outliers(df=df)
-    # small_n_bins = check_for_small_sample_sizes(df=df)
-    # if small_n_bins:
-    #    pass
-
     # Bin samples into groups and plot the resulting histogram
-    df = add_bins(df=df, individual_colonies=individual_colonies, bins=large_colony_groups)
-    plot_histogram(df=df, ax=hist_ax)
-
+    binned_df = add_bins(df=df, individual_colonies=individual_colonies, bins=large_colony_groups)
+    # Sample size warning
+    warns = sample_size_warning(df=binned_df)
+    if warns:
+        answered_event = QEvent(QEvent.WindowActivate)
+        user_wants_to_continue_event = QEvent(QEvent.WindowActivate)
+        answered_event.setAccepted(False)
+        ss_warning_callback.emit((answered_event, user_wants_to_continue_event, warns))
+        while not answered_event.isAccepted():
+            time.sleep(0.1)
+            if not user_wants_to_continue_event.isAccepted():
+                raise AbortedByUser("User decided to stop DynaFit analysis.")
     # Perform DynaFit bootstrap
-    df = bootstrap_data(df=df, repeats=bootstrap_repeats)
+    df = bootstrap_data(df=binned_df, repeats=bootstrap_repeats, progress_callback=progress_callback)
     df = add_log_columns(df=df)
-
     # Base results
     xs, ys = get_mean_line_arrays(df=df)
     scatter_xs = df['log2_CS_mean'].values
     scatter_ys = df['log2_GR_var'].values
     scatter_colors = df['bins'].apply(lambda curr_bin: 'gray' if curr_bin > individual_colonies else 'red').values
-
     # Add CoDy values to dataframe_results dictionary
     max_x_value = round(max(xs), 2)
     cody_range = [i for i in range(1, 7) if i < max_x_value]
     for i in cody_range:
         results_dict[f'CoDy {i}'] = round(calculate_cody(xs=xs, ys=ys, cody_n=i), 4)
     results_dict[f'CoDy {max_x_value}'] = round(calculate_cody(xs=xs, ys=ys, cody_n=None), 4)
-
     # Violins
     violin_ys, violin_colors = None, None
     if add_violin:
         violin_ys = [df.loc[df['bins'] == b]['log2_GR_var'].values for b in sorted(df['bins'].unique())]
         violin_colors = individual_colonies
-
     # CI
     upper_ys, lower_ys = None, None
     if add_confidence_interval:
@@ -87,13 +77,17 @@ def dynafit(data: Workbook, filename: str, sheetname: str, need_to_calculate_gr:
             for i in cody_range:
                 results_dict[f'CoDy {i} {name} CI'] = round(calculate_cody(xs=xs, ys=ys, cody_n=i), 4)
             results_dict[f'CoDy {max_x_value} {name} CI'] = round(calculate_cody(xs=xs, ys=ys, cody_n=None), 4)
-
+    # Other histogram values
+    hist_x = np.log2(binned_df['CS'])
+    hist_pos, hist_bin_mins, hist_bin_maxs, hist_instances = get_histogram_values(df=binned_df)
     # Get and return results
-    plot_results = PlotResults(mean_xs=xs, mean_ys=ys, upper_ys=upper_ys, lower_ys=lower_ys, scatter_xs=scatter_xs,
-                               scatter_ys=scatter_ys, scatter_colors=scatter_colors, violin_ys=violin_ys,
-                               violin_colors=violin_colors)
+    plot_results = Plotter(mean_xs=xs, mean_ys=ys, upper_ys=upper_ys, lower_ys=lower_ys, scatter_xs=scatter_xs,
+                           scatter_ys=scatter_ys, scatter_colors=scatter_colors, violin_ys=violin_ys,
+                           violin_colors=violin_colors, hist_x=hist_x, hist_pos=hist_pos, hist_bin_mins=hist_bin_mins,
+                           hist_bin_maxs=hist_bin_maxs, hist_instances=hist_instances)
     dataframe_results = results_to_dataframe(results_dict=results_dict, xs=round_arr(xs), ys=round_arr(ys))
-    return plot_results, dataframe_results
+    plot_title_info = filename, sheetname
+    return plot_results, dataframe_results, plot_title_info
 
 
 def calculate_growth_rate(df: pd.DataFrame, time_delta: float) -> pd.DataFrame:
@@ -137,16 +131,26 @@ def add_bins(df: pd.DataFrame, individual_colonies: int, bins: int) -> pd.DataFr
     return df.assign(bins=pd.concat([single_bins, multiple_bins]))
 
 
-def bootstrap_data(df: pd.DataFrame, repeats: int) -> pd.DataFrame:
+def sample_size_warning(df: pd.DataFrame) -> Dict[float, float]:
+    warns = {}
+    for bin_number, bin_values in df.groupby('bins'):
+        n = len(bin_values)
+        if n < N_WARNING_LEVEL:
+            warns[bin_number] = n
+    return warns
+
+
+def bootstrap_data(df: pd.DataFrame, repeats: int, progress_callback: Signal) -> pd.DataFrame:
     """Performs bootstrapping. Each bin is sampled N times (N="repeats" parameter)."""
-    warns = []
+    total_progress = repeats * df['bins'].max()
+    current_progress = count()
     columns = ['CS_mean', 'GR_var', 'bins']
     output_df = pd.DataFrame(columns=columns)
     for bin_number, bin_values in df.groupby('bins'):
         n = len(bin_values)
-        if n < N_WARNING_LEVEL:
-            warns.append((bin_number, n))
         for repeat in range(repeats):
+            progress = int(round(100 * next(current_progress) / total_progress))
+            progress_callback.emit(progress)
             sample = bin_values.sample(n=n, replace=True)
             row = pd.Series([sample['CS'].mean(), sample['GR'].var(), bin_number], index=columns)
             output_df = output_df.append(row, ignore_index=True)
@@ -181,20 +185,16 @@ def get_confidence_interval_values(df: pd.DataFrame, confidence_value: float) ->
     return np.array(upper_ys), np.array(lower_ys)
 
 
-def plot_histogram(df: pd.DataFrame, ax: plt.Axes) -> None:
-    """Plots a histogram of the colony size, indicating the "cuts" and group sizes made by the binning process."""
-    ax.hist(np.log2(df['CS']))
+def get_histogram_values(df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Returns values for the histogram of the colony size, indicating the group sizes made by the binning process."""
     grouped_data = df.groupby('bins')
     positions = np.log2(grouped_data.max()['CS'])
     bin_min_labels = np.core.defchararray.add('> ', np.roll(grouped_data.max()['CS'], 1).astype(int).astype(str))
     bin_min_labels[0] = '> 0'
     bin_max_labels = np.core.defchararray.add('<= ', grouped_data.max()['CS'].astype(int).astype(str))
     bin_max_labels[-1] = '<= inf'
-    number_of_instances = grouped_data.count()['CS']
-    for pos, bin_min, bin_max, num in zip(positions, bin_min_labels, bin_max_labels, number_of_instances):
-        ax.axvline(pos, c='k')
-        text = f'{bin_min}\n{bin_max}\nn={num}'
-        ax.text(pos, ax.get_ylim()[1] * 0.5, text)
+    number_of_instances = grouped_data.count()['CS'].values
+    return positions, bin_min_labels, bin_max_labels, number_of_instances
 
 
 def calculate_cody(xs: np.ndarray, ys: np.ndarray, cody_n: Optional[int]) -> float:

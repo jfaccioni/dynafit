@@ -4,22 +4,22 @@ import traceback
 from csv import writer
 from io import StringIO
 from math import isnan
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Tuple, Callable, Union
 from zipfile import BadZipFile
 
 import matplotlib
 import openpyxl
 import pandas as pd
-from PySide2.QtCore import QEvent, QThreadPool
+from PySide2.QtCore import QEvent, QThreadPool, QRunnable, Slot, Signal, QObject
 from PySide2.QtGui import QKeySequence
 from PySide2.QtWidgets import (QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFrame,
                                QGridLayout, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow, QMessageBox,
                                QPushButton, QRadioButton, QSpinBox, QTableWidget, QTableWidgetItem, QVBoxLayout,
-                               QWidget, qApp)
+                               QWidget, qApp, QProgressBar)
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as Canvas, NavigationToolbar2QT as Navbar
 from matplotlib.pyplot import Figure
 
-from src.logic import PlotResults, dynafit
+from src.logic import dynafit
 from src.plotter import Plotter
 
 # Set a small font for plots
@@ -182,7 +182,7 @@ class DynaFitGUI(QMainWindow):
         plot_grid = QGridLayout()
         # Plot button
         self.plot_button = QPushButton(self, text='Plot CVP')
-        self.plot_button.clicked.connect(self.dynafit_run)
+        self.plot_button.clicked.connect(self.dynafit_run_worker)
         plot_grid.addWidget(self.plot_button, 0, 0, 1, 1)
         # Excel export button
         self.to_excel_button = QPushButton(self, text='Save to Excel')
@@ -194,13 +194,20 @@ class DynaFitGUI(QMainWindow):
         self.to_csv_button.clicked.connect(self.save_to_csv_dialog)
         self.to_csv_button.setDisabled(True)
         plot_grid.addWidget(self.to_csv_button, 0, 2, 1, 1)
+        # Progress bar and label
+        self.progress_bar_label = QLabel(self, text='Bootstrapping...')
+        self.progress_bar_label.setVisible(False)
+        plot_grid.addWidget(self.progress_bar_label, 0, 3, 1, 1)
+        self.progress_bar = QProgressBar(self, minimum=0, maximum=100)
+        self.progress_bar.setVisible(False)
+        plot_grid.addWidget(self.progress_bar, 0, 4, 1, 1)
         # CoDy table of values
         self.results_table = QTableWidget(self, rowCount=0, columnCount=4)
         for index, column_name in enumerate(['Parameter', 'Value', 'Mean X', 'Mean Y']):
             self.results_table.setHorizontalHeaderItem(index, QTableWidgetItem(column_name))
             self.results_table.horizontalHeader().setSectionResizeMode(index, QHeaderView.Stretch)
         self.results_table.installEventFilter(self)
-        plot_grid.addWidget(self.results_table, 1, 0, 3, 3)
+        plot_grid.addWidget(self.results_table, 1, 0, 5, 5)
         # Add section above to left column
         left_column.addLayout(plot_grid)
 
@@ -235,7 +242,7 @@ class DynaFitGUI(QMainWindow):
         try:
             self.data = openpyxl.load_workbook(query, data_only=True)
         except BadZipFile:
-            self.raise_error(CorruptedExcelFile('Cannot load input Excel file. Is it corrupted?'))
+            self.raise_main_thread_error(CorruptedExcelFile('Cannot load input Excel file. Is it corrupted?'))
         else:
             filename = os.path.basename(query)
             self.input_filename_label.setText(filename)
@@ -264,27 +271,29 @@ class DynaFitGUI(QMainWindow):
         else:
             self.conf_int_spinbox.setEnabled(False)
 
-    def dynafit_run(self) -> None:
-        """Runs DynaFit (main function from logic.py)."""
-        self.dynafit_setup()
+    def dynafit_run_worker(self) -> None:
+        """Runs DynaFit analysis on a worker thread."""
         try:
             dynafit_settings = self.get_dynafit_settings()
-            results = dynafit(**dynafit_settings)
         except Exception as e:
-            if DEBUG:
-                print(e)
-                print(traceback.format_exc())
-            else:
-                self.dynafit_raised_exception(e)
-        else:
-            self.dynafit_no_exceptions_raised(results)
-        finally:
-            self.dynafit_cleanup()
+            self.raise_main_thread_error(error=e)
+            return
+        worker = Worker(func=dynafit, **dynafit_settings)
+        worker.signals.started.connect(self.dynafit_setup)
+        worker.signals.progress.connect(self.dynafit_show_progress)
+        worker.signals.ss_warning.connect(self.dynafit_small_sample_size_warning)
+        worker.signals.finished.connect(self.dynafit_cleanup)
+        worker.signals.success.connect(self.dynafit_no_exceptions_raised)
+        worker.signals.error.connect(self.dynafit_raised_exception)
+        self.threadpool.start(worker)
 
     def dynafit_setup(self) -> None:
         """Called before DynaFit analysis starts. Modifies the label on the plot button and clears both Axes."""
-        self.plot_button.setText('Plotting...')
-        self.plot_button.setEnabled(False)
+        self.progress_bar.setVisible(True)
+        self.progress_bar_label.setVisible(True)
+        self.plot_button.setDisabled(True)
+        self.to_excel_button.setDisabled(True)
+        self.to_csv_button.setDisabled(True)
         self.cvp_ax.clear()
         self.histogram_ax.clear()
 
@@ -308,25 +317,43 @@ class DynaFitGUI(QMainWindow):
             'confidence_value': self.conf_int_spinbox.value(),
             'remove_outliers': self.remove_outliers_checkbox.isChecked(),
             'add_violin': self.add_violins_checkbox.isChecked(),
-            'hist_ax': self.histogram_ax,
         }
 
-    def dynafit_raised_exception(self, error: Exception) -> None:
+    def dynafit_show_progress(self, number: int):
+        self.progress_bar.setValue(number)
+
+    def dynafit_small_sample_size_warning(self, warning_contents: Tuple[QEvent, QEvent, Dict[str, str]]) -> None:
+        answer, should_continue, info = warning_contents
+        message = ('Warning: small sample sizes found for some groups. '
+                   'Do you want to continue the DynaFit analysis anyway?')
+        message += '\n' + '\n'.join(f'Group {k} -> {v} instances' for k, v in list(info.items())[:5])
+        remaining = len(info) - 5
+        if remaining:
+            message += f'\nand {remaining} other groups'
+        reply = QMessageBox.question(self, 'Warning: low sample sizes', message, QMessageBox.Yes | QMessageBox.No,
+                                     QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            should_continue.accept()
+        else:
+            should_continue.ignore()
+        answer.accept()
+
+    def dynafit_raised_exception(self, exception: Union[Exception, Tuple[Exception, str]]) -> None:
         """Called if an error is raised during DynaFit analysis. Clears axes and shows the error in a message box."""
         self.cvp_ax.clear()
         self.histogram_ax.clear()
-        self.raise_error(error)
+        self.raise_worker_thread_error(exception)
 
-    def dynafit_no_exceptions_raised(self, results: Tuple[PlotResults, pd.DataFrame]) -> None:
+    def dynafit_no_exceptions_raised(self, results: Tuple[Plotter, pd.DataFrame, Tuple[str, str]]) -> None:
         """Called if no errors are raised during the DynaFit analysis. Writes/saves the results from DynaFit."""
         self.to_excel_button.setEnabled(True)
         self.to_csv_button.setEnabled(True)
-        dynafit_results, table_results = results
-        self.dataframe_results = table_results
-        Plotter(cvp_ax=self.cvp_ax, hist_ax=self.histogram_ax, results=dynafit_results).plot_all()
-        filename, sheetname = self.dataframe_results.loc[0:1, 'Value']
-        self.set_figure_labels(filename=filename, sheetname=sheetname)
+        plotter, dataframe_results, plot_title_info = results
+        self.dataframe_results = dataframe_results
         self.set_results_table()
+        plotter.plot_cvp(ax=self.cvp_ax)
+        plotter.plot_histogram(ax=self.histogram_ax)
+        self.set_figure_labels(*plot_title_info)
 
     def set_figure_labels(self, filename: str, sheetname: str):
         self.fig.suptitle(f'CVP - Exp: {filename}, Sheet: {sheetname}')
@@ -347,13 +374,15 @@ class DynaFitGUI(QMainWindow):
         button and removes the axis lines from the histogram"""
         self.plot_button.setText('Plot CVP')
         self.plot_button.setEnabled(True)
+        self.progress_bar_label.setVisible(False)
+        self.progress_bar.setVisible(False)
         self.histogram_ax.set_axis_off()
         self.canvas.draw()
 
     def save_to_excel_dialog(self) -> None:
         """Opens a file dialog, prompting the user to select the name/location for the Excel export of the results."""
         if self.dataframe_results is None:
-            self.raise_error(ValueError('No dataframe_results yet. Please click on the "Plot CVP" button first.'))
+            self.raise_main_thread_error(ValueError('No dataframe_results yet. Please plot the CVP first.'))
             return
         placeholder = f'{self.results_table.item(0, 1).text()}_{self.results_table.item(1, 1).text()}.xlsx'
         query, _ = QFileDialog.getSaveFileName(self, 'Select file to save dataframe_results', placeholder,
@@ -370,7 +399,7 @@ class DynaFitGUI(QMainWindow):
     def save_to_csv_dialog(self) -> None:
         """Opens a file dialog, prompting the user to select the name/location for the csv export of the results."""
         if self.dataframe_results is None:
-            self.raise_error(ValueError('No dataframe_results yet. Please click on the "Plot CVP" button first.'))
+            self.raise_main_thread_error(ValueError('No dataframe_results yet. Please plot the CVP first.'))
             return
         placeholder = f'{self.results_table.item(0, 1).text()}_{self.results_table.item(1, 1).text()}.csv'
         query, _ = QFileDialog.getSaveFileName(self, 'Select file to save dataframe_results', placeholder,
@@ -384,16 +413,20 @@ class DynaFitGUI(QMainWindow):
             path = path + '.csv'
         self.dataframe_results.to_csv(path, index=None)
 
-    def raise_error(self, error: Exception) -> None:
+    def raise_main_thread_error(self, error: Exception) -> None:
         """Generic function for catching errors and re-raising them as properly formatted message boxes."""
         name = f'{error.__class__.__name__}:\n{error}'
         trace = traceback.format_exc()
-        self.show_error_message((name, trace))
+        self.show_error_message(name=name, trace=trace)
 
-    def show_error_message(self, error_tuple: Tuple[str, str]) -> None:
+    def raise_worker_thread_error(self, error: Tuple[Exception, str]) -> None:
+        exception, trace = error
+        name = f'{exception.__class__.__name__}:\n{exception}'
+        self.show_error_message(name=name, trace=trace)
+
+    def show_error_message(self, name: str, trace: str) -> None:
         """Shows a given error as a message box in front of the GUI."""
-        error, trace = error_tuple
-        box = QMessageBox(self, windowTitle='An error occurred!', text=error, detailedText=trace)
+        box = QMessageBox(self, windowTitle='An error occurred!', text=name, detailedText=trace)
         box.show()
 
     def debug(self) -> None:
@@ -430,6 +463,48 @@ class DynaFitGUI(QMainWindow):
             stream = StringIO()
             writer(stream).writerows(table)
             qApp.clipboard().setText(stream.getvalue())
+
+
+class Worker(QRunnable):
+    """Worker thread for SCOUTS analysis. Avoids unresponsive GUI."""
+    def __init__(self, func: Callable, *args, **kwargs) -> None:
+        super().__init__()
+        self.func = func
+        self.args = args
+        self.kwargs = kwargs
+        self.signals = WorkerSignals()
+        self.kwargs['progress_callback'] = self.signals.progress
+        self.kwargs['ss_warning_callback'] = self.signals.ss_warning
+
+    @Slot()
+    def run(self) -> None:
+        """Runs the Worker thread."""
+        self.signals.started.emit()
+        try:
+            return_value = self.func(*self.args, **self.kwargs)
+        except Exception as error:
+            trace = traceback.format_exc()
+            self.signals.error.emit((error, trace))
+        else:
+            self.signals.success.emit(return_value)
+        finally:
+            self.signals.finished.emit()
+
+
+class WorkerSignals(QObject):
+    """Defines the signals available from a running worker thread. Supported signals are:
+         Started: Worker has begun working. Nothing is emitted.
+         Finished: Worker has done executing (either naturally or by an Exception). Nothing is emitted.
+         Success: Worker finished executing without errors. Emits a tuple of a Plotter object and a pandas DataFrame.
+         Error: an Exception was raised. Emits a tuple containing an Exception object and the traceback as a string.
+         Progress:
+         SS Warning: """
+    started = Signal()
+    finished = Signal()
+    success = Signal(tuple)
+    error = Signal(tuple)
+    progress = Signal(float)
+    ss_warning = Signal(tuple)
 
 
 class CorruptedExcelFile(Exception):

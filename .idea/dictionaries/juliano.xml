@@ -13,6 +13,8 @@
       <w>groupname</w>
       <w>hbox</w>
       <w>maxbin</w>
+      <w>maxs</w>
+      <w>mins</w>
       <w>navbar</w>
       <w>nbins</w>
       <w>ndarray</w>
