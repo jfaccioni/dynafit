@@ -142,8 +142,9 @@ def sample_size_warning(df: pd.DataFrame) -> Dict[float, float]:
 
 def bootstrap_data(df: pd.DataFrame, repeats: int, progress_callback: Signal) -> pd.DataFrame:
     """Performs bootstrapping. Each bin is sampled N times (N="repeats" parameter)."""
-    total_progress = repeats * df['bins'].max()
+    total_progress = repeats * len(df['bins'].unique())
     current_progress = count()
+    next(current_progress)
     columns = ['CS_mean', 'GR_var', 'bins']
     output_df = pd.DataFrame(columns=columns)
     for bin_number, bin_values in df.groupby('bins'):
