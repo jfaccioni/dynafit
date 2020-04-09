@@ -1,3 +1,13 @@
+# 0.1.0
+- Added thread support for DynaFit analysis, UI is now responsive
+- Added progress bar that indicates % of bootstrapping done
+- Added message box that waits for user when sample size is too low in one or more binned groups
+- When parsing the input file columns, the program now ignores any rows that contains non-numeric data or empty cells,
+  even if the corresponding cell in the other column contains numeric data
+- Moved all plotting related functions to its dedicated object (plotter. py); plotting is done in the main thread,
+  after the worker thread has finished executing
+- Added utils.py for common-use functions
+
 # 0.0.4
 - The program no longer attempts to calculate CoDy values for colony size values beyond the max X value
 - Renamed "CoDy Inf" to "CoDy max X value"
