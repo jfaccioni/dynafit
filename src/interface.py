@@ -363,6 +363,7 @@ class DynaFitGUI(QMainWindow):
         self.fig.suptitle('')
         self.cvp_ax.clear()
         self.histogram_ax.clear()
+        self.results_table.clearContents()
         self.raise_worker_thread_error(exception_tuple)
 
     def dynafit_worker_raised_no_exceptions(self, results: Tuple[Plotter, pd.DataFrame, Tuple[str, str]]) -> None:
