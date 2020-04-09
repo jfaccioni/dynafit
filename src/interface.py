@@ -22,12 +22,15 @@ from matplotlib.pyplot import Figure
 from src.logic import dynafit
 from src.plotter import Plotter
 
-# Set a small font for plots
-matplotlib.rc('font', size=8)
+# ## GLOBALS ##
 # Set debugging flag
 DEBUG = True
-mutex = QMutex()
-wait_condition = QWaitCondition()
+# Set a small font for plots
+matplotlib.rc('font', size=8)
+# Set global QMutex instance
+MUTEX = QMutex()
+# Set global QWaitInstance instance
+WAIT_CONDITION = QWaitCondition()
 
 
 class DynaFitGUI(QMainWindow):
@@ -43,19 +46,24 @@ class DynaFitGUI(QMainWindow):
         self.threadpool = QThreadPool()
         self.data = None
         self.dataframe_results = None
+
         # --Central widget--
         self.frame = QWidget(self)
         self.setCentralWidget(self.frame)
+
         # --Main layout--
         main_layout = QVBoxLayout()
         self.frame.setLayout(main_layout)
+
         # --Columns--
         columns = QHBoxLayout()
         main_layout.addLayout(columns)
+
         # --Left column--
         # Region where user selects parameters
         left_column = QVBoxLayout()
         columns.addLayout(left_column)
+
         # --Right column--
         # Region where plots are displayed
         right_column = QVBoxLayout()
@@ -244,7 +252,8 @@ class DynaFitGUI(QMainWindow):
         try:
             self.data = openpyxl.load_workbook(query, data_only=True)
         except BadZipFile:
-            raise CorruptedExcelFile('Cannot load input Excel file. Is it corrupted?')
+            e = CorruptedExcelFile('Cannot load input Excel file. Is it corrupted?')
+            self.raise_main_thread_error(e)
         else:
             filename = os.path.basename(query)
             self.input_filename_label.setText(filename)
@@ -276,16 +285,18 @@ class DynaFitGUI(QMainWindow):
     def dynafit_run_worker(self) -> None:
         """Runs DynaFit analysis on a worker thread."""
         if self.data is None:
-            raise NoExcelFileError('Please select an Excel spreadsheet as the input file')
-        dynafit_settings = self.get_dynafit_settings()
-        worker = Worker(func=dynafit, **dynafit_settings)
-        worker.signals.started.connect(self.dynafit_setup)
-        worker.signals.progress.connect(self.dynafit_show_progress)
-        worker.signals.ss_warning.connect(self.dynafit_small_sample_size_warning)
-        worker.signals.finished.connect(self.dynafit_cleanup)
-        worker.signals.success.connect(self.dynafit_no_exceptions_raised)
-        worker.signals.error.connect(self.dynafit_raised_exception)
-        self.threadpool.start(worker)
+            e = NoExcelFileError('Please select an Excel spreadsheet as the input file')
+            self.raise_main_thread_error(e)
+        else:
+            dynafit_settings = self.get_dynafit_settings()
+            worker = Worker(func=dynafit, **dynafit_settings)
+            worker.signals.started.connect(self.dynafit_setup)
+            worker.signals.progress.connect(self.dynafit_show_progress)
+            worker.signals.ss_warning.connect(self.dynafit_small_sample_size_warning)
+            worker.signals.finished.connect(self.dynafit_cleanup)
+            worker.signals.success.connect(self.dynafit_no_exceptions_raised)
+            worker.signals.error.connect(self.dynafit_raised_exception)
+            self.threadpool.start(worker)
 
     def dynafit_setup(self) -> None:
         """Called before DynaFit analysis starts. Modifies the label on the plot button and clears both Axes."""
@@ -333,7 +344,7 @@ class DynaFitGUI(QMainWindow):
             warning_event.ignore()
         else:
             warning_event.accept()
-        wait_condition.wakeAll()
+        WAIT_CONDITION.wakeAll()
 
     def dynafit_raised_exception(self, exception: Union[Exception, Tuple[Exception, str]]) -> None:
         """Called if an error is raised during DynaFit analysis. Clears axes and shows the error in a message box."""
@@ -379,12 +390,14 @@ class DynaFitGUI(QMainWindow):
     def save_to_excel_dialog(self) -> None:
         """Opens a file dialog, prompting the user to select the name/location for the Excel export of the results."""
         if self.dataframe_results is None:
-            raise ValueError('No dataframe_results yet. Please plot the CVP first.')
-        placeholder = f'{self.results_table.item(0, 1).text()}_{self.results_table.item(1, 1).text()}.xlsx'
-        query, _ = QFileDialog.getSaveFileName(self, 'Select file to save dataframe_results', placeholder,
-                                               'Excel Spreadsheet (*.xlsx)')
-        if query:
-            self.save_excel(path=query, placeholder=placeholder)
+            e = ValueError('No dataframe_results yet. Please plot the CVP first.')
+            self.raise_main_thread_error(e)
+        else:
+            placeholder = f'{self.results_table.item(0, 1).text()}_{self.results_table.item(1, 1).text()}.xlsx'
+            query, _ = QFileDialog.getSaveFileName(self, 'Select file to save dataframe_results', placeholder,
+                                                   'Excel Spreadsheet (*.xlsx)')
+            if query:
+                self.save_excel(path=query, placeholder=placeholder)
 
     def save_excel(self, path: str, placeholder: str) -> None:
         """Saves the DynaFit dataframe_results to the given path as an Excel spreadsheet."""
@@ -395,12 +408,14 @@ class DynaFitGUI(QMainWindow):
     def save_to_csv_dialog(self) -> None:
         """Opens a file dialog, prompting the user to select the name/location for the csv export of the results."""
         if self.dataframe_results is None:
-            raise ValueError('No dataframe_results yet. Please plot the CVP first.')
-        placeholder = f'{self.results_table.item(0, 1).text()}_{self.results_table.item(1, 1).text()}.csv'
-        query, _ = QFileDialog.getSaveFileName(self, 'Select file to save dataframe_results', placeholder,
-                                               'Comma-separated values (*.csv)')
-        if query:
-            self.save_csv(path=query)
+            e = ValueError('No dataframe_results yet. Please plot the CVP first.')
+            self.raise_main_thread_error(e)
+        else:
+            placeholder = f'{self.results_table.item(0, 1).text()}_{self.results_table.item(1, 1).text()}.csv'
+            query, _ = QFileDialog.getSaveFileName(self, 'Select file to save dataframe_results', placeholder,
+                                                   'Comma-separated values (*.csv)')
+            if query:
+                self.save_csv(path=query)
 
     def save_csv(self, path: str) -> None:
         """Saves the DynaFit dataframe_results to the given path as a csv file."""
@@ -474,8 +489,8 @@ class Worker(QRunnable):
         """Adds keyword arguments related signaling between main thread and worker thread."""
         self.kwargs['progress_callback'] = self.signals.progress
         self.kwargs['ss_warning_callback'] = self.signals.ss_warning
-        self.kwargs['mutex'] = mutex
-        self.kwargs['wait_condition'] = wait_condition
+        self.kwargs['mutex'] = MUTEX
+        self.kwargs['wait_condition'] = WAIT_CONDITION
 
     @Slot()
     def run(self) -> None:
@@ -522,7 +537,4 @@ if __name__ == '__main__':
     if DEBUG:
         dfgui.debug()
     dfgui.show()
-    try:
-        sys.exit(app.exec_())
-    except Exception as e:
-        dfgui.raise_main_thread_error(e)
+    sys.exit(app.exec_())
