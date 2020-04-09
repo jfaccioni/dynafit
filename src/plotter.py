@@ -3,7 +3,7 @@ from typing import List
 import matplotlib.pyplot as plt
 import numpy as np
 
-from src.utils import get_missing_coord, get_start_end_values
+from utils import get_missing_coord, get_start_end_values
 
 
 class Plotter:
