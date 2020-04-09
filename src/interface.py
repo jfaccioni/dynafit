@@ -4,7 +4,7 @@ import traceback
 from csv import writer
 from io import StringIO
 from math import isnan
-from typing import Any, Callable, Dict, Tuple, Union
+from typing import Any, Callable, Dict, Tuple
 from zipfile import BadZipFile
 
 import matplotlib
@@ -105,11 +105,11 @@ class DynaFitGUI(QMainWindow):
         self.data_type_range_frame.setLayout(QGridLayout())
         # CS1/CS2 button (calculates GR)
         self.cs1_cs2_button = QRadioButton(self, text='Initial and final colony sizes', checked=True)
-        self.cs1_cs2_button.clicked.connect(self.cs1_cs2_setup)
+        self.cs1_cs2_button.clicked.connect(self.cs1_cs2_button_clicked)
         self.data_type_range_frame.layout().addWidget(self.cs1_cs2_button, 0, 0, 1, 2)
         # CS/GR button (pre-calculated GR)
         self.cs_gr_button = QRadioButton(self, text='Initial colony size and growth rate')
-        self.cs_gr_button.clicked.connect(self.cs_gr_setup)
+        self.cs_gr_button.clicked.connect(self.cs_gr_button_clicked)
         self.data_type_range_frame.layout().addWidget(self.cs_gr_button, 1, 0, 1, 2)
         # Time interval label and value -> TODO: find a better place for these widgets in the GUI!
         self.time_interval_label = QLabel(self, text='Hours between initial and final colony sizes:', wordWrap=True)
@@ -173,7 +173,7 @@ class DynaFitGUI(QMainWindow):
         self.options_frame.layout().addWidget(self.bootstrap_repeats_spinbox, 1, 1, 1, 1)
         # Confidence interval parameter
         self.add_conf_int_checkbox = QCheckBox(self, text='Use conf. int.')
-        self.add_conf_int_checkbox.clicked.connect(self.confidence_setup)
+        self.add_conf_int_checkbox.clicked.connect(self.conf_int_checkbox_checked)
         self.options_frame.layout().addWidget(self.add_conf_int_checkbox, 1, 2, 1, 1)
         self.conf_int_spinbox = QDoubleSpinBox(self, minimum=0, value=0.95, maximum=0.999, singleStep=0.01, decimals=3)
         self.conf_int_spinbox.setEnabled(False)
@@ -192,16 +192,16 @@ class DynaFitGUI(QMainWindow):
         plot_grid = QGridLayout()
         # Plot button
         self.plot_button = QPushButton(self, text='Plot CVP')
-        self.plot_button.clicked.connect(self.dynafit_run_worker)
+        self.plot_button.clicked.connect(self.dynafit_run)
         plot_grid.addWidget(self.plot_button, 0, 0, 1, 1)
         # Excel export button
         self.to_excel_button = QPushButton(self, text='Save to Excel')
-        self.to_excel_button.clicked.connect(self.save_to_excel_dialog)
+        self.to_excel_button.clicked.connect(self.save_excel_dialog)
         self.to_excel_button.setDisabled(True)
         plot_grid.addWidget(self.to_excel_button, 0, 1, 1, 1)
         # CSV export button
         self.to_csv_button = QPushButton(self, text='Save to csv')
-        self.to_csv_button.clicked.connect(self.save_to_csv_dialog)
+        self.to_csv_button.clicked.connect(self.save_csv_dialog)
         self.to_csv_button.setDisabled(True)
         plot_grid.addWidget(self.to_csv_button, 0, 2, 1, 1)
         # Progress bar and label
@@ -256,49 +256,60 @@ class DynaFitGUI(QMainWindow):
             self.raise_main_thread_error(e)
         else:
             filename = os.path.basename(query)
-            self.input_filename_label.setText(filename)
-            self.input_sheetname_combobox.setEnabled(True)
-            self.input_sheetname_combobox.clear()
-            self.input_sheetname_combobox.addItems(self.data.sheetnames)
+            self.load_data_success(filename=filename)
 
-    def cs1_cs2_setup(self) -> None:
+    def load_data_success(self, filename: str) -> None:
+        """Runs upon successfully loading an Excel file into the GUI."""
+        self.input_filename_label.setText(filename)
+        self.input_sheetname_combobox.setEnabled(True)
+        self.input_sheetname_combobox.clear()
+        self.input_sheetname_combobox.addItems(self.data.sheetnames)
+
+    def cs1_cs2_button_clicked(self) -> None:
         """Changes interface widgets when the user clicks on the CS1 and CS2 radio button."""
         self.time_interval_label.setEnabled(True)
         self.time_interval_spinbox.setEnabled(True)
         self.CS_label.setText('Initial colony size column')
         self.GR_label.setText('Final colony size column')
 
-    def cs_gr_setup(self) -> None:
+    def cs_gr_button_clicked(self) -> None:
         """Changes interface widgets when the user clicks on the CS and GR radio button."""
         self.time_interval_label.setEnabled(False)
         self.time_interval_spinbox.setEnabled(False)
         self.CS_label.setText('Colony size column')
         self.GR_label.setText('Growth rate column')
 
-    def confidence_setup(self) -> None:
+    def conf_int_checkbox_checked(self) -> None:
         """Changes interface widgets when the user clicks on the confidence interval radio button."""
         if self.add_conf_int_checkbox.isChecked():
             self.conf_int_spinbox.setEnabled(True)
         else:
             self.conf_int_spinbox.setEnabled(False)
 
-    def dynafit_run_worker(self) -> None:
+    def dynafit_run(self) -> None:
         """Runs DynaFit analysis on a worker thread."""
         if self.data is None:
             e = NoExcelFileError('Please select an Excel spreadsheet as the input file')
             self.raise_main_thread_error(e)
         else:
-            dynafit_settings = self.get_dynafit_settings()
-            worker = Worker(func=dynafit, **dynafit_settings)
-            worker.signals.started.connect(self.dynafit_setup)
-            worker.signals.progress.connect(self.dynafit_show_progress)
-            worker.signals.ss_warning.connect(self.dynafit_small_sample_size_warning)
-            worker.signals.finished.connect(self.dynafit_cleanup)
-            worker.signals.success.connect(self.dynafit_no_exceptions_raised)
-            worker.signals.error.connect(self.dynafit_raised_exception)
-            self.threadpool.start(worker)
+            try:
+                self.dynafit_setup_before_running()
+                dynafit_settings = self.get_dynafit_settings()
+            except Exception as e:
+                self.raise_main_thread_error(e)
+            else:
+                self.dynafit_worker_run(dynafit_settings=dynafit_settings)
 
-    def dynafit_setup(self) -> None:
+    def dynafit_worker_run(self, dynafit_settings: Dict[str, Any]) -> None:
+        worker = Worker(func=dynafit, **dynafit_settings)
+        worker.signals.progress.connect(self.dynafit_worker_progress_updated)
+        worker.signals.ss_warning.connect(self.dynafit_worker_small_sample_size_warning)
+        worker.signals.finished.connect(self.dynafit_worker_has_finished)
+        worker.signals.success.connect(self.dynafit_worker_raised_no_exceptions)
+        worker.signals.error.connect(self.dynafit_worker_raised_exception)
+        self.threadpool.start(worker)
+
+    def dynafit_setup_before_running(self) -> None:
         """Called before DynaFit analysis starts. Modifies the label on the plot button and clears both Axes."""
         self.progress_bar.setVisible(True)
         self.progress_bar_label.setVisible(True)
@@ -330,10 +341,10 @@ class DynaFitGUI(QMainWindow):
             'add_violin': self.add_violins_checkbox.isChecked(),
         }
 
-    def dynafit_show_progress(self, number: int):
+    def dynafit_worker_progress_updated(self, number: int):
         self.progress_bar.setValue(number)
 
-    def dynafit_small_sample_size_warning(self, warning: Tuple[QEvent, Dict[int, int]]) -> None:
+    def dynafit_worker_small_sample_size_warning(self, warning: Tuple[QEvent, Dict[int, int]]) -> None:
         warning_event, warning_info = warning
         message = ('Warning: small sample sizes found for some groups. DynaFit analysis may be unreliable or '
                    'impossible to compute.\nDo you want to continue anyway?')
@@ -346,22 +357,22 @@ class DynaFitGUI(QMainWindow):
             warning_event.accept()
         WAIT_CONDITION.wakeAll()
 
-    def dynafit_raised_exception(self, exception: Union[Exception, Tuple[Exception, str]]) -> None:
+    def dynafit_worker_raised_exception(self, exception_tuple: Tuple[Exception, str]) -> None:
         """Called if an error is raised during DynaFit analysis. Clears axes and shows the error in a message box."""
         self.cvp_ax.clear()
         self.histogram_ax.clear()
-        self.raise_worker_thread_error(exception)
+        self.raise_worker_thread_error(exception_tuple)
 
-    def dynafit_no_exceptions_raised(self, results: Tuple[Plotter, pd.DataFrame, Tuple[str, str]]) -> None:
+    def dynafit_worker_raised_no_exceptions(self, results: Tuple[Plotter, pd.DataFrame, Tuple[str, str]]) -> None:
         """Called if no errors are raised during the DynaFit analysis. Writes/saves the results from DynaFit."""
         self.to_excel_button.setEnabled(True)
         self.to_csv_button.setEnabled(True)
         plotter, dataframe_results, plot_title_info = results
         self.dataframe_results = dataframe_results
-        self.set_results_table()
         plotter.plot_cvp(ax=self.cvp_ax)
         plotter.plot_histogram(ax=self.histogram_ax)
         self.set_figure_labels(*plot_title_info)
+        self.set_results_table()
 
     def set_figure_labels(self, filename: str, sheetname: str):
         self.fig.suptitle(f'CVP - Exp: {filename}, Sheet: {sheetname}')
@@ -377,7 +388,7 @@ class DynaFitGUI(QMainWindow):
                 value = '' if isinstance(value, float) and isnan(value) else str(value)
                 self.results_table.setItem(row_index, column_index, QTableWidgetItem(value))
 
-    def dynafit_cleanup(self) -> None:
+    def dynafit_worker_has_finished(self) -> None:
         """Called when DynaFit analysis finishes running (regardless of errors). Restores label on the plot
         button and removes the axis lines from the histogram"""
         self.plot_button.setText('Plot CVP')
@@ -387,7 +398,7 @@ class DynaFitGUI(QMainWindow):
         self.histogram_ax.set_axis_off()
         self.canvas.draw()
 
-    def save_to_excel_dialog(self) -> None:
+    def save_excel_dialog(self) -> None:
         """Opens a file dialog, prompting the user to select the name/location for the Excel export of the results."""
         if self.dataframe_results is None:
             e = ValueError('No dataframe_results yet. Please plot the CVP first.')
@@ -405,7 +416,7 @@ class DynaFitGUI(QMainWindow):
             path = path + '.xlsx'
         self.dataframe_results.to_excel(path, index=None, sheet_name=placeholder)
 
-    def save_to_csv_dialog(self) -> None:
+    def save_csv_dialog(self) -> None:
         """Opens a file dialog, prompting the user to select the name/location for the csv export of the results."""
         if self.dataframe_results is None:
             e = ValueError('No dataframe_results yet. Please plot the CVP first.')
@@ -429,9 +440,9 @@ class DynaFitGUI(QMainWindow):
         trace = traceback.format_exc()
         self.show_error_message(name=name, trace=trace)
 
-    def raise_worker_thread_error(self, error: Tuple[Exception, str]) -> None:
-        exception, trace = error
-        name = f'{exception.__class__.__name__}:\n{exception}'
+    def raise_worker_thread_error(self, exception_tuple: Tuple[Exception, str]) -> None:
+        error, trace = exception_tuple
+        name = f'{error.__class__.__name__}:\n{error}'
         self.show_error_message(name=name, trace=trace)
 
     def show_error_message(self, name: str, trace: str) -> None:
@@ -445,7 +456,7 @@ class DynaFitGUI(QMainWindow):
         self.CS_start_textbox.setText('A2')
         self.GR_start_textbox.setText('B2')
         self.cs_gr_button.setChecked(True)
-        self.cs_gr_setup()
+        self.cs_gr_button_clicked()
 
     # The following methods allows the result table to be copied to the clipboard. Source:
     # https://stackoverflow.com/questions/40469607/
@@ -458,7 +469,7 @@ class DynaFitGUI(QMainWindow):
         return super().eventFilter(source, event)
 
     def copy_selection(self) -> None:
-        """Copies selection on the dataframe_results table to the clipboard (csv-formatted)."""
+        """Copies selection on the results table to the clipboard (csv-formatted)."""
         selected_indexes = self.results_table.selectedIndexes()
         if selected_indexes:
             rows = sorted(index.row() for index in selected_indexes)
@@ -476,7 +487,7 @@ class DynaFitGUI(QMainWindow):
 
 
 class Worker(QRunnable):
-    """Worker thread for SCOUTS analysis. Avoids unresponsive GUI."""
+    """Worker thread for DynaFit analysis. Avoids unresponsive GUI."""
     def __init__(self, func: Callable, *args, **kwargs) -> None:
         super().__init__()
         self.func = func
@@ -509,18 +520,18 @@ class Worker(QRunnable):
 
 class WorkerSignals(QObject):
     """Defines the signals available from a running worker thread. Supported signals are:
-         Started: Worker has begun working. Nothing is emitted.
-         Finished: Worker has done executing (either naturally or by an Exception). Nothing is emitted.
-         Success: Worker finished executing without errors. Emits a tuple of a Plotter object and a pandas DataFrame.
-         Error: an Exception was raised. Emits a tuple containing an Exception object and the traceback as a string.
-         Progress:
-         SS Warning: """
-    started = Signal()
+        Progress: Worker has finished a percentage of its job. Emits an int representing that percentage (0-100).
+        SS Warning: Worker has encountered low samples in one or more groups. Emits a tuple containing a QEvent and
+          a dictionary containing the low sample groups. Meant to wait for used response in the GUI through a QMutex
+          and QWaitCondition before moving on with its execution.
+        Finished: Worker has done executing (either naturally or by an Exception). Nothing is emitted.
+        Success: Worker finished executing without errors. Emits a tuple of a Plotter object and a pandas DataFrame.
+        Error: an Exception was raised. Emits a tuple containing an Exception object and the traceback as a string."""
+    progress = Signal(int)
+    ss_warning = Signal(tuple)
     finished = Signal()
     success = Signal(tuple)
     error = Signal(tuple)
-    progress = Signal(float)
-    ss_warning = Signal(tuple)
 
 
 class CorruptedExcelFile(Exception):
