@@ -53,14 +53,14 @@ class Plotter:
 
     @staticmethod
     def plot_h0(start: float, end: float, initial_height: float, ax: plt.Axes) -> None:
-        """Plots H0 on the CVP (horizontal blue line)"""
-        ax.plot([start, end], [initial_height, initial_height], color='blue', lw=3)
+        """Plots H0 on the CVP (horizontal red line)"""
+        ax.plot([start, end], [initial_height, initial_height], color='red', lw=3)
 
     @staticmethod
     def plot_h1(start: float, end: float, initial_height: float, ax: plt.Axes) -> None:
-        """Plots H1 on the CVP (diagonal red line)"""
+        """Plots H1 on the CVP (diagonal blue line)"""
         final_height = get_missing_coord(x1=start, y1=initial_height, x2=end)
-        ax.plot([start, end], [initial_height, final_height], color='red', lw=3)
+        ax.plot([start, end], [initial_height, final_height], color='blue', lw=3)
 
     @staticmethod
     def plot_vertical_axis(start: float, ax: plt.Axes) -> None:
@@ -86,15 +86,15 @@ class Plotter:
 
     @staticmethod
     def plot_h0_ci(start: float, end: float, upper: float, lower: float, ax: plt.Axes) -> None:
-        """Plots H0 confidence interval on the CVP (diagonal red line)"""
-        ax.fill_between([start, end], [upper, upper], [lower, lower], color='blue', alpha=0.3)
+        """Plots H0 confidence interval on the CVP (horizontal red line)"""
+        ax.fill_between([start, end], [upper, upper], [lower, lower], color='red', alpha=0.3)
 
     @staticmethod
     def plot_h1_ci(start: float, end: float, upper: float, lower: float, ax: plt.Axes) -> None:
-        """Plots H1 confidence interval on the CVP (diagonal red line)"""
+        """Plots H1 confidence interval on the CVP (diagonal blue line)"""
         final_height_upper = get_missing_coord(x1=start, y1=upper, x2=end)
         final_height_lower = get_missing_coord(x1=start, y1=lower, x2=end)
-        ax.fill_between([start, end], [upper, final_height_upper], [lower, final_height_lower], color='red', alpha=0.3)
+        ax.fill_between([start, end], [upper, final_height_upper], [lower, final_height_lower], color='blue', alpha=0.3)
 
     def plot_bootstrap_violins(self, ax: plt.Axes) -> None:
         """Plots the bootstrap populations for each bin as violin plots."""

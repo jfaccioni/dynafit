@@ -396,11 +396,11 @@ class DynaFitGUI(QMainWindow):
         button and removes the axis lines from the histogram"""
         self.plot_button.setText('Plot CVP')
         self.plot_button.setEnabled(True)
-        self.progress_bar_label.setVisible(False)
-        self.progress_bar.setValue(0)
-        self.progress_bar.setVisible(False)
         self.histogram_ax.set_axis_off()
         self.canvas.draw()
+        self.progress_bar_label.setVisible(False)
+        self.progress_bar.setVisible(False)
+        self.progress_bar.setValue(0)
 
     def save_excel_dialog(self) -> None:
         """Opens a file dialog, prompting the user to select the name/location for the Excel export of the results."""
