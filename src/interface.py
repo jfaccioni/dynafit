@@ -110,12 +110,12 @@ class DynaFitGUI(QMainWindow):
         # CS/GR button (pre-calculated GR)
         self.cs_gr_button = QRadioButton(self, text='Initial colony size and growth rate')
         self.cs_gr_button.clicked.connect(self.cs_gr_button_clicked)
-        self.data_type_range_frame.layout().addWidget(self.cs_gr_button, 1, 0, 1, 2)
-        # Time interval label and value -> TODO: find a better place for these widgets in the GUI!
+        self.data_type_range_frame.layout().addWidget(self.cs_gr_button, 0, 2, 1, 2)
+        # Time interval label and value
         self.time_interval_label = QLabel(self, text='Hours between initial and final colony sizes:', wordWrap=True)
-        self.data_type_range_frame.layout().addWidget(self.time_interval_label, 0, 2, 1, 1)
+        self.data_type_range_frame.layout().addWidget(self.time_interval_label, 1, 0, 1, 2)
         self.time_interval_spinbox = QDoubleSpinBox(self, minimum=0.0, value=24.0, maximum=1000.0, singleStep=1.0)
-        self.data_type_range_frame.layout().addWidget(self.time_interval_spinbox, 0, 3, 1, 1)
+        self.data_type_range_frame.layout().addWidget(self.time_interval_spinbox, 1, 2, 1, 2)
         # CS label and GR label
         self.CS_label = QLabel(self, text='Initial colony size column', styleSheet='font-weight: 600')
         self.data_type_range_frame.layout().addWidget(self.CS_label, 2, 0, 1, 2)
@@ -205,7 +205,7 @@ class DynaFitGUI(QMainWindow):
         self.to_csv_button.setDisabled(True)
         plot_grid.addWidget(self.to_csv_button, 0, 2, 1, 1)
         # Progress bar and label
-        self.progress_bar_label = QLabel(self, text='Bootstrapping...')
+        self.progress_bar_label = QLabel(self, text='Progress:')
         self.progress_bar_label.setVisible(False)
         plot_grid.addWidget(self.progress_bar_label, 0, 3, 1, 1)
         self.progress_bar = QProgressBar(self, minimum=0, maximum=100)
@@ -311,13 +311,14 @@ class DynaFitGUI(QMainWindow):
 
     def dynafit_setup_before_running(self) -> None:
         """Called before DynaFit analysis starts. Modifies the label on the plot button and clears both Axes."""
+        self.cvp_ax.clear()
+        self.histogram_ax.clear()
+        self.histogram_ax.set_axis_off()
         self.progress_bar.setVisible(True)
         self.progress_bar_label.setVisible(True)
         self.plot_button.setDisabled(True)
         self.to_excel_button.setDisabled(True)
         self.to_csv_button.setDisabled(True)
-        self.cvp_ax.clear()
-        self.histogram_ax.clear()
 
     def get_dynafit_settings(self) -> Dict[str, Any]:
         """Bundles the information and parameters selected by the user into a single dictionary and then returns it.
@@ -359,6 +360,7 @@ class DynaFitGUI(QMainWindow):
 
     def dynafit_worker_raised_exception(self, exception_tuple: Tuple[Exception, str]) -> None:
         """Called if an error is raised during DynaFit analysis. Clears axes and shows the error in a message box."""
+        self.fig.suptitle('')
         self.cvp_ax.clear()
         self.histogram_ax.clear()
         self.raise_worker_thread_error(exception_tuple)
@@ -394,6 +396,7 @@ class DynaFitGUI(QMainWindow):
         self.plot_button.setText('Plot CVP')
         self.plot_button.setEnabled(True)
         self.progress_bar_label.setVisible(False)
+        self.progress_bar.setValue(0)
         self.progress_bar.setVisible(False)
         self.histogram_ax.set_axis_off()
         self.canvas.draw()
@@ -506,7 +509,6 @@ class Worker(QRunnable):
     @Slot()
     def run(self) -> None:
         """Runs the Worker thread."""
-        self.signals.started.emit()
         try:
             return_value = self.func(*self.args, **self.kwargs)
         except Exception as error:
