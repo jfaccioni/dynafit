@@ -1,10 +1,9 @@
-import time
 from itertools import count
 from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 import pandas as pd
-from PySide2.QtCore import QEvent, Signal
+from PySide2.QtCore import QEvent, QMutex, QWaitCondition, Signal
 from openpyxl import Workbook
 from scipy.stats import sem, t
 
@@ -21,72 +20,94 @@ round_arr = np.vectorize(round)
 def dynafit(data: Workbook, filename: str, sheetname: str, need_to_calculate_gr: bool, time_delta: float,
             cs_start_cell: str, cs_end_cell: str, gr_start_cell: str, gr_end_cell: str, individual_colonies: int,
             large_colony_groups: int, bootstrap_repeats: int, add_confidence_interval: bool, confidence_value: float,
-            remove_outliers: bool, add_violin: bool, progress_callback: Signal,
-            ss_warning_callback: Signal) -> Tuple[Plotter, pd.DataFrame, Tuple[str, str]]:
+            remove_outliers: bool, add_violin: bool, **kwargs) -> Tuple[Plotter, pd.DataFrame, Tuple[str, str]]:
     """Main DynaFit function"""
+    # Extract thread-related values from kwargs
+    progress_callback = kwargs.get('progress_callback')
+    sample_size_callback = kwargs.get('ss_warning_callback')
+    mutex = kwargs.get('mutex')
+    wait_condition = kwargs.get('wait_condition')
+
     # Store parameters used for DynaFit analysis
-    results_dict = {'file': filename, 'sheet': sheetname, 'max individual colony size': individual_colonies,
-                    'number of large colony groups': large_colony_groups, 'bootstrapping repeats': bootstrap_repeats}
+    results_dict = {
+        'file': filename,
+        'sheet': sheetname,
+        'max individual colony size': individual_colonies,
+        'number of large colony groups': large_colony_groups,
+        'bootstrapping repeats': bootstrap_repeats
+    }
+
     # Validate input data
-    df = ExcelValidator(data=data, sheetname=sheetname, cs_start_cell=cs_start_cell, cs_end_cell=cs_end_cell,
-                        gr_start_cell=gr_start_cell, gr_end_cell=gr_end_cell).data
+    excel_validator = ExcelValidator(data=data, sheetname=sheetname, cs_start_cell=cs_start_cell,
+                                     cs_end_cell=cs_end_cell, gr_start_cell=gr_start_cell, gr_end_cell=gr_end_cell)
+
+    # Get input data
+    df = excel_validator.data
+
     # Preprocess data
     if need_to_calculate_gr is True:
         df = calculate_growth_rate(df=df, time_delta=time_delta)
-    df = filter_bad_data(df=df)
+    df = filter_colony_sizes_less_than_one(df=df)
     if remove_outliers is True:
         df = filter_outliers(df=df)
+
     # Bin samples into groups and plot the resulting histogram
     binned_df = add_bins(df=df, individual_colonies=individual_colonies, bins=large_colony_groups)
-    # Sample size warning
-    warns = sample_size_warning(df=binned_df)
-    if warns:
-        answered_event = QEvent(QEvent.WindowActivate)
-        user_wants_to_continue_event = QEvent(QEvent.WindowActivate)
-        answered_event.setAccepted(False)
-        ss_warning_callback.emit((answered_event, user_wants_to_continue_event, warns))
-        while not answered_event.isAccepted():
-            time.sleep(0.1)
-            if not user_wants_to_continue_event.isAccepted():
-                raise AbortedByUser("User decided to stop DynaFit analysis.")
+
+    # Check for sample size warning
+    warning_info = sample_size_warning(df=binned_df)
+    if warning_info:
+        prompt_sample_size_warning(warning_info=warning_info, mutex=mutex, wait_condition=wait_condition,
+                                   callback=sample_size_callback)
+
     # Perform DynaFit bootstrap
     df = bootstrap_data(df=binned_df, repeats=bootstrap_repeats, progress_callback=progress_callback)
     df = add_log_columns(df=df)
-    # Base results
+
+    # Get mean line results
     xs, ys = get_mean_line_arrays(df=df)
-    scatter_xs = df['log2_CS_mean'].values
-    scatter_ys = df['log2_GR_var'].values
-    scatter_colors = df['bins'].apply(lambda curr_bin: 'gray' if curr_bin > individual_colonies else 'red').values
-    # Add CoDy values to dataframe_results dictionary
+
+    # Add mean line CoDy values to results_dict
     max_x_value = round(max(xs), 2)
     cody_range = [i for i in range(1, 7) if i < max_x_value]
     for i in cody_range:
         results_dict[f'CoDy {i}'] = round(calculate_cody(xs=xs, ys=ys, cody_n=i), 4)
     results_dict[f'CoDy {max_x_value}'] = round(calculate_cody(xs=xs, ys=ys, cody_n=None), 4)
-    # Violins
+
+    # Get scatter results
+    scatter_xs = df['log2_CS_mean'].values
+    scatter_ys = df['log2_GR_var'].values
+    scatter_colors = df['bins'].apply(lambda curr_bin: 'gray' if curr_bin > individual_colonies else 'red').values
+
+    # Get violin results (if user wants to do so)
     violin_ys, violin_colors = None, None
     if add_violin:
         violin_ys = [df.loc[df['bins'] == b]['log2_GR_var'].values for b in sorted(df['bins'].unique())]
         violin_colors = individual_colonies
-    # CI
+
+    # Get CI results (if user wants to do so)
     upper_ys, lower_ys = None, None
     if add_confidence_interval:
         upper_ys, lower_ys = get_confidence_interval_values(df=df, confidence_value=confidence_value)
-        # Add CoDy CI values to dataframe_results dictionary
+        # Add CI CoDy values to results_dict
         for ys, name in zip([upper_ys, lower_ys], ['upper', 'lower']):
             for i in cody_range:
                 results_dict[f'CoDy {i} {name} CI'] = round(calculate_cody(xs=xs, ys=ys, cody_n=i), 4)
             results_dict[f'CoDy {max_x_value} {name} CI'] = round(calculate_cody(xs=xs, ys=ys, cody_n=None), 4)
-    # Other histogram values
+
+    # Get histogram values
     hist_x = np.log2(binned_df['CS'])
     hist_pos, hist_bin_mins, hist_bin_maxs, hist_instances = get_histogram_values(df=binned_df)
-    # Get and return results
+
+    # Encapsulate results in the correct objets
     plot_results = Plotter(mean_xs=xs, mean_ys=ys, upper_ys=upper_ys, lower_ys=lower_ys, scatter_xs=scatter_xs,
                            scatter_ys=scatter_ys, scatter_colors=scatter_colors, violin_ys=violin_ys,
                            violin_colors=violin_colors, hist_x=hist_x, hist_pos=hist_pos, hist_bin_mins=hist_bin_mins,
                            hist_bin_maxs=hist_bin_maxs, hist_instances=hist_instances)
     dataframe_results = results_to_dataframe(results_dict=results_dict, xs=round_arr(xs), ys=round_arr(ys))
     plot_title_info = filename, sheetname
+
+    # Return results
     return plot_results, dataframe_results, plot_title_info
 
 
@@ -101,7 +122,7 @@ def calculate_growth_rate(df: pd.DataFrame, time_delta: float) -> pd.DataFrame:
     return df.assign(GR=growth_rate)
 
 
-def filter_bad_data(df: pd.DataFrame) -> pd.DataFrame:
+def filter_colony_sizes_less_than_one(df: pd.DataFrame) -> pd.DataFrame:
     """Filter low CS values (colonies with less than 1 cell should not exist anyway)."""
     return df.loc[df['CS'] >= 1]
 
@@ -131,31 +152,46 @@ def add_bins(df: pd.DataFrame, individual_colonies: int, bins: int) -> pd.DataFr
     return df.assign(bins=pd.concat([single_bins, multiple_bins]))
 
 
-def sample_size_warning(df: pd.DataFrame) -> Dict[float, float]:
-    warns = {}
+def sample_size_warning(df: pd.DataFrame) -> Dict[int, int]:
+    warning_info = {}
     for bin_number, bin_values in df.groupby('bins'):
         n = len(bin_values)
         if n < N_WARNING_LEVEL:
-            warns[bin_number] = n
-    return warns
+            warning_info[int(bin_number)] = n
+    return warning_info
+
+
+def prompt_sample_size_warning(warning_info: Dict[int, int], mutex: QMutex, wait_condition: QWaitCondition,
+                               callback: Signal) -> None:
+    mutex.lock()
+    warning_event = QEvent(QEvent.WindowActivate)
+    warning = (warning_event, warning_info)
+    callback.emit(warning)
+    wait_condition.wait(mutex)
+    mutex.unlock()
+    if warning_event.isAccepted():
+        raise AbortedByUser("User decided to stop DynaFit analysis.")
 
 
 def bootstrap_data(df: pd.DataFrame, repeats: int, progress_callback: Signal) -> pd.DataFrame:
     """Performs bootstrapping. Each bin is sampled N times (N="repeats" parameter)."""
     total_progress = repeats * len(df['bins'].unique())
-    current_progress = count()
-    next(current_progress)
+    progress_counter = count(start=1)
     columns = ['CS_mean', 'GR_var', 'bins']
     output_df = pd.DataFrame(columns=columns)
     for bin_number, bin_values in df.groupby('bins'):
-        n = len(bin_values)
+        sample_size = len(bin_values)
         for repeat in range(repeats):
-            progress = int(round(100 * next(current_progress) / total_progress))
-            progress_callback.emit(progress)
-            sample = bin_values.sample(n=n, replace=True)
+            emit_bootstrap_progress(current=next(progress_counter), total=total_progress, callback=progress_callback)
+            sample = bin_values.sample(n=sample_size, replace=True)
             row = pd.Series([sample['CS'].mean(), sample['GR'].var(), bin_number], index=columns)
             output_df = output_df.append(row, ignore_index=True)
     return output_df
+
+
+def emit_bootstrap_progress(current: int, total: int, callback: Signal):
+    progress = int(round(100 * current / total))
+    callback.emit(progress)
 
 
 def add_log_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -211,9 +247,9 @@ def calculate_cody(xs: np.ndarray, ys: np.ndarray, cody_n: Optional[int]) -> flo
 def truncate_arrays(xs: np.ndarray, ys: np.ndarray, cutoff: int) -> Tuple[np.ndarray, np.ndarray]:
     """Truncates and returns the arrays "xs" and "ys" by removing values from the "xs" arrays lower than the cutoff,
     and the removing "ys"'s last elements until both arrays have the same size."""
-    xs_trunc = [x for x in xs if x < cutoff] + [cutoff]
+    xs_trunc = np.array([x for x in xs if x < cutoff] + [cutoff])
     end_y = np.interp(cutoff, xs, ys)
-    ys_trunc = ys[:len(xs_trunc)] + [end_y]
+    ys_trunc = np.array(ys[:len(xs_trunc)] + [end_y])
     return xs_trunc, ys_trunc
 
 

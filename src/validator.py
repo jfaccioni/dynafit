@@ -1,6 +1,7 @@
 import re
-from typing import Dict, List, Optional, Tuple
+from typing import Optional, Tuple
 
+import numpy as np
 import pandas as pd
 from openpyxl import Workbook
 from openpyxl.cell.cell import Cell
@@ -13,18 +14,19 @@ class ExcelValidator:
                  gr_start_cell: str, gr_end_cell: str) -> None:
         """Init method of ExcelValidator class."""
         # Checks if any data has been loaded at all
-        self.validate_input(data=data)
         self.ws = data[sheetname]
         # Add character '1' column strings (typing 'A' implies starting from cell '1A'
-        cs_start_cell = self.convert_column_to_first_cell(cs_start_cell)
-        gr_start_cell = self.convert_column_to_first_cell(gr_start_cell)
+        cs_start_cell = self.convert_column_to_first_cell(cs_start_cell).strip().upper()
+        gr_start_cell = self.convert_column_to_first_cell(gr_start_cell).strip().upper()
         # Structures cell ranges in a dictionary
         self.ranges = {
-            'CS': [cs_start_cell.strip().upper(), cs_end_cell.strip().upper()],
-            'GR': [gr_start_cell.strip().upper(), gr_end_cell.strip().upper()],
+            'CS': [cs_start_cell, cs_end_cell],
+            'GR': [gr_start_cell, gr_end_cell],
         }
         # Validates data as a whole
-        self.data = self.validation_routine()
+        self.validation_routine()
+        # Exposes data as a pandas DataFrame
+        self.data = self.get_data()
 
     def convert_column_to_first_cell(self, cell_str: str) -> str:
         """Converts and returns an Excel column accessor such as "A" to a first row cell accessor ("A1").
@@ -34,13 +36,7 @@ class ExcelValidator:
                 return cell_str + '1'
         return cell_str
 
-    @staticmethod
-    def validate_input(data: Optional[Workbook]) -> None:
-        """Validates input by checking whether an input Excel file has been selected at all"""
-        if data is None:
-            raise NoExcelFileError('Please select an Excel spreadsheet as the input file')
-
-    def validation_routine(self) -> pd.DataFrame:
+    def validation_routine(self) -> None:
         """Method responsible for calling downstream validation methods. Validation steps includes:
         - Checking if the start cell is empty
         - Checking if the start and end cells are valid Excel cells
@@ -56,20 +52,11 @@ class ExcelValidator:
           GR: <growth rate values>
         As an implementation detail, the GR column may actually be the final colony size column, if the user
         chose to let the program calculate the growth rate instead. This will be later overwritten by DynaFit."""
-        data = {}  # To be converted to a pandas DataFrame at the end
         for name, (start, end) in self.ranges.items():
             if end:  # User wants range from start cell to end cell
                 self.validate_cell_range(start=start, end=end)
             else:  # User wants range from start cell to end of the start cell's column
                 self.validate_cell_string(cell_str=start)
-                end = self.get_end_cell(start=start)  # Figures out where the column ends
-            cell_range = f'{start}:{end}'
-            cell_rows = self.ws[cell_range]
-            self.validate_cell_values(start, cell_rows)
-            values = self.get_cell_values(cell_rows)
-            data[name] = values
-        self.validate_values_size(data=data)
-        return pd.DataFrame(data)
 
     def validate_cell_string(self, cell_str: str) -> None:
         """Validates a cell string in an Excel spreadsheet. Raises an appropriate error if the validation fails."""
@@ -94,42 +81,43 @@ class ExcelValidator:
         error if the validation fails."""
         for cell_str in (start, end):
             self.validate_cell_string(cell_str=cell_str)
-        if not self.ranges_share_same_column(start=start, end=end):
+        if not self.validate_cell_ranges_share_same_column(start=start, end=end):
             raise MismatchedColumnsError(f'Cells {start} and {end} do not share same column')
-        if not self.end_cell_comes_after_start_cell(start=start, end=end):
+        if not self.validate_end_cell_comes_after_start_cell(start=start, end=end):
             raise MismatchedRowsError(f'Start cell {start} comes after end cell {end}')
 
-    def ranges_share_same_column(self, start: str, end: str) -> bool:
+    def validate_cell_ranges_share_same_column(self, start: str, end: str) -> bool:
         """Returns whether the start and end cells share the same column letter."""
         start_letters = self.extract_letters(start)
         end_letters = self.extract_letters(end)
         return start_letters == end_letters
 
-    def end_cell_comes_after_start_cell(self, start: str, end: str) -> bool:
+    def validate_end_cell_comes_after_start_cell(self, start: str, end: str) -> bool:
         """Returns whether the row number of the end cell comes after the row number of the start cell."""
         start_numbers = self.extract_digits(start)
         end_numbers = self.extract_digits(end)
         return int(start_numbers) < int(end_numbers)
 
-    def validate_cell_values(self, start: str, cell_rows: Tuple[Tuple[Cell]]) -> None:
-        """Validates each cell in a cell range by checking whether the value inside each cell can be cast into
-        a float. None values and empty strings are ignored in this process."""
-        column = self.extract_letters(start)
-        num = int(self.extract_digits(start))
-        for i, row in enumerate(cell_rows, start=num):
-            cell = row[0]
-            if cell.value not in (None, ''):
-                try:
-                    float(cell.value)
-                except ValueError:
-                    cell_str = f'"{column}{i}"'
-                    raise BadCellValueError(f'Could not convert value "{cell.value}" on cell {cell_str} to numerical.')
+    def get_data(self) -> pd.DataFrame:
+        data = {}
+        for name, (start, end) in self.ranges.items():
+            if not end:  # Figure out where the column ends
+                end = self.get_end_cell(start=start)
+            cell_range = f'{start}:{end}'
+            cell_rows = self.ws[cell_range]
+            values = self.get_cell_values(cell_rows)
+            data[name] = values
+        try:
+            df = pd.DataFrame(data)
+        except ValueError:
+            raise DifferentSizeError(('Columns have different number of numeric elements (after removing rows '
+                                      'containing text or empty cells). Please check the selected data ranges.'))
+        return df.dropna()
 
     @staticmethod
-    def get_cell_values(rows: Tuple[Tuple[Cell]]) -> List[float]:
-        """Returns the values of cells in a column (tuple of tuples) casted to float. None values and empty strings
-        are ignored in this process."""
-        return [float(row[0].value) for row in rows if row[0].value not in (None, '')]
+    def get_cell_values(rows: Tuple[Tuple[Cell]]) -> np.ndarray:
+        """Returns the values of cells in a column (tuple of tuples)."""
+        return pd.to_numeric([row[0].value for row in rows], errors='coerce')
 
     def get_end_cell(self, start: str) -> str:
         """Given a valid cell string, returns the cell string at the end of the column (same column + max row)
@@ -147,17 +135,6 @@ class ExcelValidator:
     def extract_digits(s: str) -> str:
         """Returns the digit portion of an alphanumerical string."""
         return ''.join(char for char in s if char.isdigit())
-
-    @staticmethod
-    def validate_values_size(data: Dict[str, List[float]]) -> None:
-        """Checks whether the data has same size on both of its columns (CS and GR)."""
-        l1, l2 = [len(vs) for vs in data.values()]
-        if l1 != l2:
-            raise DifferentSizeError('CS and GR cell ranges have different lengths (after removing blank/empty cells)')
-
-
-class NoExcelFileError(Exception):
-    """Exception raised when user runs DynaFit with no input file."""
 
 
 class EmptyCellError(Exception):

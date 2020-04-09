@@ -1,3 +1,5 @@
+from typing import List
+
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -7,9 +9,9 @@ from src.utils import get_missing_coord, get_start_end_values
 class Plotter:
     """docstring"""
     def __init__(self, mean_xs: np.ndarray, mean_ys: np.ndarray, upper_ys: np.ndarray, lower_ys: np.ndarray,
-                 scatter_xs: np.ndarray, scatter_ys: np.ndarray, scatter_colors: np.ndarray, violin_ys: np.ndarray,
-                 violin_colors: int, hist_x: np.ndarray, hist_pos: np.ndarray, hist_bin_mins: np.ndarray,
-                 hist_bin_maxs: np.ndarray, hist_instances: np.ndarray) -> None:
+                 scatter_xs: np.ndarray, scatter_ys: np.ndarray, scatter_colors: np.ndarray,
+                 violin_ys: List[np.ndarray], violin_colors: int, hist_x: np.ndarray, hist_pos: np.ndarray,
+                 hist_bin_mins: np.ndarray, hist_bin_maxs: np.ndarray, hist_instances: np.ndarray) -> None:
         """docstring"""
         self.xs = mean_xs
         self.ys = mean_ys

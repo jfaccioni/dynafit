@@ -4,18 +4,18 @@ import traceback
 from csv import writer
 from io import StringIO
 from math import isnan
-from typing import Any, Dict, Tuple, Callable, Union
+from typing import Any, Callable, Dict, Tuple, Union
 from zipfile import BadZipFile
 
 import matplotlib
 import openpyxl
 import pandas as pd
-from PySide2.QtCore import QEvent, QThreadPool, QRunnable, Slot, Signal, QObject
+from PySide2.QtCore import QEvent, QMutex, QObject, QRunnable, QThreadPool, QWaitCondition, Signal, Slot
 from PySide2.QtGui import QKeySequence
-from PySide2.QtWidgets import (QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFrame,
-                               QGridLayout, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow, QMessageBox,
+from PySide2.QtWidgets import (QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFrame, QGridLayout,
+                               QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow, QMessageBox, QProgressBar,
                                QPushButton, QRadioButton, QSpinBox, QTableWidget, QTableWidgetItem, QVBoxLayout,
-                               QWidget, qApp, QProgressBar)
+                               QWidget, qApp)
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as Canvas, NavigationToolbar2QT as Navbar
 from matplotlib.pyplot import Figure
 
@@ -26,6 +26,8 @@ from src.plotter import Plotter
 matplotlib.rc('font', size=8)
 # Set debugging flag
 DEBUG = True
+mutex = QMutex()
+wait_condition = QWaitCondition()
 
 
 class DynaFitGUI(QMainWindow):
@@ -242,7 +244,7 @@ class DynaFitGUI(QMainWindow):
         try:
             self.data = openpyxl.load_workbook(query, data_only=True)
         except BadZipFile:
-            self.raise_main_thread_error(CorruptedExcelFile('Cannot load input Excel file. Is it corrupted?'))
+            raise CorruptedExcelFile('Cannot load input Excel file. Is it corrupted?')
         else:
             filename = os.path.basename(query)
             self.input_filename_label.setText(filename)
@@ -273,11 +275,9 @@ class DynaFitGUI(QMainWindow):
 
     def dynafit_run_worker(self) -> None:
         """Runs DynaFit analysis on a worker thread."""
-        try:
-            dynafit_settings = self.get_dynafit_settings()
-        except Exception as e:
-            self.raise_main_thread_error(error=e)
-            return
+        if self.data is None:
+            raise NoExcelFileError('Please select an Excel spreadsheet as the input file')
+        dynafit_settings = self.get_dynafit_settings()
         worker = Worker(func=dynafit, **dynafit_settings)
         worker.signals.started.connect(self.dynafit_setup)
         worker.signals.progress.connect(self.dynafit_show_progress)
@@ -322,21 +322,18 @@ class DynaFitGUI(QMainWindow):
     def dynafit_show_progress(self, number: int):
         self.progress_bar.setValue(number)
 
-    def dynafit_small_sample_size_warning(self, warning_contents: Tuple[QEvent, QEvent, Dict[str, str]]) -> None:
-        answer, should_continue, info = warning_contents
-        message = ('Warning: small sample sizes found for some groups. '
-                   'Do you want to continue the DynaFit analysis anyway?')
-        message += '\n' + '\n'.join(f'Group {k} -> {v} instances' for k, v in list(info.items())[:5])
-        remaining = len(info) - 5
-        if remaining:
-            message += f'\nand {remaining} other groups'
+    def dynafit_small_sample_size_warning(self, warning: Tuple[QEvent, Dict[int, int]]) -> None:
+        warning_event, warning_info = warning
+        message = ('Warning: small sample sizes found for some groups. DynaFit analysis may be unreliable or '
+                   'impossible to compute.\nDo you want to continue anyway?')
+        message += '\n' + '\n'.join(f'Group {k}: sample size = {v}' for k, v in warning_info.items())
         reply = QMessageBox.question(self, 'Warning: low sample sizes', message, QMessageBox.Yes | QMessageBox.No,
                                      QMessageBox.No)
         if reply == QMessageBox.Yes:
-            should_continue.accept()
+            warning_event.ignore()
         else:
-            should_continue.ignore()
-        answer.accept()
+            warning_event.accept()
+        wait_condition.wakeAll()
 
     def dynafit_raised_exception(self, exception: Union[Exception, Tuple[Exception, str]]) -> None:
         """Called if an error is raised during DynaFit analysis. Clears axes and shows the error in a message box."""
@@ -382,8 +379,7 @@ class DynaFitGUI(QMainWindow):
     def save_to_excel_dialog(self) -> None:
         """Opens a file dialog, prompting the user to select the name/location for the Excel export of the results."""
         if self.dataframe_results is None:
-            self.raise_main_thread_error(ValueError('No dataframe_results yet. Please plot the CVP first.'))
-            return
+            raise ValueError('No dataframe_results yet. Please plot the CVP first.')
         placeholder = f'{self.results_table.item(0, 1).text()}_{self.results_table.item(1, 1).text()}.xlsx'
         query, _ = QFileDialog.getSaveFileName(self, 'Select file to save dataframe_results', placeholder,
                                                'Excel Spreadsheet (*.xlsx)')
@@ -399,8 +395,7 @@ class DynaFitGUI(QMainWindow):
     def save_to_csv_dialog(self) -> None:
         """Opens a file dialog, prompting the user to select the name/location for the csv export of the results."""
         if self.dataframe_results is None:
-            self.raise_main_thread_error(ValueError('No dataframe_results yet. Please plot the CVP first.'))
-            return
+            raise ValueError('No dataframe_results yet. Please plot the CVP first.')
         placeholder = f'{self.results_table.item(0, 1).text()}_{self.results_table.item(1, 1).text()}.csv'
         query, _ = QFileDialog.getSaveFileName(self, 'Select file to save dataframe_results', placeholder,
                                                'Comma-separated values (*.csv)')
@@ -473,8 +468,14 @@ class Worker(QRunnable):
         self.args = args
         self.kwargs = kwargs
         self.signals = WorkerSignals()
+        self.add_threading_related_kwargs()
+
+    def add_threading_related_kwargs(self):
+        """Adds keyword arguments related signaling between main thread and worker thread."""
         self.kwargs['progress_callback'] = self.signals.progress
         self.kwargs['ss_warning_callback'] = self.signals.ss_warning
+        self.kwargs['mutex'] = mutex
+        self.kwargs['wait_condition'] = wait_condition
 
     @Slot()
     def run(self) -> None:
@@ -511,10 +512,17 @@ class CorruptedExcelFile(Exception):
     """Exception raised when openpyxl cannot parse the input Excel file."""
 
 
+class NoExcelFileError(Exception):
+    """Exception raised when user runs DynaFit with no input file."""
+
+
 if __name__ == '__main__':
     app = QApplication()
     dfgui = DynaFitGUI()
     if DEBUG:
         dfgui.debug()
     dfgui.show()
-    sys.exit(app.exec_())
+    try:
+        sys.exit(app.exec_())
+    except Exception as e:
+        dfgui.raise_main_thread_error(e)
