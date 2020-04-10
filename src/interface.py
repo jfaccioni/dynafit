@@ -347,9 +347,11 @@ class DynaFitGUI(QMainWindow):
         answer_queue, warning_info = warning
         message = ('Warning: small sample sizes found for some groups. DynaFit analysis may be unreliable or '
                    'impossible to compute.\nDo you want to continue anyway?')
-        message += '\n' + '\n'.join(f'Group {k}: sample size = {v}' for k, v in warning_info.items())
-        reply = QMessageBox.question(self, 'Warning: low sample sizes', message, QMessageBox.Yes | QMessageBox.No,
-                                     QMessageBox.No)
+        groups = '\n'.join(f'Group {k}: sample size = {v}' for k, v in warning_info.items())
+        box = QMessageBox(self, windowTitle='Warning: low sample sizes', text=message, detailedText=groups,
+                          standardButtons=QMessageBox.Yes | QMessageBox.No)
+        box.setDefaultButton(QMessageBox.No)
+        reply = box.exec_()
         if reply == QMessageBox.Yes:
             answer_queue.put(False)
         else:
@@ -450,7 +452,7 @@ class DynaFitGUI(QMainWindow):
     def show_error_message(self, name: str, trace: str) -> None:
         """Shows a given error as a message box in front of the GUI."""
         box = QMessageBox(self, windowTitle='An error occurred!', text=name, detailedText=trace)
-        box.show()
+        box.exec_()
 
     def debug(self) -> None:
         """Implemented for easier debugging."""
