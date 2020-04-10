@@ -1,32 +1,32 @@
 from itertools import count
+from queue import Queue
 from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 import pandas as pd
-from PySide2.QtCore import QEvent, QMutex, QWaitCondition, Signal
+from PySide2.QtCore import Signal
 from openpyxl import Workbook
 from scipy.stats import sem, t
 
+from src.exceptions import AbortedByUser, NegativeInfiniteVarianceError, TooManyBinsError
 from src.plotter import Plotter
 from src.utils import get_missing_coord, get_start_end_values
 from src.validator import ExcelValidator
 
 # Value from which to throw a warning of low N
-N_WARNING_LEVEL = 20
+WARNING_LEVEL = 20
 # Vectorized round function
-round_arr = np.vectorize(round)
+ROUND_ARR = np.vectorize(round)
 
 
-def dynafit(data: Workbook, filename: str, sheetname: str, need_to_calculate_gr: bool, time_delta: float,
+def dynafit(data: Workbook, filename: str, sheetname: str, must_calculate_growth_rate: bool, time_delta: float,
             cs_start_cell: str, cs_end_cell: str, gr_start_cell: str, gr_end_cell: str, individual_colonies: int,
             large_colony_groups: int, bootstrap_repeats: int, add_confidence_interval: bool, confidence_value: float,
-            remove_outliers: bool, add_violin: bool, **kwargs) -> Tuple[Plotter, pd.DataFrame, Tuple[str, str]]:
+            must_remove_outliers: bool, add_violin: bool, **kwargs) -> Tuple[Plotter, pd.DataFrame, Tuple[str, str]]:
     """Main DynaFit function"""
-    # Extract thread-related values from kwargs
+    # Extract values to be emitted by thread from kwargs
     progress_callback = kwargs.get('progress_callback')
-    sample_size_callback = kwargs.get('ss_warning_callback')
-    mutex = kwargs.get('mutex')
-    wait_condition = kwargs.get('wait_condition')
+    warning_callback = kwargs.get('warning_callback')
 
     # Store parameters used for DynaFit analysis
     results_dict = {
@@ -37,78 +37,81 @@ def dynafit(data: Workbook, filename: str, sheetname: str, need_to_calculate_gr:
         'bootstrapping repeats': bootstrap_repeats
     }
 
-    # Validate input data
-    excel_validator = ExcelValidator(data=data, sheetname=sheetname, cs_start_cell=cs_start_cell,
-                                     cs_end_cell=cs_end_cell, gr_start_cell=gr_start_cell, gr_end_cell=gr_end_cell)
-
-    # Get input data
-    df = excel_validator.data
+    # Validate input data and return it
+    df = ExcelValidator(data=data, sheetname=sheetname, cs_start_cell=cs_start_cell, cs_end_cell=cs_end_cell,
+                        gr_start_cell=gr_start_cell, gr_end_cell=gr_end_cell).data
 
     # Preprocess data
-    if need_to_calculate_gr is True:
-        df = calculate_growth_rate(df=df, time_delta=time_delta)
-    df = filter_colony_sizes_less_than_one(df=df)
-    if remove_outliers is True:
-        df = filter_outliers(df=df)
+    df = preprocess_data(df=df, must_calculate_growth_rate=must_calculate_growth_rate, time_delta=time_delta,
+                         must_remove_outliers=must_remove_outliers)
 
-    # Bin samples into groups and plot the resulting histogram
-    binned_df = add_bins(df=df, individual_colonies=individual_colonies, bins=large_colony_groups)
+    # Bin samples into groups
+    df = add_bins(df=df, individual_colonies=individual_colonies, bins=large_colony_groups)
 
     # Check for sample size warning
-    warning_info = sample_size_warning(df=binned_df)
-    if warning_info:
-        prompt_sample_size_warning(warning_info=warning_info, mutex=mutex, wait_condition=wait_condition,
-                                   callback=sample_size_callback)
+    warning_info = sample_size_warning_info(df=df, warning_level=WARNING_LEVEL)
+    if sample_size_warning_answer(warning_info=warning_info, callback=warning_callback) is True:
+        raise AbortedByUser("User decided to stop DynaFit analysis.")
+
+    # Get histogram values
+    hist_x = np.log2(df['CS'])
+    hist_pos, hist_bin_mins, hist_bin_maxs, hist_instances = get_histogram_values(df=df)
 
     # Perform DynaFit bootstrap
-    df = bootstrap_data(df=binned_df, repeats=bootstrap_repeats, progress_callback=progress_callback)
+    df = bootstrap_data(df=df, repeats=bootstrap_repeats, progress_callback=progress_callback)
     df = add_log_columns(df=df)
 
-    # Get mean line results
+    # Get mean line values
     xs, ys = get_mean_line_arrays(df=df)
 
-    # Add mean line CoDy values to results_dict
+    # Calculate mean line CoDy values and add them to results_dict
     max_x_value = round(max(xs), 2)
     cody_range = [i for i in range(1, 7) if i < max_x_value]
     for i in cody_range:
         results_dict[f'CoDy {i}'] = round(calculate_cody(xs=xs, ys=ys, cody_n=i), 4)
     results_dict[f'CoDy {max_x_value}'] = round(calculate_cody(xs=xs, ys=ys, cody_n=None), 4)
 
-    # Get scatter results
+    # Get scatter values
     scatter_xs = df['log2_CS_mean'].values
     scatter_ys = df['log2_GR_var'].values
     scatter_colors = df['bins'].apply(lambda curr_bin: 'gray' if curr_bin > individual_colonies else 'red').values
 
-    # Get violin results (if user wants to do so)
+    # Get violin values (if user wants to do so)
     violin_ys, violin_colors = None, None
     if add_violin:
         violin_ys = [df.loc[df['bins'] == b]['log2_GR_var'].values for b in sorted(df['bins'].unique())]
-        violin_colors = individual_colonies
+        violin_colors = ['gray' if i <= 5 else 'red' for i, _ in enumerate(xs)]
 
-    # Get CI results (if user wants to do so)
+    # Get CI values (if user wants to do so)
     upper_ys, lower_ys = None, None
     if add_confidence_interval:
         upper_ys, lower_ys = get_confidence_interval_values(df=df, confidence_value=confidence_value)
-        # Add CI CoDy values to results_dict
+        # Calculate CI CoDy values and add them to results_dict
         for ys, name in zip([upper_ys, lower_ys], ['upper', 'lower']):
             for i in cody_range:
                 results_dict[f'CoDy {i} {name} CI'] = round(calculate_cody(xs=xs, ys=ys, cody_n=i), 4)
             results_dict[f'CoDy {max_x_value} {name} CI'] = round(calculate_cody(xs=xs, ys=ys, cody_n=None), 4)
 
-    # Get histogram values
-    hist_x = np.log2(binned_df['CS'])
-    hist_pos, hist_bin_mins, hist_bin_maxs, hist_instances = get_histogram_values(df=binned_df)
-
-    # Encapsulate results in the correct objets
+    # Encapsulate results in the correct objects
     plot_results = Plotter(mean_xs=xs, mean_ys=ys, upper_ys=upper_ys, lower_ys=lower_ys, scatter_xs=scatter_xs,
                            scatter_ys=scatter_ys, scatter_colors=scatter_colors, violin_ys=violin_ys,
                            violin_colors=violin_colors, hist_x=hist_x, hist_pos=hist_pos, hist_bin_mins=hist_bin_mins,
                            hist_bin_maxs=hist_bin_maxs, hist_instances=hist_instances)
-    dataframe_results = results_to_dataframe(results_dict=results_dict, xs=round_arr(xs), ys=round_arr(ys))
+    dataframe_results = results_to_dataframe(results_dict=results_dict, xs=xs, ys=ys)
     plot_title_info = filename, sheetname
 
     # Return results
     return plot_results, dataframe_results, plot_title_info
+
+
+def preprocess_data(df: pd.DataFrame, must_calculate_growth_rate: bool, time_delta: float,
+                    must_remove_outliers: bool) -> pd.DataFrame:
+    if must_calculate_growth_rate:
+        df = calculate_growth_rate(df=df, time_delta=time_delta)
+    df = filter_colony_sizes_less_than_one(df=df)
+    if must_remove_outliers:
+        df = filter_outliers(df=df)
+    return df
 
 
 def calculate_growth_rate(df: pd.DataFrame, time_delta: float) -> pd.DataFrame:
@@ -146,31 +149,28 @@ def add_bins(df: pd.DataFrame, individual_colonies: int, bins: int) -> pd.DataFr
     try:
         multiple_bins = pd.qcut(df.loc[bin_condition]['CS'], bins, labels=False) + (individual_colonies + 1)
     except ValueError:
-        mes = (f'Could not divide the large CS population into {bins} unique groups. ' 
-               'Please reduce the value of the "number_of_bins" parameter and try again.')
+        mes = (f'Could not divide the population of large colonies into {bins} unique groups. ' 
+               'Please reduce the number of large colony groups and try again.')
         raise TooManyBinsError(mes)
     return df.assign(bins=pd.concat([single_bins, multiple_bins]))
 
 
-def sample_size_warning(df: pd.DataFrame) -> Dict[int, int]:
+def sample_size_warning_info(df: pd.DataFrame, warning_level: int) -> Optional[Dict[int, int]]:
     warning_info = {}
     for bin_number, bin_values in df.groupby('bins'):
         n = len(bin_values)
-        if n < N_WARNING_LEVEL:
+        if n < warning_level:
             warning_info[int(bin_number)] = n
-    return warning_info
+    return warning_info if warning_info else None
 
 
-def prompt_sample_size_warning(warning_info: Dict[int, int], mutex: QMutex, wait_condition: QWaitCondition,
-                               callback: Signal) -> None:
-    mutex.lock()
-    warning_event = QEvent(QEvent.WindowActivate)
-    warning = (warning_event, warning_info)
+def sample_size_warning_answer(warning_info: Optional[Dict[int, int]], callback: Signal) -> bool:
+    if warning_info is None:
+        return False
+    answer = Queue()
+    warning = answer, warning_info
     callback.emit(warning)
-    wait_condition.wait(mutex)
-    mutex.unlock()
-    if warning_event.isAccepted():
-        raise AbortedByUser("User decided to stop DynaFit analysis.")
+    return answer.get(block=True)
 
 
 def bootstrap_data(df: pd.DataFrame, repeats: int, progress_callback: Signal) -> pd.DataFrame:
@@ -283,17 +283,16 @@ def trapezium_integration(xs: np.ndarray, ys: np.ndarray) -> float:
 
 def results_to_dataframe(results_dict: Dict[str, Any], xs: np.ndarray, ys: np.ndarray) -> pd.DataFrame:
     """Saves DynaFit dataframe_results as a pandas DataFrame (used for Excel/csv export)."""
+    try:
+        xs = ROUND_ARR(xs)
+        ys = ROUND_ARR(ys)
+    except OverflowError:
+        raise NegativeInfiniteVarianceError('DynaFit analysis could not be processed with current parameters due to '
+                                            'small groups and low variance within these groups. Try decreasing the '
+                                            'number of groups for the analysis.')
     size = max(len(results_dict), len(xs), len(ys))
     params = list(results_dict.keys()) + [np.nan for _ in range(size - len(results_dict))]
     values = list(results_dict.values()) + [np.nan for _ in range(size - len(results_dict))]
     xs = list(xs) + [np.nan for _ in range(size - len(xs))]
     ys = list(ys) + [np.nan for _ in range(size - len(ys))]
     return pd.DataFrame({'Parameter': params, 'Value': values, 'Mean X Values': xs, 'Mean Y Values': ys})
-
-
-class TooManyBinsError(Exception):
-    """Exception raised when samples cannot be found in the input file."""
-
-
-class AbortedByUser(Exception):
-    """Exception raised when user aborts the execution of DynaFit analysis."""

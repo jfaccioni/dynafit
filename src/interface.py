@@ -4,13 +4,14 @@ import traceback
 from csv import writer
 from io import StringIO
 from math import isnan
+from queue import Queue
 from typing import Any, Callable, Dict, Tuple
 from zipfile import BadZipFile
 
 import matplotlib
 import openpyxl
 import pandas as pd
-from PySide2.QtCore import QEvent, QMutex, QObject, QRunnable, QThreadPool, QWaitCondition, Signal, Slot
+from PySide2.QtCore import QEvent, QObject, QRunnable, QThreadPool, Signal, Slot
 from PySide2.QtGui import QKeySequence
 from PySide2.QtWidgets import (QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFrame, QGridLayout,
                                QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow, QMessageBox, QProgressBar,
@@ -19,7 +20,8 @@ from PySide2.QtWidgets import (QApplication, QCheckBox, QComboBox, QDoubleSpinBo
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as Canvas, NavigationToolbar2QT as Navbar
 from matplotlib.pyplot import Figure
 
-from src.logic import dynafit
+from src.core import dynafit
+from src.exceptions import AbortedByUser, CorruptedExcelFile, NoExcelFileError
 from src.plotter import Plotter
 
 # ## GLOBALS ##
@@ -27,10 +29,6 @@ from src.plotter import Plotter
 DEBUG = True
 # Set a small font for plots
 matplotlib.rc('font', size=8)
-# Set global QMutex instance
-MUTEX = QMutex()
-# Set global QWaitInstance instance
-WAIT_CONDITION = QWaitCondition()
 
 
 class DynaFitGUI(QMainWindow):
@@ -303,7 +301,7 @@ class DynaFitGUI(QMainWindow):
     def dynafit_worker_run(self, dynafit_settings: Dict[str, Any]) -> None:
         worker = Worker(func=dynafit, **dynafit_settings)
         worker.signals.progress.connect(self.dynafit_worker_progress_updated)
-        worker.signals.ss_warning.connect(self.dynafit_worker_small_sample_size_warning)
+        worker.signals.warning.connect(self.dynafit_worker_small_sample_size_warning)
         worker.signals.finished.connect(self.dynafit_worker_has_finished)
         worker.signals.success.connect(self.dynafit_worker_raised_no_exceptions)
         worker.signals.error.connect(self.dynafit_worker_raised_exception)
@@ -327,7 +325,7 @@ class DynaFitGUI(QMainWindow):
             'data': self.data,
             'filename': os.path.splitext(self.input_filename_label.text())[0],
             'sheetname': self.input_sheetname_combobox.currentText(),
-            'need_to_calculate_gr': self.cs1_cs2_button.isChecked(),
+            'must_calculate_growth_rate': self.cs1_cs2_button.isChecked(),
             'time_delta': self.time_interval_spinbox.value(),
             'cs_start_cell': self.CS_start_textbox.text(),
             'cs_end_cell': self.CS_end_textbox.text(),
@@ -338,25 +336,24 @@ class DynaFitGUI(QMainWindow):
             'bootstrap_repeats': self.bootstrap_repeats_spinbox.value(),
             'add_confidence_interval': self.add_conf_int_checkbox.isChecked(),
             'confidence_value': self.conf_int_spinbox.value(),
-            'remove_outliers': self.remove_outliers_checkbox.isChecked(),
+            'must_remove_outliers': self.remove_outliers_checkbox.isChecked(),
             'add_violin': self.add_violins_checkbox.isChecked(),
         }
 
     def dynafit_worker_progress_updated(self, number: int):
         self.progress_bar.setValue(number)
 
-    def dynafit_worker_small_sample_size_warning(self, warning: Tuple[QEvent, Dict[int, int]]) -> None:
-        warning_event, warning_info = warning
+    def dynafit_worker_small_sample_size_warning(self, warning: Tuple[Queue, Dict[int, int]]) -> None:
+        answer_queue, warning_info = warning
         message = ('Warning: small sample sizes found for some groups. DynaFit analysis may be unreliable or '
                    'impossible to compute.\nDo you want to continue anyway?')
         message += '\n' + '\n'.join(f'Group {k}: sample size = {v}' for k, v in warning_info.items())
         reply = QMessageBox.question(self, 'Warning: low sample sizes', message, QMessageBox.Yes | QMessageBox.No,
                                      QMessageBox.No)
         if reply == QMessageBox.Yes:
-            warning_event.ignore()
+            answer_queue.put(False)
         else:
-            warning_event.accept()
-        WAIT_CONDITION.wakeAll()
+            answer_queue.put(True)
 
     def dynafit_worker_raised_exception(self, exception_tuple: Tuple[Exception, str]) -> None:
         """Called if an error is raised during DynaFit analysis. Clears axes and shows the error in a message box."""
@@ -364,7 +361,8 @@ class DynaFitGUI(QMainWindow):
         self.cvp_ax.clear()
         self.histogram_ax.clear()
         self.results_table.clearContents()
-        self.raise_worker_thread_error(exception_tuple)
+        if not isinstance(exception_tuple[0], AbortedByUser):
+            self.raise_worker_thread_error(exception_tuple)
 
     def dynafit_worker_raised_no_exceptions(self, results: Tuple[Plotter, pd.DataFrame, Tuple[str, str]]) -> None:
         """Called if no errors are raised during the DynaFit analysis. Writes/saves the results from DynaFit."""
@@ -498,14 +496,12 @@ class Worker(QRunnable):
         self.args = args
         self.kwargs = kwargs
         self.signals = WorkerSignals()
-        self.add_threading_related_kwargs()
+        self.add_callbacks_to_kwargs()
 
-    def add_threading_related_kwargs(self):
+    def add_callbacks_to_kwargs(self):
         """Adds keyword arguments related signaling between main thread and worker thread."""
         self.kwargs['progress_callback'] = self.signals.progress
-        self.kwargs['ss_warning_callback'] = self.signals.ss_warning
-        self.kwargs['mutex'] = MUTEX
-        self.kwargs['wait_condition'] = WAIT_CONDITION
+        self.kwargs['warning_callback'] = self.signals.warning
 
     @Slot()
     def run(self) -> None:
@@ -531,18 +527,10 @@ class WorkerSignals(QObject):
         Success: Worker finished executing without errors. Emits a tuple of a Plotter object and a pandas DataFrame.
         Error: an Exception was raised. Emits a tuple containing an Exception object and the traceback as a string."""
     progress = Signal(int)
-    ss_warning = Signal(tuple)
+    warning = Signal(tuple)
     finished = Signal()
     success = Signal(tuple)
     error = Signal(tuple)
-
-
-class CorruptedExcelFile(Exception):
-    """Exception raised when openpyxl cannot parse the input Excel file."""
-
-
-class NoExcelFileError(Exception):
-    """Exception raised when user runs DynaFit with no input file."""
 
 
 if __name__ == '__main__':

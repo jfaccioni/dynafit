@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -8,10 +8,11 @@ from src.utils import get_missing_coord, get_start_end_values
 
 class Plotter:
     """docstring"""
-    def __init__(self, mean_xs: np.ndarray, mean_ys: np.ndarray, upper_ys: np.ndarray, lower_ys: np.ndarray,
-                 scatter_xs: np.ndarray, scatter_ys: np.ndarray, scatter_colors: np.ndarray,
-                 violin_ys: List[np.ndarray], violin_colors: int, hist_x: np.ndarray, hist_pos: np.ndarray,
-                 hist_bin_mins: np.ndarray, hist_bin_maxs: np.ndarray, hist_instances: np.ndarray) -> None:
+    def __init__(self, mean_xs: np.ndarray, mean_ys: np.ndarray, upper_ys: Optional[np.ndarray],
+                 lower_ys: Optional[np.ndarray], scatter_xs: np.ndarray, scatter_ys: np.ndarray,
+                 scatter_colors: np.ndarray, violin_ys: Optional[List[np.ndarray]], violin_colors: Optional[List[str]],
+                 hist_x: np.ndarray, hist_pos: np.ndarray, hist_bin_mins: np.ndarray, hist_bin_maxs: np.ndarray,
+                 hist_instances: np.ndarray) -> None:
         """docstring"""
         self.xs = mean_xs
         self.ys = mean_ys
@@ -33,10 +34,10 @@ class Plotter:
         self.plot_mean_line(ax=ax)
         self.plot_supporting_lines(ax=ax)
         self.plot_bootstrap_scatter(ax=ax)
-        if self.upper_ys is not None:
+        if self.upper_ys is not None:  # User added CI
             self.plot_mean_line_ci(ax=ax)
             self.plot_supporting_lines_ci(ax=ax)
-        if self.violin_ys is not None:
+        if self.violin_ys is not None:  # User added violins
             self.plot_bootstrap_violins(ax=ax)
 
     def plot_mean_line(self, ax: plt.Axes) -> None:
@@ -100,8 +101,8 @@ class Plotter:
         """Plots the bootstrap populations for each bin as violin plots."""
         parts = ax.violinplot(positions=self.xs, dataset=self.violin_ys, showmeans=False, showmedians=False,
                               showextrema=False)
-        for i, body in enumerate(parts['bodies'], 1):
-            body.set_facecolor('red') if i <= self.violin_colors else body.set_facecolor('gray')
+        for body, color in zip(parts['bodies'], self.violin_colors):
+            body.set_facecolor(color)
             body.set_edgecolor('black')
             body.set_alpha(0.3)
 

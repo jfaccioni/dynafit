@@ -6,6 +6,9 @@ import pandas as pd
 from openpyxl import Workbook
 from openpyxl.cell.cell import Cell
 
+from src.exceptions import (BadCellStringError, DifferentSizeError, EmptyCellError, MismatchedColumnsError,
+                            MismatchedRowsError)
+
 
 class ExcelValidator:
     """Class that bundles many different validation methods for the input data (Excel spreadsheet) used for DynaFit.
@@ -135,27 +138,3 @@ class ExcelValidator:
     def extract_digits(s: str) -> str:
         """Returns the digit portion of an alphanumerical string."""
         return ''.join(char for char in s if char.isdigit())
-
-
-class EmptyCellError(Exception):
-    """Exception raised when mandatory cell is empty."""
-
-
-class BadCellStringError(Exception):
-    """Exception raised when cell does not correspond to a valid Excel cell accessor."""
-
-
-class MismatchedColumnsError(Exception):
-    """Exception raised when samples cannot be found in the input file."""
-
-
-class MismatchedRowsError(Exception):
-    """Exception raised when samples cannot be found in the input file."""
-
-
-class BadCellValueError(Exception):
-    """Exception raised when a cell value cannot be coerced into a float."""
-
-
-class DifferentSizeError(Exception):
-    """Exception raised when samples cannot be found in the input file."""
