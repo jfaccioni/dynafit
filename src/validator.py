@@ -4,6 +4,7 @@ from typing import Optional, Tuple
 import numpy as np
 import pandas as pd
 from openpyxl import Workbook
+from openpyxl.worksheet.worksheet import Worksheet
 from openpyxl.cell.cell import Cell
 
 from exceptions import (BadCellStringError, DifferentSizeError, EmptyCellError, MismatchedColumnsError,
@@ -13,23 +14,23 @@ from exceptions import (BadCellStringError, DifferentSizeError, EmptyCellError, 
 class ExcelValidator:
     """Class that bundles many different validation methods for the input data (Excel spreadsheet) used for DynaFit.
     The validation methods aim to raise a specific, user-informative exception, if they fail."""
-    def __init__(self, data: Optional[Workbook], sheetname: str, cs_start_cell: str, cs_end_cell: str,
+    def __init__(self, workbook: Optional[Workbook], sheetname: str, cs_start_cell: str, cs_end_cell: str,
                  gr_start_cell: str, gr_end_cell: str) -> None:
         """Init method of ExcelValidator class."""
-        # Checks if any data has been loaded at all
-        self.ws = data[sheetname]
+        self.wb = workbook
+        self.sheetname = sheetname
         # Add character '1' column strings (typing 'A' implies starting from cell '1A'
-        cs_start_cell = self.convert_column_to_first_cell(cs_start_cell).strip().upper()
-        gr_start_cell = self.convert_column_to_first_cell(gr_start_cell).strip().upper()
+        cs_start_cell = self.convert_column_to_first_cell(cs_start_cell.strip().upper())
+        gr_start_cell = self.convert_column_to_first_cell(gr_start_cell.strip().upper())
         # Structures cell ranges in a dictionary
         self.ranges = {
             'CS': [cs_start_cell, cs_end_cell],
             'GR': [gr_start_cell, gr_end_cell],
         }
-        # Validates data as a whole
-        self.validation_routine()
-        # Exposes data as a pandas DataFrame
-        self.data = self.get_data()
+
+    @property
+    def ws(self) -> Worksheet:
+        return self.wb[self.sheetname]
 
     def convert_column_to_first_cell(self, cell_str: str) -> str:
         """Converts and returns an Excel column accessor such as "A" to a first row cell accessor ("A1").
@@ -66,7 +67,7 @@ class ExcelValidator:
         if cell_str == '':  # Guaranteed only to happen on start cells
             raise EmptyCellError(f'Start cell cannot be empty')
         if not self.is_valid_excel(cell_str=cell_str):
-            raise BadCellStringError(f'The string "{cell_str}" is not valid Excel cell accessor')
+            raise BadCellStringError(f'The string "{cell_str}" is not a valid Excel cell accessor')
 
     @staticmethod
     def is_valid_excel(cell_str: str) -> bool:
@@ -77,7 +78,7 @@ class ExcelValidator:
             return False
         # All letters in cell_str come before all numbers. Source:
         # https://stackoverflow.com/questions/60758670/
-        return bool(re.match("[A-Z]+\d+$", cell_str))
+        return bool(re.match("[A-Z]+[1-9]\d*$", cell_str))
 
     def validate_cell_range(self, start: str, end: str) -> None:
         """Validates range of cells (from start cell to end cell) in an Excel spreadsheet. Raises an appropriate
@@ -102,6 +103,7 @@ class ExcelValidator:
         return int(start_numbers) < int(end_numbers)
 
     def get_data(self) -> pd.DataFrame:
+        self.validation_routine()
         data = {}
         for name, (start, end) in self.ranges.items():
             if not end:  # Figure out where the column ends
