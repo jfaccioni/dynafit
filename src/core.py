@@ -8,10 +8,10 @@ from PySide2.QtCore import Signal
 from openpyxl import Workbook
 from scipy.stats import sem, t
 
-from src.exceptions import AbortedByUser, NegativeInfiniteVarianceError, TooManyBinsError
-from src.plotter import Plotter
-from src.utils import get_missing_coord, get_start_end_values
-from src.validator import ExcelValidator
+from exceptions import AbortedByUser, NegativeInfiniteVarianceError, TooManyBinsError
+from plotter import Plotter
+from utils import get_missing_coord, get_start_end_values
+from validator import ExcelValidator
 
 # Value from which to throw a warning of low N
 WARNING_LEVEL = 20

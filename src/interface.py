@@ -20,9 +20,9 @@ from PySide2.QtWidgets import (QApplication, QCheckBox, QComboBox, QDoubleSpinBo
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as Canvas, NavigationToolbar2QT as Navbar
 from matplotlib.pyplot import Figure
 
-from src.core import dynafit
-from src.exceptions import AbortedByUser, CorruptedExcelFile, NoExcelFileError
-from src.plotter import Plotter
+from core import dynafit
+from exceptions import AbortedByUser, CorruptedExcelFile, NoExcelFileError
+from plotter import Plotter
 
 # ## GLOBALS ##
 # Set debugging flag
@@ -456,7 +456,7 @@ class DynaFitGUI(QMainWindow):
 
     def debug(self) -> None:
         """Implemented for easier debugging."""
-        self.load_data(query='data/example.xlsx')
+        self.load_data(query='../data/example.xlsx')
         self.CS_start_textbox.setText('A2')
         self.GR_start_textbox.setText('B2')
         self.cs_gr_button.setChecked(True)

@@ -6,8 +6,8 @@ import pandas as pd
 from openpyxl import Workbook
 from openpyxl.cell.cell import Cell
 
-from src.exceptions import (BadCellStringError, DifferentSizeError, EmptyCellError, MismatchedColumnsError,
-                            MismatchedRowsError)
+from exceptions import (BadCellStringError, DifferentSizeError, EmptyCellError, MismatchedColumnsError,
+                        MismatchedRowsError)
 
 
 class ExcelValidator:
