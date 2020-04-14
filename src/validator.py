@@ -8,7 +8,7 @@ from openpyxl.worksheet.worksheet import Worksheet
 from openpyxl.cell.cell import Cell
 
 from exceptions import (BadCellStringError, DifferentSizeError, EmptyCellError, MismatchedColumnsError,
-                        MismatchedRowsError)
+                        MismatchedRowsError, NoExcelFileError)
 
 
 class ExcelValidator:
@@ -30,7 +30,10 @@ class ExcelValidator:
 
     @property
     def ws(self) -> Worksheet:
-        return self.wb[self.sheetname]
+        try:
+            return self.wb[self.sheetname]
+        except TypeError:  # self.wb is None
+            raise NoExcelFileError('Please select an Excel spreadsheet as the input file')
 
     def convert_column_to_first_cell(self, cell_str: str) -> str:
         """Converts and returns an Excel column accessor such as "A" to a first row cell accessor ("A1").

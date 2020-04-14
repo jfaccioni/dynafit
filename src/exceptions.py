@@ -6,10 +6,6 @@ class CorruptedExcelFile(Exception):
     """Exception raised when openpyxl cannot parse the input Excel file."""
 
 
-class NoExcelFileError(Exception):
-    """Exception raised when user runs DynaFit with no input file."""
-
-
 # Called on core.py
 class TooManyBinsError(Exception):
     """Exception raised when too many bins are used."""
@@ -27,6 +23,10 @@ class AbortedByUser(Exception):
 # Called on validator.py
 class EmptyCellError(Exception):
     """Exception raised when mandatory cell is empty."""
+
+
+class NoExcelFileError(Exception):
+    """Exception raised when user runs DynaFit with no input file."""
 
 
 class BadCellStringError(Exception):

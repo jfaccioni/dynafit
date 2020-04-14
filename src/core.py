@@ -38,8 +38,8 @@ def dynafit(data: Workbook, filename: str, sheetname: str, must_calculate_growth
     }
 
     # Validate input data and return it
-    df = ExcelValidator(data=data, sheetname=sheetname, cs_start_cell=cs_start_cell, cs_end_cell=cs_end_cell,
-                        gr_start_cell=gr_start_cell, gr_end_cell=gr_end_cell).data
+    df = ExcelValidator(workbook=data, sheetname=sheetname, cs_start_cell=cs_start_cell, cs_end_cell=cs_end_cell,
+                        gr_start_cell=gr_start_cell, gr_end_cell=gr_end_cell).get_data()
 
     # Preprocess data
     df = preprocess_data(df=df, must_calculate_growth_rate=must_calculate_growth_rate, time_delta=time_delta,

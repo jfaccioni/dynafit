@@ -286,17 +286,13 @@ class DynaFitGUI(QMainWindow):
 
     def dynafit_run(self) -> None:
         """Runs DynaFit analysis on a worker thread."""
-        if self.data is None:
-            e = NoExcelFileError('Please select an Excel spreadsheet as the input file')
+        try:
+            self.dynafit_setup_before_running()
+            dynafit_settings = self.get_dynafit_settings()
+        except Exception as e:
             self.raise_main_thread_error(e)
         else:
-            try:
-                self.dynafit_setup_before_running()
-                dynafit_settings = self.get_dynafit_settings()
-            except Exception as e:
-                self.raise_main_thread_error(e)
-            else:
-                self.dynafit_worker_run(dynafit_settings=dynafit_settings)
+            self.dynafit_worker_run(dynafit_settings=dynafit_settings)
 
     def dynafit_worker_run(self, dynafit_settings: Dict[str, Any]) -> None:
         worker = Worker(func=dynafit, **dynafit_settings)
