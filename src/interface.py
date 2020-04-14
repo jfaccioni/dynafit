@@ -21,12 +21,12 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as Canvas, Navi
 from matplotlib.pyplot import Figure
 
 from core import dynafit
-from exceptions import AbortedByUser, CorruptedExcelFile, NoExcelFileError
+from exceptions import AbortedByUser, CorruptedExcelFile
 from plotter import Plotter
 
 # ## GLOBALS ##
 # Set debugging flag
-DEBUG = True
+DEBUG = False
 # Set a small font for plots
 matplotlib.rc('font', size=8)
 
@@ -170,9 +170,9 @@ class DynaFitGUI(QMainWindow):
         self.bootstrap_repeats_spinbox.setValue(100)
         self.options_frame.layout().addWidget(self.bootstrap_repeats_spinbox, 1, 1, 1, 1)
         # Confidence interval parameter
-        self.add_conf_int_checkbox = QCheckBox(self, text='Use conf. int.')
-        self.add_conf_int_checkbox.clicked.connect(self.conf_int_checkbox_checked)
-        self.options_frame.layout().addWidget(self.add_conf_int_checkbox, 1, 2, 1, 1)
+        self.conf_int_checkbox = QCheckBox(self, text='Use conf. int.')
+        self.conf_int_checkbox.clicked.connect(self.conf_int_checkbox_clicked)
+        self.options_frame.layout().addWidget(self.conf_int_checkbox, 1, 2, 1, 1)
         self.conf_int_spinbox = QDoubleSpinBox(self, minimum=0, value=0.95, maximum=0.999, singleStep=0.01, decimals=3)
         self.conf_int_spinbox.setEnabled(False)
         self.options_frame.layout().addWidget(self.conf_int_spinbox, 1, 3, 1, 1)
@@ -277,9 +277,9 @@ class DynaFitGUI(QMainWindow):
         self.CS_label.setText('Colony size column')
         self.GR_label.setText('Growth rate column')
 
-    def conf_int_checkbox_checked(self) -> None:
+    def conf_int_checkbox_clicked(self) -> None:
         """Changes interface widgets when the user clicks on the confidence interval radio button."""
-        if self.add_conf_int_checkbox.isChecked():
+        if self.conf_int_checkbox.isChecked():
             self.conf_int_spinbox.setEnabled(True)
         else:
             self.conf_int_spinbox.setEnabled(False)
@@ -330,7 +330,7 @@ class DynaFitGUI(QMainWindow):
             'individual_colonies': self.max_individual_cs_spinbox.value(),
             'large_colony_groups': self.large_colony_groups_spinbox.value(),
             'bootstrap_repeats': self.bootstrap_repeats_spinbox.value(),
-            'add_confidence_interval': self.add_conf_int_checkbox.isChecked(),
+            'add_confidence_interval': self.conf_int_checkbox.isChecked(),
             'confidence_value': self.conf_int_spinbox.value(),
             'must_remove_outliers': self.remove_outliers_checkbox.isChecked(),
             'add_violin': self.add_violins_checkbox.isChecked(),
