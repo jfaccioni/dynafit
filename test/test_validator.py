@@ -6,9 +6,10 @@ from unittest.mock import patch
 import numpy as np
 import openpyxl
 import pandas as pd
+from openpyxl.worksheet.worksheet import Worksheet
 
 from exceptions import (BadCellStringError, DifferentSizeError, EmptyCellError, MismatchedColumnsError,
-                        MismatchedRowsError)
+                        MismatchedRowsError, NoExcelFileError)
 from src.validator import ExcelValidator
 
 vec_isinstance = np.vectorize(isinstance)
@@ -35,6 +36,14 @@ class TestUtilsModule(unittest.TestCase):
 
     def tearDown(self) -> None:
         del self.ev
+
+    def test_ws_attribute_returns_excel_worksheet(self) -> None:
+        self.load_test_case(sheetname='okay_spreadsheet')
+        self.assertIsInstance(self.ev.ws, Worksheet)
+
+    def test_ws_attribute_raises_exception_when_no_data_was_loaded(self) -> None:
+        with self.assertRaises(NoExcelFileError):
+            self.ev.ws
 
     def test_validation_routine_passes_with_valid_cell_ranges(self) -> None:
         for start, end in self.valid_cell_ranges:

@@ -21,16 +21,16 @@ class AbortedByUser(Exception):
 
 
 # Called on validator.py
-class EmptyCellError(Exception):
-    """Exception raised when mandatory cell is empty."""
-
-
-class NoExcelFileError(Exception):
-    """Exception raised when user runs DynaFit with no input file."""
-
-
 class BadCellStringError(Exception):
     """Exception raised when cell does not correspond to a valid Excel cell accessor."""
+
+
+class DifferentSizeError(Exception):
+    """Exception raised when samples cannot be found in the input file."""
+
+
+class EmptyCellError(Exception):
+    """Exception raised when mandatory cell is empty."""
 
 
 class MismatchedColumnsError(Exception):
@@ -41,5 +41,5 @@ class MismatchedRowsError(Exception):
     """Exception raised when samples cannot be found in the input file."""
 
 
-class DifferentSizeError(Exception):
-    """Exception raised when samples cannot be found in the input file."""
+class NoExcelFileError(Exception):
+    """Exception raised when user runs DynaFit with no input file."""
