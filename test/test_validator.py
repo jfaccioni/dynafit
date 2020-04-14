@@ -1,12 +1,22 @@
 import unittest
 from random import randint
 from string import ascii_uppercase
+from unittest.mock import patch
+
+import numpy as np
+import openpyxl
+import pandas as pd
+
+from exceptions import (BadCellStringError, DifferentSizeError, EmptyCellError, MismatchedColumnsError,
+                        MismatchedRowsError)
 from src.validator import ExcelValidator
-from exceptions import EmptyCellError, BadCellStringError, MismatchedRowsError, MismatchedColumnsError
+
+vec_isinstance = np.vectorize(isinstance)
 
 
 class TestUtilsModule(unittest.TestCase):
     """Tests the validator.py module."""
+    test_case_path = 'test/ExcelValidator_testCase.xlsx'
     valid_cell_strings = ['A1', 'D78', 'C14', 'AB3', 'XYZ3']
     invalid_cell_strings = ['1', 'X', 'A1A', '4C', 'ABBA0303', '  E0  ', '', 'SOME OTHER THINGS', '?', ";;;;;;"]
     valid_cell_ranges = [('A1', 'A100'), ('B2', 'B3'), ('XX100', 'XX200')]
@@ -17,6 +27,11 @@ class TestUtilsModule(unittest.TestCase):
     def setUp(self) -> None:
         self.ev = ExcelValidator(workbook=None, sheetname='sheetname', cs_start_cell='A1', cs_end_cell='A100',
                                  gr_start_cell='B1', gr_end_cell='B100')
+
+    def load_test_case(self, sheetname: str):
+        self.ev.wb = openpyxl.load_workbook(self.test_case_path)
+        self.ev.sheetname = sheetname
+        self.ev.ranges = {'CS': ['A1', ''], 'GR': ['B1', '']}
 
     def tearDown(self) -> None:
         del self.ev
@@ -163,8 +178,94 @@ class TestUtilsModule(unittest.TestCase):
                 result = self.ev.validate_end_cell_comes_after_start_cell(start=start, end=end)
                 self.assertFalse(result)
 
-    def test_get_data(self):
-        pass
+    def test_get_data_works_with_good_data(self) -> None:
+        self.load_test_case(sheetname='okay_spreadsheet')
+        data = self.ev.get_data()
+        self.assertIsInstance(data, pd.DataFrame)  # get_data returned a pandas DataFrame
+        self.assertTrue(all(np.issubdtype(dtype, np.number) for dtype in data.dtypes))  # All columns are numeric
+        self.assertEqual(len(data), 10)  # All 10 rows were parsed
+
+    def test_get_data_ignores_missing_data(self) -> None:
+        self.load_test_case(sheetname='blank_cells_spreadsheet')
+        data = self.ev.get_data()
+        self.assertIsInstance(data, pd.DataFrame)  # get_data returned a pandas DataFrame
+        self.assertTrue(all(np.issubdtype(dtype, np.number) for dtype in data.dtypes))  # All columns are numeric
+        self.assertEqual(len(data), 8)  # 8 rows were parsed, 2 rows with blank cells were ignored
+
+    def test_get_data_ignores_non_numeric_data(self) -> None:
+        self.load_test_case(sheetname='non_numeric_spreadsheet')
+        data = self.ev.get_data()
+        self.assertIsInstance(data, pd.DataFrame)  # get_data returned a pandas DataFrame
+        self.assertTrue(all(np.issubdtype(dtype, np.number) for dtype in data.dtypes))  # All columns are numeric
+        self.assertEqual(len(data), 8)  # 8 rows were parsed, 2 rows with non-numeric cells were ignored
+
+    def test_get_data_raises_exception_different_sized_ranges(self) -> None:
+        self.load_test_case(sheetname='okay_spreadsheet')
+        self.ev.ranges['CS'][0] = 'A2'  # CS starts on A2, GR starts on B1, sizes will mismatch
+        with self.assertRaises(DifferentSizeError):
+            self.ev.get_data()
+
+    def test_get_cell_values_extract_values_from_worksheet_column(self) -> None:
+        self.load_test_case(sheetname='okay_spreadsheet')
+        cell_range = 'A1:A11'
+        cell_rows = self.ev.ws[cell_range]
+        values = self.ev.get_cell_values(cell_rows)
+        self.assertIsInstance(values, np.ndarray)  # get_cell_values returned a numpy array
+        self.assertTrue(vec_isinstance(values, float).all())  # All values are numeric
+        self.assertEqual(len(values), 11)  # All 11 rows were parsed, including header
+
+    def test_get_cell_values_extract_values_coerces_headers_to_NaN(self) -> None:
+        self.load_test_case(sheetname='okay_spreadsheet')
+        cell_range = 'A1:A11'
+        cell_rows = self.ev.ws[cell_range]
+        values = self.ev.get_cell_values(cell_rows)
+        self.assertTrue(np.isnan(values[0]))  # First row (header) was coerced to NaN
+        self.assertTrue(~np.isnan(values[1:]).all())  # All other rows were not coerced to NaN
+
+    def test_get_cell_values_extract_values_coerces_empty_cells_to_NaN(self) -> None:
+        self.load_test_case(sheetname='blank_cells_spreadsheet')
+        cell_range = 'A1:A11'
+        cell_rows = self.ev.ws[cell_range]
+        values = self.ev.get_cell_values(cell_rows)
+        self.assertTrue(np.isnan(values[2]))  # Third row (empty cell) was coerced to NaN
+
+    def test_get_cell_values_extract_values_coerces_non_numeric_to_NaN(self) -> None:
+        self.load_test_case(sheetname='non_numeric_spreadsheet')
+        cell_range = 'A1:A11'
+        cell_rows = self.ev.ws[cell_range]
+        values = self.ev.get_cell_values(cell_rows)
+        self.assertTrue(np.isnan(values[2]))  # Third row (string 'hello') was coerced to NaN
+
+    @patch('src.validator.ExcelValidator.ws')
+    def test_get_end_cell_uses_max_row_attribute_of_ws(self, mock_ws) -> None:
+        for max_row in range(20):
+            with self.subTest(max_row=max_row):
+                mock_ws.max_row = max_row
+                start = 'A1'
+                end = self.ev.get_end_cell(start=start)
+                self.assertEqual(end, f'A{max_row}')
+
+    def test_extract_letters_returns_all_letters_in_strings(self) -> None:
+        test_case = 'A1'
+        result = self.ev.extract_letters(test_case)
+        self.assertEqual(result, 'A')
+        test_case = 'I am a test string!'
+        result = self.ev.extract_letters(test_case)
+        self.assertEqual(result, 'Iamateststring')
+        test_case = '10 > 100?'
+        result = self.ev.extract_letters(test_case)
+        self.assertEqual(result, '')
+
+    def test_extract_digits_returns_all_digits_in_strings(self) -> None:
+        test_case = 'A1'
+        result = self.ev.extract_digits(test_case)
+        self.assertEqual(result, '1')
+        test_case = 'I am a test string!'
+        result = self.ev.extract_digits(test_case)
+        self.assertEqual(result, '')
+        test_case = '10 > 100?'
+        result = self.ev.extract_digits(test_case)
+        self.assertEqual(result, '10100')
 
 
 if __name__ == '__main__':

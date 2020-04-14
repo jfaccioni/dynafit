@@ -7,11 +7,13 @@
       <w>colsize</w>
       <w>dataframe</w>
       <w>dfgui</w>
+      <w>dtype</w>
       <w>dynafit</w>
       <w>facecolor</w>
       <w>facecolors</w>
       <w>groupname</w>
       <w>hbox</w>
+      <w>iamateststring</w>
       <w>maxbin</w>
       <w>maxs</w>
       <w>mins</w>
