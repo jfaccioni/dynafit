@@ -1,3 +1,9 @@
+# 0.1.1
+- Changed line colors of the CVP (red = horizontal, blue = diagonal)
+- Added decimals to XY mean line values
+- Other fixes related to testing were introduced
+- Worker thread moved to module workers.py
+
 # 0.1.0
 - Added thread support for DynaFit analysis, UI is now responsive
 - Added progress bar that indicates % of bootstrapping done
