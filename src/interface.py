@@ -5,13 +5,13 @@ from csv import writer
 from io import StringIO
 from math import isnan
 from queue import Queue
-from typing import Any, Callable, Dict, Tuple
+from typing import Any, Dict, Tuple
 from zipfile import BadZipFile
 
 import matplotlib
 import openpyxl
 import pandas as pd
-from PySide2.QtCore import QEvent, QObject, QRunnable, QThreadPool, Signal, Slot
+from PySide2.QtCore import QEvent, QThreadPool
 from PySide2.QtGui import QKeySequence
 from PySide2.QtWidgets import (QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFrame, QGridLayout,
                                QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow, QMessageBox, QProgressBar,
@@ -23,10 +23,11 @@ from matplotlib.pyplot import Figure
 from core import dynafit
 from exceptions import AbortedByUser, CorruptedExcelFile
 from plotter import Plotter
+from worker import Worker
 
 # ## GLOBALS ##
 # Set debugging flag
-DEBUG = False
+DEBUG = True
 # Set a small font for plots
 matplotlib.rc('font', size=8)
 
@@ -296,12 +297,16 @@ class DynaFitGUI(QMainWindow):
 
     def dynafit_worker_run(self, dynafit_settings: Dict[str, Any]) -> None:
         worker = Worker(func=dynafit, **dynafit_settings)
+        self.connect_worker(worker=worker)
+        self.threadpool.start(worker)
+
+    def connect_worker(self, worker: Worker) -> None:
+        """Hooks up worker signals to interface methods."""
         worker.signals.progress.connect(self.dynafit_worker_progress_updated)
         worker.signals.warning.connect(self.dynafit_worker_small_sample_size_warning)
         worker.signals.finished.connect(self.dynafit_worker_has_finished)
         worker.signals.success.connect(self.dynafit_worker_raised_no_exceptions)
         worker.signals.error.connect(self.dynafit_worker_raised_exception)
-        self.threadpool.start(worker)
 
     def dynafit_setup_before_running(self) -> None:
         """Called before DynaFit analysis starts. Modifies the label on the plot button and clears both Axes."""
@@ -452,7 +457,7 @@ class DynaFitGUI(QMainWindow):
 
     def debug(self) -> None:
         """Implemented for easier debugging."""
-        self.load_data(query='../data/example.xlsx')
+        self.load_data(query='../test/InterfaceExample_TestCase.xlsx')
         self.CS_start_textbox.setText('A2')
         self.GR_start_textbox.setText('B2')
         self.cs_gr_button.setChecked(True)
@@ -484,51 +489,6 @@ class DynaFitGUI(QMainWindow):
             stream = StringIO()
             writer(stream).writerows(table)
             qApp.clipboard().setText(stream.getvalue())
-
-
-class Worker(QRunnable):
-    """Worker thread for DynaFit analysis. Avoids unresponsive GUI."""
-    def __init__(self, func: Callable, *args, **kwargs) -> None:
-        super().__init__()
-        self.func = func
-        self.args = args
-        self.kwargs = kwargs
-        self.signals = WorkerSignals()
-        self.add_callbacks_to_kwargs()
-
-    def add_callbacks_to_kwargs(self):
-        """Adds keyword arguments related signaling between main thread and worker thread."""
-        self.kwargs['progress_callback'] = self.signals.progress
-        self.kwargs['warning_callback'] = self.signals.warning
-
-    @Slot()
-    def run(self) -> None:
-        """Runs the Worker thread."""
-        try:
-            return_value = self.func(*self.args, **self.kwargs)
-        except Exception as error:
-            trace = traceback.format_exc()
-            self.signals.error.emit((error, trace))
-        else:
-            self.signals.success.emit(return_value)
-        finally:
-            self.signals.finished.emit()
-
-
-class WorkerSignals(QObject):
-    """Defines the signals available from a running worker thread. Supported signals are:
-        Progress: Worker has finished a percentage of its job. Emits an int representing that percentage (0-100).
-        SS Warning: Worker has encountered low samples in one or more groups. Emits a tuple containing a QEvent and
-          a dictionary containing the low sample groups. Meant to wait for used response in the GUI through a QMutex
-          and QWaitCondition before moving on with its execution.
-        Finished: Worker has done executing (either naturally or by an Exception). Nothing is emitted.
-        Success: Worker finished executing without errors. Emits a tuple of a Plotter object and a pandas DataFrame.
-        Error: an Exception was raised. Emits a tuple containing an Exception object and the traceback as a string."""
-    progress = Signal(int)
-    warning = Signal(tuple)
-    finished = Signal()
-    success = Signal(tuple)
-    error = Signal(tuple)
 
 
 if __name__ == '__main__':
