@@ -8,7 +8,7 @@ from PySide2.QtCore import Signal
 from openpyxl import Workbook
 from scipy.stats import sem, t
 
-from exceptions import AbortedByUser, NegativeInfiniteVarianceError, TooManyBinsError
+from exceptions import AbortedByUser, TooManyGroupsError
 from plotter import Plotter
 from utils import get_missing_coord, get_start_end_values
 from validator import ExcelValidator
@@ -151,7 +151,7 @@ def add_bins(df: pd.DataFrame, individual_colonies: int, bins: int) -> pd.DataFr
     except ValueError:
         mes = (f'Could not divide the population of large colonies into {bins} unique groups. ' 
                'Please reduce the number of large colony groups and try again.')
-        raise TooManyBinsError(mes)
+        raise TooManyGroupsError(mes)
     return df.assign(bins=pd.concat([single_bins, multiple_bins]))
 
 
@@ -283,13 +283,8 @@ def trapezium_integration(xs: np.ndarray, ys: np.ndarray) -> float:
 
 def results_to_dataframe(results_dict: Dict[str, Any], xs: np.ndarray, ys: np.ndarray) -> pd.DataFrame:
     """Saves DynaFit dataframe_results as a pandas DataFrame (used for Excel/csv export)."""
-    try:
-        xs = ROUND_ARR(xs, 2)
-        ys = ROUND_ARR(ys, 2)
-    except OverflowError:
-        raise NegativeInfiniteVarianceError('DynaFit analysis could not be processed with current parameters due to '
-                                            'small groups and low variance within these groups. Try decreasing the '
-                                            'number of groups for the analysis.')
+    xs = ROUND_ARR(xs, 2)
+    ys = ROUND_ARR(ys, 2)
     size = max(len(results_dict), len(xs), len(ys))
     params = list(results_dict.keys()) + [np.nan for _ in range(size - len(results_dict))]
     values = list(results_dict.values()) + [np.nan for _ in range(size - len(results_dict))]

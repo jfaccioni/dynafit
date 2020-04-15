@@ -7,13 +7,8 @@ class CorruptedExcelFile(Exception):
 
 
 # Called on core.py
-class TooManyBinsError(Exception):
+class TooManyGroupsError(Exception):
     """Exception raised when too many bins are used."""
-
-
-class NegativeInfiniteVarianceError(Exception):
-    """Exception raised when DynaFit do not result in a continuous function, due to negative infinity values
-    calculated for the mean line Y coordinates (zero variance due to small groups)."""
 
 
 class AbortedByUser(Exception):
