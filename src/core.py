@@ -284,8 +284,8 @@ def trapezium_integration(xs: np.ndarray, ys: np.ndarray) -> float:
 def results_to_dataframe(results_dict: Dict[str, Any], xs: np.ndarray, ys: np.ndarray) -> pd.DataFrame:
     """Saves DynaFit dataframe_results as a pandas DataFrame (used for Excel/csv export)."""
     try:
-        xs = ROUND_ARR(xs)
-        ys = ROUND_ARR(ys)
+        xs = ROUND_ARR(xs, 2)
+        ys = ROUND_ARR(ys, 2)
     except OverflowError:
         raise NegativeInfiniteVarianceError('DynaFit analysis could not be processed with current parameters due to '
                                             'small groups and low variance within these groups. Try decreasing the '
