@@ -27,7 +27,7 @@ from worker import Worker
 
 # ## GLOBALS ##
 # Set debugging flag
-DEBUG = False
+DEBUG = True
 # Set a small font for plots
 matplotlib.rc('font', size=8)
 
