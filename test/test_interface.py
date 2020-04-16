@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 import openpyxl
 from PySide2.QtCore import Qt, SIGNAL
@@ -147,6 +147,44 @@ class TestInterfaceModule(unittest.TestCase):
         for signal in signals:
             with self.subTest(signal=signal):
                 self.assertEqual(w.signals.receivers(signal), 1)
+
+    def test_dynafit_setup_before_running_clears_axes(self):
+        self.ui.cvp_ax.plot([1, 2], [3, 4])
+        self.ui.histogram_ax.plot([1, 2], [3, 4])
+        self.assertTrue(self.ui.cvp_ax.lines)
+        self.assertTrue(self.ui.histogram_ax.lines)
+        self.ui.dynafit_setup_before_running()
+        self.assertFalse(self.ui.cvp_ax.lines)
+        self.assertFalse(self.ui.histogram_ax.lines)
+
+    def test_dynafit_setup_before_running_sets_histogram_axes_off(self):
+        self.ui.histogram_ax = MagicMock()
+        self.ui.histogram_ax.set_axis_off.assert_not_called()
+        self.ui.dynafit_setup_before_running()
+        self.ui.histogram_ax.set_axis_off.assert_called()
+
+    def test_dynafit_setup_before_running_turns_progress_bar_widgets_on(self):
+        for widget in (self.ui.progress_bar, self.ui.progress_bar_label):
+            with self.subTest(widget=widget):
+                self.assertTrue(widget.isHidden())
+        self.ui.dynafit_setup_before_running()
+        for widget in (self.ui.progress_bar, self.ui.progress_bar_label):
+            with self.subTest(widget=widget):
+                self.assertFalse(widget.isHidden())
+
+    def test_dynafit_setup_before_running_disables_plot_and_export_buttons(self):
+        self.ui.to_excel_button.setEnabled(True)  # buttons first become enabled
+        self.ui.to_csv_button.setEnabled(True)    # when the analysis has finished
+        for button in (self.ui.plot_button, self.ui.to_excel_button, self.ui.to_csv_button):
+            with self.subTest(button=button):
+                self.assertTrue(button.isEnabled())
+        self.ui.dynafit_setup_before_running()
+        for button in (self.ui.plot_button, self.ui.to_excel_button, self.ui.to_csv_button):
+            with self.subTest(button=button):
+                self.assertFalse(button.isEnabled())
+
+    def test_get_dynafit_settings(self):
+        settings = self.ui.get_dynafit_settings()
 
 
 if __name__ == '__main__':
