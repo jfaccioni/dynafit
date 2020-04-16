@@ -9,6 +9,7 @@ from PySide2.QtWidgets import QApplication
 from src.exceptions import CorruptedExcelFile
 from src.interface import DynaFitGUI
 from src.worker import Worker
+from test.resources import SETTINGS_SCHEMA
 
 
 class TestInterfaceModule(unittest.TestCase):
@@ -183,8 +184,21 @@ class TestInterfaceModule(unittest.TestCase):
             with self.subTest(button=button):
                 self.assertFalse(button.isEnabled())
 
-    def test_get_dynafit_settings(self):
+    def test_get_dynafit_settings_types_are_correct(self):
         settings = self.ui.get_dynafit_settings()
+        del settings['data']  # do not test data (next tests do this)
+        for expected_class, actual_value in zip(SETTINGS_SCHEMA.values(), settings.values()):
+            with self.subTest(expected_class=expected_class, actual_value=actual_value):
+                self.assertIsInstance(actual_value, expected_class)
+
+    def test_get_dynafit_settings_no_data_loaded(self):
+        settings = self.ui.get_dynafit_settings()
+        self.assertIsNone(settings['data'])
+
+    def test_get_dynafit_settings_data_loaded(self):
+        self.load_example_data()
+        settings = self.ui.get_dynafit_settings()
+        self.assertIsInstance(settings['data'], openpyxl.Workbook)
 
 
 if __name__ == '__main__':
