@@ -205,10 +205,10 @@ class DynaFitGUI(QMainWindow):
         plot_grid.addWidget(self.to_csv_button, 0, 2, 1, 1)
         # Progress bar and label
         self.progress_bar_label = QLabel(self, text='Progress:')
-        self.progress_bar_label.setVisible(False)
+        self.progress_bar_label.setHidden(True)
         plot_grid.addWidget(self.progress_bar_label, 0, 3, 1, 1)
         self.progress_bar = QProgressBar(self, minimum=0, maximum=100)
-        self.progress_bar.setVisible(False)
+        self.progress_bar.setHidden(True)
         plot_grid.addWidget(self.progress_bar, 0, 4, 1, 1)
         # CoDy table of values
         self.results_table = QTableWidget(self, rowCount=0, columnCount=4)
@@ -313,8 +313,8 @@ class DynaFitGUI(QMainWindow):
         self.cvp_ax.clear()
         self.histogram_ax.clear()
         self.histogram_ax.set_axis_off()
-        self.progress_bar.setVisible(True)
-        self.progress_bar_label.setVisible(True)
+        self.progress_bar.setHidden(False)
+        self.progress_bar_label.setHidden(False)
         self.plot_button.setDisabled(True)
         self.to_excel_button.setDisabled(True)
         self.to_csv_button.setDisabled(True)
@@ -399,8 +399,8 @@ class DynaFitGUI(QMainWindow):
         self.plot_button.setEnabled(True)
         self.histogram_ax.set_axis_off()
         self.canvas.draw()
-        self.progress_bar_label.setVisible(False)
-        self.progress_bar.setVisible(False)
+        self.progress_bar_label.setHidden(True)
+        self.progress_bar.setHidden(True)
         self.progress_bar.setValue(0)
 
     def save_excel_dialog(self) -> None:
