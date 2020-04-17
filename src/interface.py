@@ -7,7 +7,6 @@ from math import isnan
 from queue import Queue
 from typing import Any, Dict, Tuple
 from zipfile import BadZipFile
-
 import openpyxl
 import pandas as pd
 from PySide2.QtCore import QEvent, QThreadPool, Qt
@@ -384,6 +383,9 @@ class DynaFitGUI(QMainWindow):
         """Called if no errors are raised during the DynaFit analysis. Writes/saves the results from DynaFit."""
         self.to_excel_button.setEnabled(True)
         self.to_csv_button.setEnabled(True)
+        self.cvp_ax.set_visible(True)
+        self.cody_ax.set_visible(True)
+        self.histogram_ax.set_visible(True)
         plotter, dataframe_results, plot_title_info = results
         self.dataframe_results = dataframe_results
         plotter.plot_cvp_ax(ax=self.cvp_ax)
@@ -412,9 +414,6 @@ class DynaFitGUI(QMainWindow):
         self.progress_bar_label.setHidden(True)
         self.progress_bar.setHidden(True)
         self.progress_bar.setValue(0)
-        self.cvp_ax.set_visible(True)
-        self.cody_ax.set_visible(True)
-        self.histogram_ax.set_visible(True)
         self.canvas.draw()
 
     def save_excel_dialog(self) -> None:
