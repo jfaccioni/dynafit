@@ -54,8 +54,8 @@ def dynafit(data: Workbook, filename: str, sheetname: str, must_calculate_growth
         raise AbortedByUser("User decided to stop DynaFit analysis.")
 
     # Get histogram values
-    hist_x = np.log2(df['CS'])
-    hist_pos, hist_bin_mins, hist_bin_maxs, hist_instances = get_histogram_values(df=df)
+    hist_x = df['CS']
+    hist_breakpoints, hist_instances = get_histogram_values(df=df)
 
     # Perform DynaFit bootstrap
     df = bootstrap_data(df=df, repeats=bootstrap_repeats, progress_callback=progress_callback)
@@ -82,21 +82,28 @@ def dynafit(data: Workbook, filename: str, sheetname: str, must_calculate_growth
         violin_ys = [df.loc[df['bins'] == b]['log2_GR_var'].values for b in sorted(df['bins'].unique())]
         violin_colors = ['gray' if i <= 5 else 'red' for i, _ in enumerate(xs)]
 
+    # Get CoDy values for CoDy plot
+    cody_xs, cody_ys = get_cody_values(xs=xs, ys=ys)
+
     # Get CI values (if user wants to do so)
     upper_ys, lower_ys = None, None
+    cody_upper_ys, cody_lower_ys = None, None
     if add_confidence_interval:
         upper_ys, lower_ys = get_confidence_interval_values(df=df, confidence_value=confidence_value)
+        cody_upper_ys, cody_lower_ys = get_cody_confidence_interval(xs=xs, upper_ys=upper_ys, lower_ys=lower_ys)
         # Calculate CI CoDy values and add them to results_dict
         for ys, name in zip([upper_ys, lower_ys], ['upper', 'lower']):
             for i in cody_range:
                 results_dict[f'CoDy {i} {name} CI'] = round(calculate_cody(xs=xs, ys=ys, cody_n=i), 4)
             results_dict[f'CoDy {max_x_value} {name} CI'] = round(calculate_cody(xs=xs, ys=ys, cody_n=None), 4)
+        # Get CI CoDy values for CoDy plot
 
     # Encapsulate results in the correct objects
     plot_results = Plotter(mean_xs=xs, mean_ys=ys, upper_ys=upper_ys, lower_ys=lower_ys, scatter_xs=scatter_xs,
                            scatter_ys=scatter_ys, scatter_colors=scatter_colors, violin_ys=violin_ys,
-                           violin_colors=violin_colors, hist_x=hist_x, hist_pos=hist_pos, hist_bin_mins=hist_bin_mins,
-                           hist_bin_maxs=hist_bin_maxs, hist_instances=hist_instances)
+                           violin_colors=violin_colors, hist_x=hist_x, hist_breakpoints=hist_breakpoints,
+                           hist_instances=hist_instances, cody_xs=cody_xs, cody_ys=cody_ys, cody_lower_ys=cody_lower_ys,
+                           cody_upper_ys=cody_upper_ys)
     dataframe_results = results_to_dataframe(results_dict=results_dict, xs=xs, ys=ys)
     plot_title_info = filename, sheetname
 
@@ -151,6 +158,7 @@ def add_bins(df: pd.DataFrame, individual_colonies: int, bins: int) -> pd.DataFr
     except ValueError:
         mes = (f'Could not divide the population of large colonies into {bins} unique groups. ' 
                'Please reduce the number of large colony groups and try again.')
+
         raise TooManyGroupsError(mes)
     return df.assign(bins=pd.concat([single_bins, multiple_bins]))
 
@@ -222,16 +230,12 @@ def get_confidence_interval_values(df: pd.DataFrame, confidence_value: float) ->
     return np.array(upper_ys), np.array(lower_ys)
 
 
-def get_histogram_values(df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+def get_histogram_values(df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
     """Returns values for the histogram of the colony size, indicating the group sizes made by the binning process."""
     grouped_data = df.groupby('bins')
-    positions = np.log2(grouped_data.max()['CS'])
-    bin_min_labels = np.core.defchararray.add('> ', np.roll(grouped_data.max()['CS'], 1).astype(int).astype(str))
-    bin_min_labels[0] = '> 0'
-    bin_max_labels = np.core.defchararray.add('<= ', grouped_data.max()['CS'].astype(int).astype(str))
-    bin_max_labels[-1] = '<= inf'
-    number_of_instances = grouped_data.count()['CS'].values
-    return positions, bin_min_labels, bin_max_labels, number_of_instances
+    bin_breakpoints = grouped_data.max()['CS']
+    bin_instances = grouped_data.count()['CS'].values
+    return bin_breakpoints, bin_instances
 
 
 def calculate_cody(xs: np.ndarray, ys: np.ndarray, cody_n: Optional[int]) -> float:
@@ -279,6 +283,20 @@ def trapezium_integration(xs: np.ndarray, ys: np.ndarray) -> float:
         triangle = (next_x - x) * (y - next_y) / 2  # SIGNED area
         trapezium = square + triangle
         integrated_area += trapezium
+
+
+def get_cody_values(xs: np.ndarray, ys:np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    """Calculates CoDy values for all points in the mean line arrays."""
+    cody_xs = xs[1:]
+    cody_ys = np.array([calculate_cody(xs=xs, ys=ys, cody_n=x) for x in cody_xs])
+    return cody_xs, cody_ys
+
+
+def get_cody_confidence_interval(xs: np.ndarray, upper_ys: np.ndarray,
+                                 lower_ys: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    cody_upper_ys = np.array([calculate_cody(xs=xs, ys=upper_ys, cody_n=x) for x in xs[1:]])
+    cody_lower_ys = np.array([calculate_cody(xs=xs, ys=lower_ys, cody_n=x) for x in xs[1:]])
+    return cody_upper_ys, cody_lower_ys
 
 
 def results_to_dataframe(results_dict: Dict[str, Any], xs: np.ndarray, ys: np.ndarray) -> pd.DataFrame:

@@ -8,15 +8,14 @@ from queue import Queue
 from typing import Any, Dict, Tuple
 from zipfile import BadZipFile
 
-import matplotlib
 import openpyxl
 import pandas as pd
-from PySide2.QtCore import QEvent, QThreadPool
+from PySide2.QtCore import QEvent, QThreadPool, Qt
 from PySide2.QtGui import QKeySequence
 from PySide2.QtWidgets import (QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFrame, QGridLayout,
                                QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow, QMessageBox, QProgressBar,
-                               QPushButton, QRadioButton, QSpinBox, QTableWidget, QTableWidgetItem, QVBoxLayout,
-                               QWidget, qApp)
+                               QPushButton, QRadioButton, QScrollArea, QSpinBox, QTableWidget, QTableWidgetItem,
+                               QVBoxLayout, QWidget, qApp)
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as Canvas, NavigationToolbar2QT as Navbar
 from matplotlib.pyplot import Figure
 
@@ -28,8 +27,6 @@ from worker import Worker
 # ## GLOBALS ##
 # Set debugging flag
 DEBUG = True
-# Set a small font for plots
-matplotlib.rc('font', size=8)
 
 
 class DynaFitGUI(QMainWindow):
@@ -41,7 +38,6 @@ class DynaFitGUI(QMainWindow):
         # ### MAIN SETUP
 
         # --Application attributes--
-        self.resize(1080, 680)
         self.threadpool = QThreadPool()
         self.data = None
         self.dataframe_results = None
@@ -221,24 +217,40 @@ class DynaFitGUI(QMainWindow):
         left_column.addLayout(plot_grid)
 
         # ### RIGHT COLUMN
-
+        # --Scroll Area--
+        # Box with a vertical scroll bar which contains the canvas
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.scroll_area.horizontalScrollBar().setEnabled(False)
         # --Plot canvas--
         # Region where plots are displayed
-        self.fig = Figure(facecolor='white')
+        self.fig = Figure(facecolor='white', figsize=(12, 12))
         self.canvas = Canvas(self.fig)
         self.canvas.setParent(self)
+        self.scroll_area.setWidget(self.canvas)
         # Axes instance used to plot CVP
-        self.cvp_ax = self.fig.add_axes([0.1, 0.2, 0.85, 0.75])
+        self.cvp_ax = self.fig.add_axes([0.1, 0.45, 0.85, 0.5], label='cvp')
+        self.cvp_ax.set_visible(False)
+        # Axes instance used to plot CoDy results (closeness to H0 and H1)
+        self.cody_ax = self.fig.add_axes([0.1, 0.25, 0.85, 0.1], label='cody')
+        self.cody_ax.set_visible(False)
         # Axes instance used to plot population histogram
-        self.histogram_ax = self.fig.add_axes([0.05, 0.0, 0.9, 0.1])
-        self.histogram_ax.set_axis_off()
+        self.histogram_ax = self.fig.add_axes([0.1, 0.05, 0.85, 0.1], label='histogram')
+        self.histogram_ax.set_visible(False)
         # Add canvas above to right column
-        right_column.addWidget(self.canvas)
+        right_column.addWidget(self.scroll_area)
         # Add a navigation bar to right column
-        right_column.addWidget(Navbar(self.canvas, self.frame))
+        navbar_layout = QHBoxLayout()
+        navbar_layout.addWidget(Navbar(self.canvas, self.frame))
+        right_column.addLayout(navbar_layout)
 
         # Set column stretch so that only plot gets rescaled with GUI
         columns.setStretch(1, 10)
+        self.showMaximized()
+
+    def resizeEvent(self, e):
+        self.canvas.resize(self.scroll_area.width(), self.canvas.height())
+        super().resizeEvent(e)
 
     def load_data_dialog(self) -> None:
         """Opens a file dialog, prompting the user to select the data (Excel spreadsheet) to load."""
@@ -311,8 +323,8 @@ class DynaFitGUI(QMainWindow):
     def dynafit_setup_before_running(self) -> None:
         """Called before DynaFit analysis starts. Modifies the label on the plot button and clears both Axes."""
         self.cvp_ax.clear()
+        self.cody_ax.clear()
         self.histogram_ax.clear()
-        self.histogram_ax.set_axis_off()
         self.progress_bar.setHidden(False)
         self.progress_bar_label.setHidden(False)
         self.plot_button.setDisabled(True)
@@ -361,8 +373,9 @@ class DynaFitGUI(QMainWindow):
     def dynafit_worker_raised_exception(self, exception_tuple: Tuple[Exception, str]) -> None:
         """Called if an error is raised during DynaFit analysis. Clears axes and shows the error in a message box."""
         self.fig.suptitle('')
-        self.cvp_ax.clear()
-        self.histogram_ax.clear()
+        self.cvp_ax.set_visible(False)
+        self.cody_ax.set_visible(False)
+        self.histogram_ax.set_visible(False)
         self.results_table.clearContents()
         if not isinstance(exception_tuple[0], AbortedByUser):
             self.raise_worker_thread_error(exception_tuple)
@@ -373,15 +386,14 @@ class DynaFitGUI(QMainWindow):
         self.to_csv_button.setEnabled(True)
         plotter, dataframe_results, plot_title_info = results
         self.dataframe_results = dataframe_results
-        plotter.plot_cvp(ax=self.cvp_ax)
-        plotter.plot_histogram(ax=self.histogram_ax)
-        self.set_figure_labels(*plot_title_info)
+        plotter.plot_cvp_ax(ax=self.cvp_ax)
+        plotter.plot_cody_ax(ax=self.cody_ax, xlims=self.cvp_ax.get_xlim())
+        plotter.plot_histogram_ax(ax=self.histogram_ax)
+        self.set_figure_title(*plot_title_info)
         self.set_results_table()
 
-    def set_figure_labels(self, filename: str, sheetname: str):
+    def set_figure_title(self, filename: str, sheetname: str):
         self.fig.suptitle(f'CVP - Exp: {filename}, Sheet: {sheetname}')
-        self.cvp_ax.set_xlabel('log2(Colony Size)')
-        self.cvp_ax.set_ylabel('log2(Growth Rate variance)')
 
     def set_results_table(self) -> None:
         """Sets values obtained from DynaFit analysis onto dataframe_results table."""
@@ -397,11 +409,13 @@ class DynaFitGUI(QMainWindow):
         button and removes the axis lines from the histogram"""
         self.plot_button.setText('Plot CVP')
         self.plot_button.setEnabled(True)
-        self.histogram_ax.set_axis_off()
-        self.canvas.draw()
         self.progress_bar_label.setHidden(True)
         self.progress_bar.setHidden(True)
         self.progress_bar.setValue(0)
+        self.cvp_ax.set_visible(True)
+        self.cody_ax.set_visible(True)
+        self.histogram_ax.set_visible(True)
+        self.canvas.draw()
 
     def save_excel_dialog(self) -> None:
         """Opens a file dialog, prompting the user to select the name/location for the Excel export of the results."""
