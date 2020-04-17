@@ -1,3 +1,5 @@
+"""core.py - bundles all computations of DynaFit."""
+
 from itertools import count
 from queue import Queue
 from typing import Any, Dict, Optional, Tuple

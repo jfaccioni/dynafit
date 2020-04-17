@@ -1,3 +1,5 @@
+"""plotter.py - defines a Plotter object."""
+
 from typing import List, Optional, Tuple
 
 import matplotlib.pyplot as plt
@@ -8,13 +10,13 @@ from utils import get_missing_coord, get_start_end_values
 
 
 class Plotter:
-    """docstring"""
+    """Class that contains all information necessary to plot the DynaFit results"""
     def __init__(self, mean_xs: np.ndarray, mean_ys: np.ndarray, upper_ys: Optional[np.ndarray],
                  lower_ys: Optional[np.ndarray], scatter_xs: np.ndarray, scatter_ys: np.ndarray,
                  scatter_colors: np.ndarray, violin_ys: Optional[List[np.ndarray]], violin_colors: Optional[List[str]],
                  hist_x: np.ndarray, hist_breakpoints: np.ndarray, hist_instances: np.ndarray, cody_xs: np.ndarray,
                  cody_ys: np.ndarray, cody_lower_ys: Optional[np.ndarray], cody_upper_ys: Optional[np.ndarray]) -> None:
-        """docstring"""
+        """Init method of Plotter class."""
         self.xs = mean_xs
         self.ys = mean_ys
         self.upper_ys = upper_ys

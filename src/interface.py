@@ -1,3 +1,5 @@
+"""interface.py - GUI implementation of DynaFit."""
+
 import os
 import sys
 import traceback
@@ -9,7 +11,7 @@ from typing import Any, Dict, Tuple
 from zipfile import BadZipFile
 import openpyxl
 import pandas as pd
-from PySide2.QtCore import QEvent, QThreadPool, Qt
+from PySide2.QtCore import QEvent, QThreadPool, Qt, Slot
 from PySide2.QtGui import QKeySequence
 from PySide2.QtWidgets import (QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFrame, QGridLayout,
                                QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow, QMessageBox, QProgressBar,
@@ -248,6 +250,7 @@ class DynaFitGUI(QMainWindow):
         self.showMaximized()
 
     def resizeEvent(self, e):
+        """Overloaded method that resizes the QScrollArea properly."""
         self.canvas.resize(self.scroll_area.width(), self.canvas.height())
         super().resizeEvent(e)
 
@@ -307,6 +310,7 @@ class DynaFitGUI(QMainWindow):
             self.dynafit_worker_run(dynafit_settings=dynafit_settings)
 
     def dynafit_worker_run(self, dynafit_settings: Dict[str, Any]) -> None:
+        """Runs Worker thread through QThreadPool after instantiating and connecting it."""
         worker = Worker(func=dynafit, **dynafit_settings)
         self.connect_worker(worker=worker)
         self.threadpool.start(worker)
@@ -352,10 +356,14 @@ class DynaFitGUI(QMainWindow):
             'add_violin': self.add_violins_checkbox.isChecked(),
         }
 
+    @Slot(int)
     def dynafit_worker_progress_updated(self, number: int):
+        """Updates DynaFit progress"""
         self.progress_bar.setValue(number)
 
     def dynafit_worker_small_sample_size_warning(self, warning: Tuple[Queue, Dict[int, int]]) -> None:
+        """Creates a sample size warning message box. Thread is halted while user selects the answer, which is
+        sent back to the thread through a Queue object."""
         answer_queue, warning_info = warning
         message = ('Warning: small sample sizes found for some groups. DynaFit analysis may be unreliable or '
                    'impossible to compute.\nDo you want to continue anyway?')
@@ -395,6 +403,7 @@ class DynaFitGUI(QMainWindow):
         self.set_results_table()
 
     def set_figure_title(self, filename: str, sheetname: str):
+        """Sets the figure title based on the parameters used in the DynaFit analysis."""
         self.fig.suptitle(f'CVP - Exp: {filename}, Sheet: {sheetname}')
 
     def set_results_table(self) -> None:
@@ -431,7 +440,7 @@ class DynaFitGUI(QMainWindow):
     def save_excel(self, path: str, placeholder: str) -> None:
         """Saves the DynaFit dataframe_results to the given path as an Excel spreadsheet."""
         if not path.endswith('.xlsx'):
-            path = path + '.xlsx'
+            path += '.xlsx'
         self.dataframe_results.to_excel(path, index=None, sheet_name=placeholder)
 
     def save_csv_dialog(self) -> None:
@@ -449,16 +458,19 @@ class DynaFitGUI(QMainWindow):
     def save_csv(self, path: str) -> None:
         """Saves the DynaFit dataframe_results to the given path as a csv file."""
         if not path.endswith('.csv'):
-            path = path + '.csv'
+            path += '.csv'
         self.dataframe_results.to_csv(path, index=None)
 
     def raise_main_thread_error(self, error: Exception) -> None:
-        """Generic function for catching errors and re-raising them as properly formatted message boxes."""
+        """Generic function for catching errors in the main GUI thread and re-raising them as properly formatted
+        message boxes."""
         name = f'{error.__class__.__name__}:\n{error}'
         trace = traceback.format_exc()
         self.show_error_message(name=name, trace=trace)
 
     def raise_worker_thread_error(self, exception_tuple: Tuple[Exception, str]) -> None:
+        """Generic function for catching errors in the worker thread and re-raising them as properly formatted
+        message boxes."""
         error, trace = exception_tuple
         name = f'{error.__class__.__name__}:\n{error}'
         self.show_error_message(name=name, trace=trace)

@@ -1,4 +1,4 @@
-# Exceptions raised by all modules are bundled here
+"""exceptions.py - exceptions raised by all modules are bundled here."""
 
 
 # Called on interface.py

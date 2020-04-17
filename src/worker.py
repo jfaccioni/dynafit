@@ -1,3 +1,5 @@
+"""worker.py - defines a Worker thread object."""
+
 import traceback
 from typing import Callable
 
