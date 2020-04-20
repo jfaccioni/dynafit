@@ -11,42 +11,45 @@ from utils import get_missing_coord, get_start_end_values
 
 class Plotter:
     """Class that contains all information necessary to plot the DynaFit results"""
-    def __init__(self, mean_xs: np.ndarray, mean_ys: np.ndarray, upper_ys: Optional[np.ndarray],
-                 lower_ys: Optional[np.ndarray], scatter_xs: np.ndarray, scatter_ys: np.ndarray,
-                 scatter_colors: np.ndarray, violin_ys: Optional[List[np.ndarray]], violin_colors: Optional[List[str]],
-                 hist_x: np.ndarray, hist_breakpoints: np.ndarray, hist_instances: np.ndarray, cumcody_ys: np.ndarray,
-                 cumcody_lower_ys: Optional[np.ndarray], cumcody_upper_ys: Optional[np.ndarray], endcody_ys: np.ndarray,
-                 endcody_lower_ys: Optional[np.ndarray], endcody_upper_ys: Optional[np.ndarray]) -> None:
+    def __init__(self, xs: np.ndarray, ys: np.ndarray, scatter_xs: np.ndarray, scatter_ys: np.ndarray,
+                 scatter_colors: np.ndarray, show_violin: bool, violin_ys: Optional[List[np.ndarray]],
+                 violin_colors: Optional[List[str]], cumcody_ys: np.ndarray, endcody_ys: np.ndarray, show_ci: bool,
+                 upper_ys: Optional[np.ndarray], lower_ys: Optional[np.ndarray], cumcody_upper_ys: Optional[np.ndarray],
+                 cumcody_lower_ys: Optional[np.ndarray], endcody_upper_ys: Optional[np.ndarray],
+                 endcody_lower_ys: Optional[np.ndarray], hist_x: np.ndarray, hist_breakpoints: np.ndarray,
+                 hist_instances: np.ndarray, ) -> None:
         """Init method of Plotter class."""
-        self.xs = mean_xs
-        self.ys = mean_ys
-        self.upper_ys = upper_ys
-        self.lower_ys = lower_ys
+        self.xs = xs
+        self.ys = ys
         self.scatter_xs = scatter_xs
         self.scatter_ys = scatter_ys
         self.scatter_colors = scatter_colors
+        self.show_violin = show_violin
         self.violin_ys = violin_ys
         self.violin_colors = violin_colors
+        self.cumcody_ys = cumcody_ys
+        self.endcody_ys = endcody_ys
+        self.show_ci = show_ci
+        self.upper_ys = upper_ys
+        self.lower_ys = lower_ys
+        self.cumcody_upper_ys = cumcody_upper_ys
+        self.cumcody_lower_ys = cumcody_lower_ys
+        self.endcody_upper_ys = endcody_upper_ys
+        self.endcody_lower_ys = endcody_lower_ys
         self.hist_x = hist_x
         self.hist_breakpoints = hist_breakpoints
         self.hist_instances = hist_instances
-        self.cumcody_ys = cumcody_ys
-        self.cumcody_upper_ys = cumcody_upper_ys
-        self.cumcody_lower_ys = cumcody_lower_ys
-        self.endcody_ys = endcody_ys
-        self.endcody_upper_ys = endcody_upper_ys
-        self.endcody_lower_ys = endcody_lower_ys
 
     def plot_cvp_ax(self, ax: plt.Axes):
         """Calls all the functions related to plotting the CVP."""
         self.plot_supporting_lines(ax=ax)
         self.plot_mean_line(ax=ax)
         self.plot_bootstrap_scatter(ax=ax)
-        if self.upper_ys is not None:  # User added CI
+        if self.show_violin:
+            self.plot_bootstrap_violins(ax=ax)
+        if self.show_ci:
             self.plot_supporting_lines_ci(ax=ax)
             self.plot_mean_line_ci(ax=ax)
-        if self.violin_ys is not None:  # User added violins
-            self.plot_bootstrap_violins(ax=ax)
         ax.set_xlabel('log2(Colony Size)')
         ax.set_ylabel('log2(Growth Rate variance)')
 
@@ -139,7 +142,7 @@ class Plotter:
         self.plot_cumcody_values(ax=ax)
         self.plot_endcody_values(ax=ax)
         self.set_cody_limits(ax=ax, xlims=xlims)
-        if self.cumcody_upper_ys is not None:
+        if self.show_ci:
             self.plot_cumcody_ci_values(ax=ax)
             self.plot_relcody_ci_values(ax=ax)
         ax.set_title('Hypothesis plot')

@@ -208,10 +208,12 @@ class DynaFitGUI(QMainWindow):
         self.progress_bar.setHidden(True)
         plot_grid.addWidget(self.progress_bar, 0, 4, 1, 1)
         # CoDy table of values
-        self.results_table = QTableWidget(self, rowCount=0, columnCount=4)
-        for index, column_name in enumerate(['Parameter', 'Value', 'Mean X', 'Mean Y']):
+        self.results_table = QTableWidget(self, rowCount=0, columnCount=8)
+        colnames = ['Parameter', 'Value', 'Log2(Colony Size)', 'Log2(Variance)', 'Closeness to H0 (cumulative)',
+                    'Closeness to H1 (cumulative)', 'Closeness to H0 (endpoint)', 'Closeness to H1 (endpoint)']
+        for index, column_name in enumerate(colnames):
             self.results_table.setHorizontalHeaderItem(index, QTableWidgetItem(column_name))
-            self.results_table.horizontalHeader().setSectionResizeMode(index, QHeaderView.Stretch)
+            self.results_table.horizontalHeader().setSectionResizeMode(index, QHeaderView.ResizeToContents)
         self.results_table.installEventFilter(self)
         plot_grid.addWidget(self.results_table, 1, 0, 5, 5)
         # Add section above to left column
@@ -350,10 +352,10 @@ class DynaFitGUI(QMainWindow):
             'individual_colonies': self.max_individual_cs_spinbox.value(),
             'large_colony_groups': self.large_colony_groups_spinbox.value(),
             'bootstrap_repeats': self.bootstrap_repeats_spinbox.value(),
-            'add_confidence_interval': self.conf_int_checkbox.isChecked(),
+            'show_ci': self.conf_int_checkbox.isChecked(),
             'confidence_value': self.conf_int_spinbox.value(),
             'must_remove_outliers': self.remove_outliers_checkbox.isChecked(),
-            'add_violin': self.add_violins_checkbox.isChecked(),
+            'show_violin': self.add_violins_checkbox.isChecked(),
         }
 
     @Slot(int)
@@ -387,19 +389,19 @@ class DynaFitGUI(QMainWindow):
         if not isinstance(exception_tuple[0], AbortedByUser):
             self.raise_worker_thread_error(exception_tuple)
 
-    def dynafit_worker_raised_no_exceptions(self, results: Tuple[Plotter, pd.DataFrame, Tuple[str, str]]) -> None:
+    def dynafit_worker_raised_no_exceptions(self, results: Tuple[Dict[str, Any], Plotter, pd.DataFrame]) -> None:
         """Called if no errors are raised during the DynaFit analysis. Writes/saves the results from DynaFit."""
         self.to_excel_button.setEnabled(True)
         self.to_csv_button.setEnabled(True)
         self.cvp_ax.set_visible(True)
         self.cody_ax.set_visible(True)
         self.histogram_ax.set_visible(True)
-        plotter, dataframe_results, plot_title_info = results
+        original_parameters, plotter, dataframe_results = results
         self.dataframe_results = dataframe_results
         plotter.plot_cvp_ax(ax=self.cvp_ax)
         plotter.plot_cody_ax(ax=self.cody_ax, xlims=self.cvp_ax.get_xlim())
         plotter.plot_histogram_ax(ax=self.histogram_ax)
-        self.set_figure_title(*plot_title_info)
+        self.set_figure_title(filename=original_parameters['filename'], sheetname=original_parameters['sheetname'])
         self.set_results_table()
 
     def set_figure_title(self, filename: str, sheetname: str):
@@ -412,8 +414,14 @@ class DynaFitGUI(QMainWindow):
         self.results_table.setRowCount(len(self.dataframe_results))
         for row_index, row_contents in self.dataframe_results.iterrows():
             for column_index, value in enumerate(row_contents):
-                value = '' if isinstance(value, float) and isnan(value) else str(value)
+                value = '' if self.is_empty_table_value(value) else str(value)
                 self.results_table.setItem(row_index, column_index, QTableWidgetItem(value))
+
+    @staticmethod
+    def is_empty_table_value(value):
+        if isinstance(value, float) and isnan(value):
+            return True
+        return value == 'nan'
 
     def dynafit_worker_has_finished(self) -> None:
         """Called when DynaFit analysis finishes running (regardless of errors). Restores label on the plot

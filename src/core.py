@@ -17,27 +17,16 @@ from validator import ExcelValidator
 
 # Value from which to throw a warning of low N
 WARNING_LEVEL = 20
-# Vectorized round function
-ROUND_ARR = np.vectorize(round)
 
 
 def dynafit(data: Workbook, filename: str, sheetname: str, must_calculate_growth_rate: bool, time_delta: float,
             cs_start_cell: str, cs_end_cell: str, gr_start_cell: str, gr_end_cell: str, individual_colonies: int,
-            large_colony_groups: int, bootstrap_repeats: int, add_confidence_interval: bool, confidence_value: float,
-            must_remove_outliers: bool, add_violin: bool, **kwargs) -> Tuple[Plotter, pd.DataFrame, Tuple[str, str]]:
+            large_colony_groups: int, bootstrap_repeats: int, show_ci: bool, confidence_value: float,
+            must_remove_outliers: bool, show_violin: bool, **kwargs) -> Tuple[Dict[str, Any], Plotter, pd.DataFrame]:
     """Main DynaFit function"""
     # Extract values to be emitted by thread from kwargs
     progress_callback = kwargs.get('progress_callback')
     warning_callback = kwargs.get('warning_callback')
-
-    # Store parameters used for DynaFit analysis
-    results_dict = {
-        'file': filename,
-        'sheet': sheetname,
-        'max individual colony size': individual_colonies,
-        'number of large colony groups': large_colony_groups,
-        'bootstrapping repeats': bootstrap_repeats
-    }
 
     # Validate input data and return it
     df = ExcelValidator(workbook=data, sheetname=sheetname, cs_start_cell=cs_start_cell, cs_end_cell=cs_end_cell,
@@ -66,13 +55,6 @@ def dynafit(data: Workbook, filename: str, sheetname: str, must_calculate_growth
     # Get mean line values
     xs, ys = get_mean_line_arrays(df=df)
 
-    # Calculate mean line CoDy values and add them to results_dict
-    max_x_value = round(max(xs), 2)
-    cody_range = [i for i in range(1, 7) if i < max_x_value]
-    for i in cody_range:
-        results_dict[f'CoDy {i}'] = round(calculate_cumcody(xs=xs, ys=ys, cody_n=i), 4)
-    results_dict[f'CoDy {max_x_value}'] = round(calculate_cumcody(xs=xs, ys=ys, cody_n=None), 4)
-
     # Get scatter values
     scatter_xs = df['log2_CS_mean'].values
     scatter_ys = df['log2_GR_var'].values
@@ -80,7 +62,7 @@ def dynafit(data: Workbook, filename: str, sheetname: str, must_calculate_growth
 
     # Get violin values (if user wants to do so)
     violin_ys, violin_colors = None, None
-    if add_violin:
+    if show_violin:
         violin_ys = [df.loc[df['bins'] == b]['log2_GR_var'].values for b in sorted(df['bins'].unique())]
         violin_colors = ['gray' if i <= 5 else 'red' for i, _ in enumerate(xs)]
 
@@ -92,29 +74,31 @@ def dynafit(data: Workbook, filename: str, sheetname: str, must_calculate_growth
     upper_ys, lower_ys = None, None
     cumcody_upper_ys, cumcody_lower_ys = None, None
     endcody_upper_ys, endcody_lower_ys = None, None
-    if add_confidence_interval:
+    if show_ci:
         upper_ys, lower_ys = get_mean_line_confidence_interval(df=df, confidence_value=confidence_value)
         cumcody_upper_ys, cumcody_lower_ys = get_cumcody_confidence_interval(xs=xs, upper_ys=upper_ys, lower_ys=lower_ys)
         endcody_upper_ys, endcody_lower_ys = get_endcody_confidence_interval(xs=xs, upper_ys=upper_ys, lower_ys=lower_ys)
-        # Calculate CI CoDy values and add them to results_dict
-        for ys, name in zip([upper_ys, lower_ys], ['upper', 'lower']):
-            for i in cody_range:
-                results_dict[f'CoDy {i} {name} CI'] = round(calculate_cumcody(xs=xs, ys=ys, cody_n=i), 4)
-            results_dict[f'CoDy {max_x_value} {name} CI'] = round(calculate_cumcody(xs=xs, ys=ys, cody_n=None), 4)
-        # Get CI CoDy values for CoDy plot
 
-    # Encapsulate results in the correct objects
-    plot_results = Plotter(mean_xs=xs, mean_ys=ys, upper_ys=upper_ys, lower_ys=lower_ys, scatter_xs=scatter_xs,
-                           scatter_ys=scatter_ys, scatter_colors=scatter_colors, violin_ys=violin_ys,
-                           violin_colors=violin_colors, hist_x=hist_x, hist_breakpoints=hist_breakpoints,
-                           hist_instances=hist_instances, cumcody_ys=cumcody_ys,
-                           cumcody_lower_ys=cumcody_lower_ys, cumcody_upper_ys=cumcody_upper_ys, endcody_ys=endcody_ys,
-                           endcody_upper_ys=endcody_upper_ys, endcody_lower_ys=endcody_lower_ys)
-    dataframe_results = results_to_dataframe(results_dict=results_dict, xs=xs, ys=ys)
-    plot_title_info = filename, sheetname
+    # Store parameters used for DynaFit analysis
+    original_parameters = {
+        'filename': filename,
+        'sheetname': sheetname,
+        'max individual colony size': individual_colonies,
+        'number of large colony groups': large_colony_groups,
+        'bootstrapping repeats': bootstrap_repeats
+    }
+    dataframe_results = results_to_dataframe(original_parameters=original_parameters, xs=xs, ys=ys,
+                                             cumcody_ys=cumcody_ys, endcody_ys=endcody_ys)
+    # Encapsulates data for plots
+    plot_results = Plotter(xs=xs, ys=ys, scatter_xs=scatter_xs, scatter_ys=scatter_ys, scatter_colors=scatter_colors,
+                           show_violin=show_violin, violin_ys=violin_ys, violin_colors=violin_colors,
+                           cumcody_ys=cumcody_ys, endcody_ys=endcody_ys, show_ci=show_ci, upper_ys=upper_ys,
+                           lower_ys=lower_ys, cumcody_upper_ys=cumcody_upper_ys, cumcody_lower_ys=cumcody_lower_ys,
+                           endcody_lower_ys=endcody_lower_ys, endcody_upper_ys=endcody_upper_ys,  hist_x=hist_x,
+                           hist_breakpoints=hist_breakpoints, hist_instances=hist_instances)
 
     # Return results
-    return plot_results, dataframe_results, plot_title_info
+    return original_parameters, plot_results, dataframe_results
 
 
 def preprocess_data(df: pd.DataFrame, must_calculate_growth_rate: bool, time_delta: float,
@@ -333,13 +317,20 @@ def get_endcody_confidence_interval(xs: np.ndarray, upper_ys: np.ndarray,
     return cody_upper_ys, cody_lower_ys
 
 
-def results_to_dataframe(results_dict: Dict[str, Any], xs: np.ndarray, ys: np.ndarray) -> pd.DataFrame:
+def results_to_dataframe(original_parameters: Dict[str, Any], xs: np.ndarray, ys: np.ndarray, cumcody_ys: np.ndarray,
+                         endcody_ys: np.ndarray) -> pd.DataFrame:
     """Saves DynaFit dataframe_results as a pandas DataFrame (used for Excel/csv export)."""
-    xs = ROUND_ARR(xs, 2)
-    ys = ROUND_ARR(ys, 2)
-    size = max(len(results_dict), len(xs), len(ys))
-    params = list(results_dict.keys()) + [np.nan for _ in range(size - len(results_dict))]
-    values = list(results_dict.values()) + [np.nan for _ in range(size - len(results_dict))]
-    xs = list(xs) + [np.nan for _ in range(size - len(xs))]
-    ys = list(ys) + [np.nan for _ in range(size - len(ys))]
-    return pd.DataFrame({'Parameter': params, 'Value': values, 'Mean X Values': xs, 'Mean Y Values': ys})
+    largest_seq_size = max(len(original_parameters), len(xs))
+    params_padding = largest_seq_size - len(original_parameters)
+    array_padding = largest_seq_size - len(xs)
+    data = {
+        'Parameter': np.concatenate([list(original_parameters.keys()), np.full(params_padding, np.nan)]),
+        'Value': np.concatenate([list(original_parameters.values()), np.full(params_padding, np.nan)]),
+        'Log2(Colony Size)': np.concatenate([xs, np.full(array_padding, np.nan)]).round(2),
+        'Log2(Variance)': np.concatenate([ys, np.full(array_padding, np.nan)]).round(2),
+        'Closeness to H0 (cumulative)': np.concatenate([np.abs(cumcody_ys), np.full(array_padding, np.nan)]).round(2),
+        'Closeness to H1 (cumulative)': np.concatenate([np.abs(cumcody_ys-1), np.full(array_padding, np.nan)]).round(2),
+        'Closeness to H0 (endpoint)': np.concatenate([np.abs(endcody_ys), np.full(array_padding, np.nan)]).round(2),
+        'Closeness to H1 (endpoint)': np.concatenate([np.abs(endcody_ys-1), np.full(array_padding, np.nan)]).round(2),
+    }
+    return pd.DataFrame(data)
