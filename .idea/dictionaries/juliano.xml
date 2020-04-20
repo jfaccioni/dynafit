@@ -26,6 +26,7 @@
       <w>nrepeats</w>
       <w>nruns</w>
       <w>openpyxl</w>
+      <w>preprocessing</w>
       <w>qstandarditemmodel</w>
       <w>qtableview</w>
       <w>rcodiff</w>

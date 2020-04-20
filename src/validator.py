@@ -1,11 +1,13 @@
+"""validator.py - defines an ExcelValidator class that parses and validates the input data."""
+
 import re
 from typing import Optional, Tuple
 
 import numpy as np
 import pandas as pd
 from openpyxl import Workbook
-from openpyxl.worksheet.worksheet import Worksheet
 from openpyxl.cell.cell import Cell
+from openpyxl.worksheet.worksheet import Worksheet
 
 from exceptions import (BadCellStringError, DifferentSizeError, EmptyCellError, MismatchedColumnsError,
                         MismatchedRowsError, NoExcelFileError)
@@ -30,6 +32,7 @@ class ExcelValidator:
 
     @property
     def ws(self) -> Worksheet:
+        """Returns the worksheet associated to the Excel workbook and sheetname defined in the __init__ method."""
         try:
             return self.wb[self.sheetname]
         except TypeError:  # self.wb is None
@@ -106,6 +109,7 @@ class ExcelValidator:
         return int(start_numbers) < int(end_numbers)
 
     def get_data(self) -> pd.DataFrame:
+        """Returns the data from the Excel sheet loaded as a pandas DataFrame."""
         self.validation_routine()
         data = {}
         for name, (start, end) in self.ranges.items():

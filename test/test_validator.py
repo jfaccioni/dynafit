@@ -1,3 +1,5 @@
+"""test_validator.py - unit tests for validator.py."""
+
 import unittest
 from random import randint
 from string import ascii_uppercase
@@ -26,15 +28,18 @@ class TestUtilsModule(unittest.TestCase):
     invalid_cell_range_rows = [('A100', 'A1'), ('B3', 'B2'), ('XX200', 'XX100')]
 
     def setUp(self) -> None:
+        """Sets up each unit test by refreshing the ExcelValidator instance."""
         self.ev = ExcelValidator(workbook=None, sheetname='sheetname', cs_start_cell='A1', cs_end_cell='A100',
                                  gr_start_cell='B1', gr_end_cell='B100')
 
     def load_test_case(self, sheetname: str):
+        """Loads the test case file as if it were passed in the ExcelValidator's __init__ method."""
         self.ev.wb = openpyxl.load_workbook(self.test_case_path)
         self.ev.sheetname = sheetname
         self.ev.ranges = {'CS': ['A1', ''], 'GR': ['B1', '']}
 
     def tearDown(self) -> None:
+        """Deletes the ExcelValidator instance after a unit test ends."""
         del self.ev
 
     def test_ws_attribute_returns_excel_worksheet(self) -> None:

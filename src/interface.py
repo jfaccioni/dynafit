@@ -9,6 +9,7 @@ from math import isnan
 from queue import Queue
 from typing import Any, Dict, Tuple
 from zipfile import BadZipFile
+
 import openpyxl
 import pandas as pd
 from PySide2.QtCore import QEvent, QThreadPool, Qt, Slot
@@ -20,10 +21,10 @@ from PySide2.QtWidgets import (QApplication, QCheckBox, QComboBox, QDoubleSpinBo
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as Canvas, NavigationToolbar2QT as Navbar
 from matplotlib.pyplot import Figure
 
-from core import dynafit
-from exceptions import AbortedByUser, CorruptedExcelFile
-from plotter import Plotter
-from worker import Worker
+from src.core import dynafit
+from src.exceptions import AbortedByUser, CorruptedExcelFile
+from src.plotter import Plotter
+from src.worker import Worker
 
 # ## GLOBALS ##
 # Set debugging flag
@@ -363,6 +364,7 @@ class DynaFitGUI(QMainWindow):
         """Updates DynaFit progress"""
         self.progress_bar.setValue(number)
 
+    @Slot(object)
     def dynafit_worker_small_sample_size_warning(self, warning: Tuple[Queue, Dict[int, int]]) -> None:
         """Creates a sample size warning message box. Thread is halted while user selects the answer, which is
         sent back to the thread through a Queue object."""
@@ -419,6 +421,7 @@ class DynaFitGUI(QMainWindow):
 
     @staticmethod
     def is_empty_table_value(value):
+        """Returns whether the value passed in should be represented as an empty cell in the results table."""
         if isinstance(value, float) and isnan(value):
             return True
         return value == 'nan'

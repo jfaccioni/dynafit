@@ -10,10 +10,10 @@ from PySide2.QtCore import Signal
 from openpyxl import Workbook
 from scipy.stats import sem, t
 
-from exceptions import AbortedByUser, TooManyGroupsError
-from plotter import Plotter
-from utils import get_missing_coord, get_start_end_values
-from validator import ExcelValidator
+from src.exceptions import AbortedByUser, TooManyGroupsError
+from src.plotter import Plotter
+from src.utils import get_missing_coord, get_start_end_values
+from src.validator import ExcelValidator
 
 # Value from which to throw a warning of low N
 WARNING_LEVEL = 20
@@ -76,8 +76,10 @@ def dynafit(data: Workbook, filename: str, sheetname: str, must_calculate_growth
     endcody_upper_ys, endcody_lower_ys = None, None
     if show_ci:
         upper_ys, lower_ys = get_mean_line_confidence_interval(df=df, confidence_value=confidence_value)
-        cumcody_upper_ys, cumcody_lower_ys = get_cumcody_confidence_interval(xs=xs, upper_ys=upper_ys, lower_ys=lower_ys)
-        endcody_upper_ys, endcody_lower_ys = get_endcody_confidence_interval(xs=xs, upper_ys=upper_ys, lower_ys=lower_ys)
+        cumcody_upper_ys, cumcody_lower_ys = get_cumcody_confidence_interval(xs=xs, upper_ys=upper_ys,
+                                                                             lower_ys=lower_ys)
+        endcody_upper_ys, endcody_lower_ys = get_endcody_confidence_interval(xs=xs, upper_ys=upper_ys,
+                                                                             lower_ys=lower_ys)
 
     # Store parameters used for DynaFit analysis
     original_parameters = {
@@ -103,6 +105,7 @@ def dynafit(data: Workbook, filename: str, sheetname: str, must_calculate_growth
 
 def preprocess_data(df: pd.DataFrame, must_calculate_growth_rate: bool, time_delta: float,
                     must_remove_outliers: bool) -> pd.DataFrame:
+    """Calls downstream methods related to data preprocessing, based on boolean flags."""
     if must_calculate_growth_rate:
         df = calculate_growth_rate(df=df, time_delta=time_delta)
     df = filter_colony_sizes_less_than_one(df=df)
@@ -154,6 +157,8 @@ def add_bins(df: pd.DataFrame, individual_colonies: int, bins: int) -> pd.DataFr
 
 
 def sample_size_warning_info(df: pd.DataFrame, warning_level: int) -> Optional[Dict[int, int]]:
+    """Checks whether any group resulting from the binning process has a low number of instances (based on the
+    global value os WARNING_LEVEL."""
     warning_info = {}
     for bin_number, bin_values in df.groupby('bins'):
         n = len(bin_values)
@@ -163,6 +168,8 @@ def sample_size_warning_info(df: pd.DataFrame, warning_level: int) -> Optional[D
 
 
 def sample_size_warning_answer(warning_info: Optional[Dict[int, int]], callback: Signal) -> bool:
+    """Emits a GUI-blocking warning back to the main thread as a Queue. The GUI is meant to wrap the warning in
+    a QMessageBox and put a boolean value in the Queue, in order to pass in the user's answer."""
     if warning_info is None:
         return False
     answer = Queue()
@@ -188,6 +195,7 @@ def bootstrap_data(df: pd.DataFrame, repeats: int, progress_callback: Signal) ->
 
 
 def emit_bootstrap_progress(current: int, total: int, callback: Signal):
+    """Emits a integer back to the GUI thread, in order to update the progress bar."""
     progress = int(round(100 * current / total))
     callback.emit(progress)
 
@@ -292,13 +300,14 @@ def calculate_cody_triangle_area(xs: np.ndarray, ys: np.ndarray) -> float:
 
 
 def get_cumulative_cody_values(xs: np.ndarray, ys: np.ndarray) -> np.ndarray:
-    """Calculates endpoint CoDy values for all points in the mean line arrays."""
+    """Calculates cumulative CoDy values for all points in the mean line arrays."""
     cody_ys = np.array([calculate_cumcody(xs=xs, ys=ys, cody_n=x) for x in xs])
     return cody_ys
 
 
 def get_cumcody_confidence_interval(xs: np.ndarray, upper_ys: np.ndarray,
                                     lower_ys: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    """Calculates the confidence interval values for the cumulative hypothesis plot."""
     cody_upper_ys = np.array([calculate_cumcody(xs=xs, ys=upper_ys, cody_n=x) for x in xs])
     cody_lower_ys = np.array([calculate_cumcody(xs=xs, ys=lower_ys, cody_n=x) for x in xs])
     return cody_upper_ys, cody_lower_ys
@@ -312,6 +321,7 @@ def get_endpoint_cody_values(xs: np.ndarray, ys: np.ndarray) -> np.ndarray:
 
 def get_endcody_confidence_interval(xs: np.ndarray, upper_ys: np.ndarray,
                                     lower_ys: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    """Calculates the confidence interval values for the endpoint hypothesis plot."""
     cody_upper_ys = np.array([calculate_endcody(xs=xs, ys=upper_ys, cody_n=x) for x in xs])
     cody_lower_ys = np.array([calculate_endcody(xs=xs, ys=lower_ys, cody_n=x) for x in xs])
     return cody_upper_ys, cody_lower_ys

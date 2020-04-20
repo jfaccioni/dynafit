@@ -1,3 +1,5 @@
+"""utils.py - bundles some utility functions used throughout the code."""
+
 from typing import Tuple
 
 import numpy as np

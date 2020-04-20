@@ -1,12 +1,18 @@
+"""test_interface.py - unit tests for interface.py."""
+
 import unittest
-from unittest.mock import patch, MagicMock
+from queue import Queue
+from typing import List
+from unittest.mock import MagicMock, patch
 
 import openpyxl
 from PySide2.QtCore import Qt, SIGNAL
 from PySide2.QtTest import QTest
-from PySide2.QtWidgets import QApplication
+from PySide2.QtWidgets import QApplication, QMessageBox
+from matplotlib.pyplot import Axes
 
-from src.exceptions import CorruptedExcelFile
+from src.core import dynafit
+from src.exceptions import AbortedByUser, CorruptedExcelFile
 from src.interface import DynaFitGUI
 from src.worker import Worker
 from test.resources import SETTINGS_SCHEMA
@@ -19,16 +25,25 @@ class TestInterfaceModule(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
+        """Sets up the test suite by instantiating a QApplication."""
         cls.app = QApplication()
 
     def setUp(self) -> None:
+        """Sets up each unit test by refreshing the DynaFitGUI instance."""
         self.ui = DynaFitGUI()
 
     def tearDown(self) -> None:
+        """Deletes the DynaFitGUI instance after a unit test ends."""
         del self.ui
 
     def load_example_data(self) -> None:
+        """Loads the test case file as if it were loaded through the DynaFitGUI."""
         self.ui.data = openpyxl.load_workbook(self.test_case_path)
+
+    @property
+    def axes(self) -> List[Axes]:
+        """Convenience property for accessing all Axes instances of the DynaFitGUI."""
+        return [self.ui.cvp_ax, self.ui.cody_ax, self.ui.histogram_ax]
 
     @patch('PySide2.QtWidgets.QFileDialog.getOpenFileName')
     def test_click_load_data_button_loads_data_dialog(self, mock_file_dialog) -> None:
@@ -149,22 +164,17 @@ class TestInterfaceModule(unittest.TestCase):
             with self.subTest(signal=signal):
                 self.assertEqual(w.signals.receivers(signal), 1)
 
-    def test_dynafit_setup_before_running_clears_axes(self):
-        self.ui.cvp_ax.plot([1, 2], [3, 4])
-        self.ui.histogram_ax.plot([1, 2], [3, 4])
-        self.assertTrue(self.ui.cvp_ax.lines)
-        self.assertTrue(self.ui.histogram_ax.lines)
+    def test_dynafit_setup_before_running_clears_axes(self) -> None:
+        for ax in self.axes:
+            ax.plot([1, 2], [3, 4])
+            with self.subTest(ax=ax):
+                self.assertTrue(ax.lines)
         self.ui.dynafit_setup_before_running()
-        self.assertFalse(self.ui.cvp_ax.lines)
-        self.assertFalse(self.ui.histogram_ax.lines)
+        for ax in self.axes:
+            with self.subTest(ax=ax):
+                self.assertFalse(ax.lines)
 
-    def test_dynafit_setup_before_running_sets_histogram_axes_off(self):
-        self.ui.histogram_ax = MagicMock()
-        self.ui.histogram_ax.set_axis_off.assert_not_called()
-        self.ui.dynafit_setup_before_running()
-        self.ui.histogram_ax.set_axis_off.assert_called()
-
-    def test_dynafit_setup_before_running_turns_progress_bar_widgets_on(self):
+    def test_dynafit_setup_before_running_turns_progress_bar_widgets_on(self) -> None:
         for widget in (self.ui.progress_bar, self.ui.progress_bar_label):
             with self.subTest(widget=widget):
                 self.assertTrue(widget.isHidden())
@@ -173,7 +183,7 @@ class TestInterfaceModule(unittest.TestCase):
             with self.subTest(widget=widget):
                 self.assertFalse(widget.isHidden())
 
-    def test_dynafit_setup_before_running_disables_plot_and_export_buttons(self):
+    def test_dynafit_setup_before_running_disables_plot_and_export_buttons(self) -> None:
         self.ui.to_excel_button.setEnabled(True)  # buttons first become enabled
         self.ui.to_csv_button.setEnabled(True)    # when the analysis has finished
         for button in (self.ui.plot_button, self.ui.to_excel_button, self.ui.to_csv_button):
@@ -184,21 +194,88 @@ class TestInterfaceModule(unittest.TestCase):
             with self.subTest(button=button):
                 self.assertFalse(button.isEnabled())
 
-    def test_get_dynafit_settings_types_are_correct(self):
+    def test_get_dynafit_settings_keys_are_dynafit_kwargs(self) -> None:
+        settings = self.ui.get_dynafit_settings()
+        for expected_argument_name in settings.keys():
+            with self.subTest(expected_argument_name=expected_argument_name):
+                self.assertIn(expected_argument_name, dynafit.__code__.co_varnames)
+
+    def test_get_dynafit_settings_values_have_correct_types(self) -> None:
         settings = self.ui.get_dynafit_settings()
         del settings['data']  # do not test data (next tests do this)
         for expected_class, actual_value in zip(SETTINGS_SCHEMA.values(), settings.values()):
             with self.subTest(expected_class=expected_class, actual_value=actual_value):
                 self.assertIsInstance(actual_value, expected_class)
 
-    def test_get_dynafit_settings_no_data_loaded(self):
+    def test_get_dynafit_settings_no_data_loaded(self) -> None:
         settings = self.ui.get_dynafit_settings()
         self.assertIsNone(settings['data'])
 
-    def test_get_dynafit_settings_data_loaded(self):
+    def test_get_dynafit_settings_data_loaded(self) -> None:
         self.load_example_data()
         settings = self.ui.get_dynafit_settings()
         self.assertIsInstance(settings['data'], openpyxl.Workbook)
+
+    def test_dynafit_worker_progress_updated(self) -> None:
+        self.ui.dynafit_worker_progress_updated(10)
+        self.assertEqual(self.ui.progress_bar.value(), 10)
+
+    @patch('src.interface.QMessageBox')
+    def test_dynafit_worker_small_sample_warning_displays_message_box(self, mock_message_box) -> None:
+        warning_contents = (Queue(), {1: 2})
+        self.ui.dynafit_worker_small_sample_size_warning(warning=warning_contents)
+        mock_message_box.assert_called()
+        mock_message_box.return_value.exec_.assert_called()
+
+    def test_dynafit_worker_small_sample_warning_yes_button_puts_false_in_queue(self) -> None:
+        q = Queue()
+        warning_contents = (q, {1: 2})
+        with patch('src.interface.QMessageBox.exec_', return_value=QMessageBox.Yes):
+            self.ui.dynafit_worker_small_sample_size_warning(warning=warning_contents)
+        self.assertFalse(q.get())
+
+    def test_dynafit_worker_small_sample_warning_no_button_puts_true_in_queue(self) -> None:
+        q = Queue()
+        warning_contents = (q, {1: 2})
+        with patch('src.interface.QMessageBox.exec_', return_value=QMessageBox.No):
+            self.ui.dynafit_worker_small_sample_size_warning(warning=warning_contents)
+        self.assertTrue(q.get())
+
+    def test_dynafit_worker_raised_exception_removes_figure_title(self) -> None:
+        self.ui.fig.suptitle('SOMETHING HERE')
+        with patch('src.interface.DynaFitGUI.raise_worker_thread_error'):
+            self.ui.dynafit_worker_raised_exception((Exception(), 'string'))
+        self.assertEqual(self.ui.fig._suptitle.get_text(), '')
+
+    def test_dynafit_worker_raised_exception_removes_figure_visibility(self) -> None:
+        for ax in self.axes:
+            ax.set_visible(True)
+        with patch('src.interface.DynaFitGUI.raise_worker_thread_error'):
+            self.ui.dynafit_worker_raised_exception((Exception(), 'string'))
+        for ax in self.axes:
+            with self.subTest(ax=ax):
+                self.assertFalse(ax.get_visible())
+
+    @patch('src.interface.QTableWidget')
+    def test_dynafit_worker_raised_exception_clears_results_table(self, mock_table_clear) -> None:
+        mock_table_clear.return_value.clearContents = MagicMock()  # no idea WHY I had to do this
+        mock_table_clear.return_value.clearContents.assert_not_called()
+        with patch('src.interface.DynaFitGUI.raise_worker_thread_error'):
+            self.ui.dynafit_worker_raised_exception((Exception(), 'string'))
+        mock_table_clear.return_value.clearContents.assert_not_called()
+
+    def test_dynafit_worker_raised_exception_passes_exception_to_handler_function(self) -> None:
+        e = Exception()
+        s = 'string'
+        with patch('src.interface.DynaFitGUI.raise_worker_thread_error') as mock_worker_exception_handler:
+            self.ui.dynafit_worker_raised_exception((e, s))
+        mock_worker_exception_handler.assert_called_once_with((e, s))
+
+    @patch('src.interface.DynaFitGUI.raise_worker_thread_error')
+    def test_dynafit_worker_raised_exception_no_exception_shown_when_aborted_by_user(self, mock_thread_error) -> None:
+        mock_thread_error.assert_not_called()
+        self.ui.dynafit_worker_raised_exception((AbortedByUser(), 'string'))
+        mock_thread_error.assert_not_called()
 
 
 if __name__ == '__main__':

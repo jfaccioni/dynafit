@@ -1,3 +1,5 @@
+"""resources.py - resources for testing are placed here."""
+
 SETTINGS_SCHEMA = {
     'filename': str,
     'sheetname': str,
@@ -10,8 +12,8 @@ SETTINGS_SCHEMA = {
     'individual_colonies': int,
     'large_colony_groups': int,
     'bootstrap_repeats': int,
-    'add_confidence_interval': bool,
+    'show_ci': bool,
     'confidence_value': float,
     'must_remove_outliers': bool,
-    'add_violin': bool
+    'show_violin': bool
 }

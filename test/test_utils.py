@@ -1,11 +1,14 @@
+"""test_utils.py - unit tests for utils.py."""
+
 import unittest
-from src.utils import get_start_end_values, get_missing_coord
+
 import numpy as np
+
+from src.utils import get_missing_coord, get_start_end_values
 
 
 class TestUtilsModule(unittest.TestCase):
     """Tests the utils.py module."""
-
     def test_get_start_end_values_two_or_more_elements_in_array(self) -> None:
         arr = np.array([1, 2])
         return_value = get_start_end_values(array=arr)
