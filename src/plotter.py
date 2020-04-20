@@ -51,7 +51,7 @@ class Plotter:
             self.plot_supporting_lines_ci(ax=ax)
             self.plot_mean_line_ci(ax=ax)
         ax.set_xlabel('log2(Colony Size)')
-        ax.set_ylabel('log2(Growth Rate variance)')
+        ax.set_ylabel('log2(Growth Rate Variance)')
 
     def plot_mean_line(self, ax: plt.Axes) -> None:
         """Plots the mean value for each bootstrapped population as a line plot."""
@@ -124,7 +124,7 @@ class Plotter:
         self.plot_distributions(ax=ax)
         self.plot_group_divisions(ax=ax)
         ax.set_title('Histogram of colony groups')
-        ax.set_xlabel('log2(Colony size)')
+        ax.set_xlabel('log2(Colony Size)')
         ax.set_ylabel('% of colonies')
 
     def plot_distributions(self, ax: plt.Axes) -> None:

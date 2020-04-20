@@ -58,13 +58,13 @@ def dynafit(data: Workbook, filename: str, sheetname: str, must_calculate_growth
     # Get scatter values
     scatter_xs = df['log2_CS_mean'].values
     scatter_ys = df['log2_GR_var'].values
-    scatter_colors = df['bins'].apply(lambda curr_bin: 'gray' if curr_bin > individual_colonies else 'red').values
+    scatter_colors = df['bins'].apply(lambda curr_bin: 'red' if curr_bin <= individual_colonies else 'gray').values
 
     # Get violin values (if user wants to do so)
     violin_ys, violin_colors = None, None
     if show_violin:
         violin_ys = [df.loc[df['bins'] == b]['log2_GR_var'].values for b in sorted(df['bins'].unique())]
-        violin_colors = ['gray' if i <= 5 else 'red' for i, _ in enumerate(xs)]
+        violin_colors = ['red' if i < individual_colonies else 'gray' for i, _ in enumerate(xs)]
 
     # Get CoDy values for CoDy plot
     cumcody_ys = get_cumulative_cody_values(xs=xs, ys=ys)
