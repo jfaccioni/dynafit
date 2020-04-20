@@ -14,8 +14,9 @@ class Plotter:
     def __init__(self, mean_xs: np.ndarray, mean_ys: np.ndarray, upper_ys: Optional[np.ndarray],
                  lower_ys: Optional[np.ndarray], scatter_xs: np.ndarray, scatter_ys: np.ndarray,
                  scatter_colors: np.ndarray, violin_ys: Optional[List[np.ndarray]], violin_colors: Optional[List[str]],
-                 hist_x: np.ndarray, hist_breakpoints: np.ndarray, hist_instances: np.ndarray, cody_xs: np.ndarray,
-                 cody_ys: np.ndarray, cody_lower_ys: Optional[np.ndarray], cody_upper_ys: Optional[np.ndarray]) -> None:
+                 hist_x: np.ndarray, hist_breakpoints: np.ndarray, hist_instances: np.ndarray, cumcody_ys: np.ndarray,
+                 cumcody_lower_ys: Optional[np.ndarray], cumcody_upper_ys: Optional[np.ndarray], endcody_ys: np.ndarray,
+                 endcody_lower_ys: Optional[np.ndarray], endcody_upper_ys: Optional[np.ndarray]) -> None:
         """Init method of Plotter class."""
         self.xs = mean_xs
         self.ys = mean_ys
@@ -29,10 +30,12 @@ class Plotter:
         self.hist_x = hist_x
         self.hist_breakpoints = hist_breakpoints
         self.hist_instances = hist_instances
-        self.cody_xs = cody_xs
-        self.cody_ys = cody_ys
-        self.cody_upper_ys = cody_upper_ys
-        self.cody_lower_ys = cody_lower_ys
+        self.cumcody_ys = cumcody_ys
+        self.cumcody_upper_ys = cumcody_upper_ys
+        self.cumcody_lower_ys = cumcody_lower_ys
+        self.endcody_ys = endcody_ys
+        self.endcody_upper_ys = endcody_upper_ys
+        self.endcody_lower_ys = endcody_lower_ys
 
     def plot_cvp_ax(self, ax: plt.Axes):
         """Calls all the functions related to plotting the CVP."""
@@ -133,15 +136,18 @@ class Plotter:
     def plot_cody_ax(self, ax: plt.Axes, xlims: Tuple[float, float]) -> None:
         """Calls all the functions related to plotting the CoDy value."""
         self.plot_hypothesis_lines(ax=ax)
-        self.plot_cody_values(ax=ax)
+        self.plot_cumcody_values(ax=ax)
+        self.plot_endcody_values(ax=ax)
         self.set_cody_limits(ax=ax, xlims=xlims)
-        if self.cody_upper_ys is not None:
-            self.plot_cody_ci_values(ax=ax)
+        if self.cumcody_upper_ys is not None:
+            self.plot_cumcody_ci_values(ax=ax)
+            self.plot_relcody_ci_values(ax=ax)
         ax.set_title('Hypothesis plot')
         ax.set_xlabel('log2(Colony Size)')
         ax.set_ylabel('Hypothesis')
         ax.set_yticks([0, 1])
         ax.set_yticklabels(['H0', 'H1'])
+        ax.legend()
 
     @staticmethod
     def plot_hypothesis_lines(ax: plt.Axes) -> None:
@@ -149,13 +155,21 @@ class Plotter:
         ax.axhline(0, color='red', linestyle='dotted', alpha=0.8)
         ax.axhline(1, color='blue', linestyle='dotted', alpha=0.8)
 
-    def plot_cody_values(self, ax: plt.Axes) -> None:
-        """Plots the CoDy values as a line plot."""
-        ax.plot(self.cody_xs, self.cody_ys, color='green')
+    def plot_cumcody_values(self, ax: plt.Axes) -> None:
+        """Plots the cumulative CoDy values as a line plot."""
+        ax.plot(self.xs, self.cumcody_ys, color='lightgreen', label='Cumulative')
 
-    def plot_cody_ci_values(self, ax: plt.Axes) -> None:
-        """Plots the CI around the CoDy values as a line plot."""
-        ax.fill_between(self.cody_xs, self.cody_upper_ys, self.cody_lower_ys, color='gray', alpha=0.5)
+    def plot_endcody_values(self, ax: plt.Axes) -> None:
+        """Plots the endpoint CoDy values as a line plot."""
+        ax.plot(self.xs, self.endcody_ys, color='darkgreen', label='Endpoint')
+
+    def plot_cumcody_ci_values(self, ax: plt.Axes) -> None:
+        """Plots the CI around the cumulative CoDy values as a line plot."""
+        ax.fill_between(self.xs, self.cumcody_upper_ys, self.cumcody_lower_ys, color='gray', alpha=0.5)
+
+    def plot_relcody_ci_values(self, ax: plt.Axes) -> None:
+        """Plots the CI around the endpoint CoDy values as a line plot."""
+        ax.fill_between(self.xs, self.endcody_upper_ys, self.endcody_lower_ys, color='gray', alpha=0.5)
 
     @staticmethod
     def set_cody_limits(ax: plt.Axes, xlims: Tuple[float, float]) -> None:

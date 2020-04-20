@@ -5,10 +5,12 @@
       <w>clonogenico</w>
       <w>codiff</w>
       <w>colsize</w>
+      <w>cumcody</w>
       <w>dataframe</w>
       <w>dfgui</w>
       <w>dtype</w>
       <w>dynafit</w>
+      <w>endcody</w>
       <w>facecolor</w>
       <w>facecolors</w>
       <w>groupname</w>
@@ -26,6 +28,7 @@
       <w>qstandarditemmodel</w>
       <w>qtableview</w>
       <w>rcodiff</w>
+      <w>relcody</w>
       <w>resizes</w>
       <w>samplesize</w>
       <w>scipy</w>

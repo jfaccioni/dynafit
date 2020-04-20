@@ -70,8 +70,8 @@ def dynafit(data: Workbook, filename: str, sheetname: str, must_calculate_growth
     max_x_value = round(max(xs), 2)
     cody_range = [i for i in range(1, 7) if i < max_x_value]
     for i in cody_range:
-        results_dict[f'CoDy {i}'] = round(calculate_cody(xs=xs, ys=ys, cody_n=i), 4)
-    results_dict[f'CoDy {max_x_value}'] = round(calculate_cody(xs=xs, ys=ys, cody_n=None), 4)
+        results_dict[f'CoDy {i}'] = round(calculate_cumcody(xs=xs, ys=ys, cody_n=i), 4)
+    results_dict[f'CoDy {max_x_value}'] = round(calculate_cumcody(xs=xs, ys=ys, cody_n=None), 4)
 
     # Get scatter values
     scatter_xs = df['log2_CS_mean'].values
@@ -85,27 +85,31 @@ def dynafit(data: Workbook, filename: str, sheetname: str, must_calculate_growth
         violin_colors = ['gray' if i <= 5 else 'red' for i, _ in enumerate(xs)]
 
     # Get CoDy values for CoDy plot
-    cody_xs, cody_ys = get_cody_values(xs=xs, ys=ys)
+    cumcody_ys = get_cumulative_cody_values(xs=xs, ys=ys)
+    endcody_ys = get_endpoint_cody_values(xs=xs, ys=ys)
 
     # Get CI values (if user wants to do so)
     upper_ys, lower_ys = None, None
-    cody_upper_ys, cody_lower_ys = None, None
+    cumcody_upper_ys, cumcody_lower_ys = None, None
+    endcody_upper_ys, endcody_lower_ys = None, None
     if add_confidence_interval:
-        upper_ys, lower_ys = get_confidence_interval_values(df=df, confidence_value=confidence_value)
-        cody_upper_ys, cody_lower_ys = get_cody_confidence_interval(xs=xs, upper_ys=upper_ys, lower_ys=lower_ys)
+        upper_ys, lower_ys = get_mean_line_confidence_interval(df=df, confidence_value=confidence_value)
+        cumcody_upper_ys, cumcody_lower_ys = get_cumcody_confidence_interval(xs=xs, upper_ys=upper_ys, lower_ys=lower_ys)
+        endcody_upper_ys, endcody_lower_ys = get_endcody_confidence_interval(xs=xs, upper_ys=upper_ys, lower_ys=lower_ys)
         # Calculate CI CoDy values and add them to results_dict
         for ys, name in zip([upper_ys, lower_ys], ['upper', 'lower']):
             for i in cody_range:
-                results_dict[f'CoDy {i} {name} CI'] = round(calculate_cody(xs=xs, ys=ys, cody_n=i), 4)
-            results_dict[f'CoDy {max_x_value} {name} CI'] = round(calculate_cody(xs=xs, ys=ys, cody_n=None), 4)
+                results_dict[f'CoDy {i} {name} CI'] = round(calculate_cumcody(xs=xs, ys=ys, cody_n=i), 4)
+            results_dict[f'CoDy {max_x_value} {name} CI'] = round(calculate_cumcody(xs=xs, ys=ys, cody_n=None), 4)
         # Get CI CoDy values for CoDy plot
 
     # Encapsulate results in the correct objects
     plot_results = Plotter(mean_xs=xs, mean_ys=ys, upper_ys=upper_ys, lower_ys=lower_ys, scatter_xs=scatter_xs,
                            scatter_ys=scatter_ys, scatter_colors=scatter_colors, violin_ys=violin_ys,
                            violin_colors=violin_colors, hist_x=hist_x, hist_breakpoints=hist_breakpoints,
-                           hist_instances=hist_instances, cody_xs=cody_xs, cody_ys=cody_ys, cody_lower_ys=cody_lower_ys,
-                           cody_upper_ys=cody_upper_ys)
+                           hist_instances=hist_instances, cumcody_ys=cumcody_ys,
+                           cumcody_lower_ys=cumcody_lower_ys, cumcody_upper_ys=cumcody_upper_ys, endcody_ys=endcody_ys,
+                           endcody_upper_ys=endcody_upper_ys, endcody_lower_ys=endcody_lower_ys)
     dataframe_results = results_to_dataframe(results_dict=results_dict, xs=xs, ys=ys)
     plot_title_info = filename, sheetname
 
@@ -216,7 +220,7 @@ def get_mean_line_arrays(df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
     return xs, ys
 
 
-def get_confidence_interval_values(df: pd.DataFrame, confidence_value: float) -> Tuple[np.ndarray, np.ndarray]:
+def get_mean_line_confidence_interval(df: pd.DataFrame, confidence_value: float) -> Tuple[np.ndarray, np.ndarray]:
     """Calculates and returns the a tuple of arrays representing the Y values of the upper and lower confidence
     interval for the bootstrapped population."""
     upper_ys = []
@@ -240,14 +244,14 @@ def get_histogram_values(df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
     return bin_breakpoints, bin_instances
 
 
-def calculate_cody(xs: np.ndarray, ys: np.ndarray, cody_n: Optional[int]) -> float:
+def calculate_cumcody(xs: np.ndarray, ys: np.ndarray, cody_n: Optional[int]) -> float:
     """Returns the area above the curve (mean green line) up to the X coordinate equivalent to the "cody_n" parameter.
     If that parameter is a None value, uses the entire range of X values instead."""
     if cody_n is not None:  # Truncate arrays so that a specific CoDy value is calculated
         xs, ys = truncate_arrays(xs=xs, ys=ys, cutoff=cody_n)
     triangle_area = calculate_triangle_area(xs=xs, ys=ys)
     area_above_curve = trapezium_integration(xs=xs, ys=ys)
-    return area_above_curve / triangle_area
+    return area_above_curve / triangle_area if triangle_area != 0 else 0.0
 
 
 def truncate_arrays(xs: np.ndarray, ys: np.ndarray, cutoff: int) -> Tuple[np.ndarray, np.ndarray]:
@@ -274,7 +278,7 @@ def calculate_triangle_area(xs: np.ndarray, ys: np.ndarray) -> float:
 def trapezium_integration(xs: np.ndarray, ys: np.ndarray) -> float:
     """Performs trapezium integration over the XY series of coordinates (mean green line), calculating the area
     above the line and below H0. Any area above H0 is calculated as negative area."""
-    integrated_area = 0
+    integrated_area = 0.0
     for i, (x, y) in enumerate(zip(xs, ys)):
         try:
             next_x = xs[i+1]
@@ -287,17 +291,45 @@ def trapezium_integration(xs: np.ndarray, ys: np.ndarray) -> float:
         integrated_area += trapezium
 
 
-def get_cody_values(xs: np.ndarray, ys:np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-    """Calculates CoDy values for all points in the mean line arrays."""
-    cody_xs = xs[1:]
-    cody_ys = np.array([calculate_cody(xs=xs, ys=ys, cody_n=x) for x in cody_xs])
-    return cody_xs, cody_ys
+def calculate_endcody(xs: np.ndarray, ys: np.ndarray, cody_n: Optional[int]) -> float:
+    """Returns the normed triangular area defined by (xs[0], ys[0]), (xs[-1], ys[0]) and (xs[-1], ys[-1])"""
+    if cody_n is not None:  # Truncate arrays so that a specific CoDy value is calculated
+        xs, ys = truncate_arrays(xs=xs, ys=ys, cutoff=cody_n)
+    triangle_area = calculate_triangle_area(xs=xs, ys=ys)
+    cody_triangle_area = calculate_cody_triangle_area(xs=xs, ys=ys)
+    return cody_triangle_area / triangle_area if triangle_area != 0 else 0.0
 
 
-def get_cody_confidence_interval(xs: np.ndarray, upper_ys: np.ndarray,
-                                 lower_ys: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-    cody_upper_ys = np.array([calculate_cody(xs=xs, ys=upper_ys, cody_n=x) for x in xs[1:]])
-    cody_lower_ys = np.array([calculate_cody(xs=xs, ys=lower_ys, cody_n=x) for x in xs[1:]])
+def calculate_cody_triangle_area(xs: np.ndarray, ys: np.ndarray) -> float:
+    """Calculates the CoDy triangle area."""
+    width = xs[-1] - xs[0]
+    height = ys[0] - ys[-1]  # SIGNED area
+    return (width * height) / 2
+
+
+def get_cumulative_cody_values(xs: np.ndarray, ys: np.ndarray) -> np.ndarray:
+    """Calculates endpoint CoDy values for all points in the mean line arrays."""
+    cody_ys = np.array([calculate_cumcody(xs=xs, ys=ys, cody_n=x) for x in xs])
+    return cody_ys
+
+
+def get_cumcody_confidence_interval(xs: np.ndarray, upper_ys: np.ndarray,
+                                    lower_ys: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    cody_upper_ys = np.array([calculate_cumcody(xs=xs, ys=upper_ys, cody_n=x) for x in xs])
+    cody_lower_ys = np.array([calculate_cumcody(xs=xs, ys=lower_ys, cody_n=x) for x in xs])
+    return cody_upper_ys, cody_lower_ys
+
+
+def get_endpoint_cody_values(xs: np.ndarray, ys: np.ndarray) -> np.ndarray:
+    """Calculates endpoint CoDy values for all points in the mean line arrays."""
+    cody_ys = np.array([calculate_endcody(xs=xs, ys=ys, cody_n=x) for x in xs])
+    return cody_ys
+
+
+def get_endcody_confidence_interval(xs: np.ndarray, upper_ys: np.ndarray,
+                                    lower_ys: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    cody_upper_ys = np.array([calculate_endcody(xs=xs, ys=upper_ys, cody_n=x) for x in xs])
+    cody_lower_ys = np.array([calculate_endcody(xs=xs, ys=lower_ys, cody_n=x) for x in xs])
     return cody_upper_ys, cody_lower_ys
 
 
