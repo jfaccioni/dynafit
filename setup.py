@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
-with open("README.md", "r") as fh:
-    long_description = fh.read()
+with open("README.md", "r") as readme:
+    long_description = readme.read()
 
 setup(
     name="dynafit",
@@ -20,4 +20,9 @@ setup(
     ],
     install_requires=['pandas', 'PySide2', 'matplotlib', 'numpy', 'openpyxl', 'seaborn', 'scipy'],
     python_requires='>=3.6',
+    entry_points={
+        'console_scripts': [
+            'dynafit=src.interface:main',
+        ],
+    },
 )
