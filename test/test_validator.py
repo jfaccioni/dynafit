@@ -19,7 +19,7 @@ vec_isinstance = np.vectorize(isinstance)
 
 class TestUtilsModule(unittest.TestCase):
     """Tests the validator.py module."""
-    test_case_path = 'test/ExcelValidator_testCase.xlsx'
+    test_case_path = 'test/test_cases/excel_validator_test_case.xlsx'
     valid_cell_strings = ['A1', 'D78', 'C14', 'AB3', 'XYZ3']
     invalid_cell_strings = ['1', 'X', 'A1A', '4C', 'ABBA0303', '  E0  ', '', 'SOME OTHER THINGS', '?', ";;;;;;"]
     valid_cell_ranges = [('A1', 'A100'), ('B2', 'B3'), ('XX100', 'XX200')]

@@ -268,8 +268,7 @@ class DynaFitGUI(QMainWindow):
         try:
             self.data = openpyxl.load_workbook(query, data_only=True)
         except BadZipFile:
-            e = CorruptedExcelFile('Cannot load input Excel file. Is it corrupted?')
-            self.raise_main_thread_error(e)
+            self.raise_main_thread_error(CorruptedExcelFile('Cannot load input Excel file. Is it corrupted?'))
         else:
             filename = os.path.basename(query)
             self.load_data_success(filename=filename)
@@ -399,22 +398,22 @@ class DynaFitGUI(QMainWindow):
         self.cody_ax.set_visible(True)
         self.histogram_ax.set_visible(True)
         original_parameters, plotter, dataframe_results = results
-        self.dataframe_results = dataframe_results
         plotter.plot_cvp_ax(ax=self.cvp_ax)
         plotter.plot_cody_ax(ax=self.cody_ax, xlims=self.cvp_ax.get_xlim())
         plotter.plot_histogram_ax(ax=self.histogram_ax)
         self.set_figure_title(filename=original_parameters['filename'], sheetname=original_parameters['sheetname'])
-        self.set_results_table()
+        self.set_results_table(dataframe_results=dataframe_results)
+        self.dataframe_results = dataframe_results
 
     def set_figure_title(self, filename: str, sheetname: str):
         """Sets the figure title based on the parameters used in the DynaFit analysis."""
         self.fig.suptitle(f'CVP - Exp: {filename}, Sheet: {sheetname}')
 
-    def set_results_table(self) -> None:
+    def set_results_table(self, dataframe_results: pd.DataFrame) -> None:
         """Sets values obtained from DynaFit analysis onto dataframe_results table."""
         self.results_table.clearContents()
-        self.results_table.setRowCount(len(self.dataframe_results))
-        for row_index, row_contents in self.dataframe_results.iterrows():
+        self.results_table.setRowCount(len(dataframe_results))
+        for row_index, row_contents in dataframe_results.iterrows():
             for column_index, value in enumerate(row_contents):
                 value = '' if self.is_empty_table_value(value) else str(value)
                 self.results_table.setItem(row_index, column_index, QTableWidgetItem(value))
@@ -493,7 +492,7 @@ class DynaFitGUI(QMainWindow):
 
     def debug(self) -> None:
         """Implemented for easier debugging."""
-        self.load_data(query='../test/InterfaceExample_TestCase.xlsx')
+        self.load_data(query='../test/interface_test_case.xlsx')
         self.CS_start_textbox.setText('A2')
         self.GR_start_textbox.setText('B2')
         self.cs_gr_button.setChecked(True)

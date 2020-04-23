@@ -2,17 +2,19 @@
 
 import unittest
 from queue import Queue
-from typing import List
-from unittest.mock import MagicMock, patch
+from typing import List, Tuple
+from unittest.mock import MagicMock, call, patch
 
+import numpy as np
 import openpyxl
+import pandas as pd
 from PySide2.QtCore import Qt, SIGNAL
 from PySide2.QtTest import QTest
-from PySide2.QtWidgets import QApplication, QMessageBox
+from PySide2.QtWidgets import QApplication, QMessageBox, QFileDialog
 from matplotlib.pyplot import Axes
 
 from src.core import dynafit
-from src.exceptions import AbortedByUser, CorruptedExcelFile
+from src.exceptions import AbortedByUser
 from src.interface import DynaFitGUI
 from src.worker import Worker
 from test.resources import SETTINGS_SCHEMA
@@ -20,8 +22,25 @@ from test.resources import SETTINGS_SCHEMA
 
 class TestInterfaceModule(unittest.TestCase):
     """Tests the interface.py module."""
-    test_case_path = './test/InterfaceExample_TestCase.xlsx'
+    test_case_path = 'test/test_cases/interface_test_case.xlsx'
     test_case_sheetnames = ['CS_GR', 'CS1_CS2']
+    corrupted_test_case_path = 'test/test_cases/corrupted_test_case.xlsx'
+    df_without_nans_before_filtering = pd.DataFrame({
+            'col1': [0.1, 0.4, 0.7],
+            'col2': [0.2, 0.5, 0.8],
+        })
+    df_without_nans_after_filtering = pd.DataFrame({
+            'col1': ['0.1', '0.4', '0.7'],
+            'col2': ['0.2', '0.5', '0.8'],
+        })
+    df_with_nans_before_filtering = pd.DataFrame({
+            'col1': ['nan', 0.4,    0.7],
+            'col2': [0.2,   np.nan, 0.8],
+        })
+    df_with_nans_after_filtering = pd.DataFrame({
+            'col1': ['', '0.4',  '0.7'],
+            'col2': ['0.2', '',  '0.8'],
+        })
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -34,36 +53,65 @@ class TestInterfaceModule(unittest.TestCase):
 
     def tearDown(self) -> None:
         """Deletes the DynaFitGUI instance after a unit test ends."""
-        del self.ui
+        self.ui.destroy()
 
     def load_example_data(self) -> None:
         """Loads the test case file as if it were loaded through the DynaFitGUI."""
         self.ui.data = openpyxl.load_workbook(self.test_case_path)
 
     @property
+    def mock_results(self) -> Tuple[MagicMock, MagicMock, MagicMock]:
+        """Returns mocked results for the DynaFit Analysis"""
+        params = MagicMock()
+        plotter = MagicMock()
+        plotter.plotting_methods = [plotter.plot_cvp_ax, plotter.plot_cody_ax, plotter.plot_histogram_ax]
+        df = MagicMock()
+        return params, plotter, df
+
+    @property
+    def mock_dataframe(self) -> MagicMock:
+        """Returns a mock dataframe for the DynaFit Analysis"""
+        return self.mock_results[-1]
+
+    @property
     def axes(self) -> List[Axes]:
         """Convenience property for accessing all Axes instances of the DynaFitGUI."""
         return [self.ui.cvp_ax, self.ui.cody_ax, self.ui.histogram_ax]
 
-    @patch('PySide2.QtWidgets.QFileDialog.getOpenFileName')
-    def test_click_load_data_button_loads_data_dialog(self, mock_file_dialog) -> None:
+    def test_click_load_data_button_opens_load_data_dialog(self) -> None:
+        QFileDialog.getOpenFileName = MagicMock(return_value=('', None))
         QTest.mouseClick(self.ui.load_data_button, Qt.LeftButton)
-        mock_file_dialog.assert_called()
+        QFileDialog.getOpenFileName.assert_called()
+
+    @patch('src.interface.DynaFitGUI.load_data')
+    def test_selecting_a_file_on_data_dialog_calls_load_data_method(self, mock_load_data) -> None:
+        QFileDialog.getOpenFileName = MagicMock(return_value=('query', None))
+        self.ui.load_data_dialog()
+        QFileDialog.getOpenFileName.assert_called()
+        mock_load_data.assert_called_with(query='query')
+
+    @patch('src.interface.DynaFitGUI.load_data')
+    def test_not_selecting_a_file_on_data_dialog_do_not_call_load_data_method(self, mock_load_data) -> None:
+        QFileDialog.getOpenFileName = MagicMock(return_value=('', None))
+        self.ui.load_data_dialog()
+        QFileDialog.getOpenFileName.assert_called()
+        mock_load_data.assert_not_called()
 
     @patch('src.interface.DynaFitGUI.load_data_success')
-    def test_load_data_calls_load_data_success(self, mock_load_data_success) -> None:
-        query = 'my query'
-        with patch('openpyxl.load_workbook'):
-            self.ui.load_data(query=query)
+    @patch('src.interface.DynaFitGUI.raise_main_thread_error')
+    def test_load_data_calls_load_data_success_when_file_is_not_corrupted(self, mock_raise_main_thread_error,
+                                                                          mock_load_data_success) -> None:
+        self.ui.load_data(query=self.test_case_path)
         mock_load_data_success.assert_called()
+        mock_raise_main_thread_error.assert_not_called()
 
     @patch('src.interface.DynaFitGUI.load_data_success')
-    def test_load_data_raises_exception_on_corrupted_excel_file(self, mock_load_data_success) -> None:
-        query = 'my query'
-        with self.assertRaises(CorruptedExcelFile):
-            with patch('openpyxl.load_workbook', side_effect=CorruptedExcelFile):
-                self.ui.load_data(query=query)
+    @patch('src.interface.DynaFitGUI.raise_main_thread_error')
+    def test_load_data_raises_exception_on_corrupted_excel_file(self, mock_raise_main_thread_error,
+                                                                mock_load_data_success) -> None:
+        self.ui.load_data(query=self.corrupted_test_case_path)
         mock_load_data_success.assert_not_called()
+        mock_raise_main_thread_error.assert_called()
 
     def test_load_data_success_changes_ui_elements(self) -> None:
         self.load_example_data()
@@ -245,7 +293,7 @@ class TestInterfaceModule(unittest.TestCase):
         self.ui.fig.suptitle('SOMETHING HERE')
         with patch('src.interface.DynaFitGUI.raise_worker_thread_error'):
             self.ui.dynafit_worker_raised_exception((Exception(), 'string'))
-        self.assertEqual(self.ui.fig._suptitle.get_text(), '')
+        self.assertEqual(self.ui.fig._suptitle.get_text(), '')  # call to private method
 
     def test_dynafit_worker_raised_exception_removes_figure_visibility(self) -> None:
         for ax in self.axes:
@@ -256,13 +304,12 @@ class TestInterfaceModule(unittest.TestCase):
             with self.subTest(ax=ax):
                 self.assertFalse(ax.get_visible())
 
-    @patch('src.interface.QTableWidget')
-    def test_dynafit_worker_raised_exception_clears_results_table(self, mock_table_clear) -> None:
-        mock_table_clear.return_value.clearContents = MagicMock()  # no idea WHY I had to do this
-        mock_table_clear.return_value.clearContents.assert_not_called()
+    def test_dynafit_worker_raised_exception_clears_results_table(self) -> None:
+        self.ui.results_table.clearContents = MagicMock()
+        self.ui.results_table.clearContents.assert_not_called()
         with patch('src.interface.DynaFitGUI.raise_worker_thread_error'):
             self.ui.dynafit_worker_raised_exception((Exception(), 'string'))
-        mock_table_clear.return_value.clearContents.assert_not_called()
+        self.ui.results_table.clearContents.assert_called()
 
     def test_dynafit_worker_raised_exception_passes_exception_to_handler_function(self) -> None:
         e = Exception()
@@ -276,6 +323,136 @@ class TestInterfaceModule(unittest.TestCase):
         mock_thread_error.assert_not_called()
         self.ui.dynafit_worker_raised_exception((AbortedByUser(), 'string'))
         mock_thread_error.assert_not_called()
+
+    def test_dynafit_worker_raised_no_exception_reenables_gui_buttons(self) -> None:
+        self.assertFalse(self.ui.to_excel_button.isEnabled())
+        self.assertFalse(self.ui.to_csv_button.isEnabled())
+        self.ui.dynafit_worker_raised_no_exceptions(results=self.mock_results)
+        self.assertTrue(self.ui.to_excel_button.isEnabled())
+        self.assertTrue(self.ui.to_csv_button.isEnabled())
+
+    def test_dynafit_worker_raised_no_exception_sets_all_axes_visible(self) -> None:
+        for ax in self.axes:
+            with self.subTest(ax=ax):
+                self.assertFalse(ax.get_visible())
+        self.ui.dynafit_worker_raised_no_exceptions(results=self.mock_results)
+        for ax in self.axes:
+            with self.subTest(ax=ax):
+                self.assertTrue(ax.get_visible())
+
+    def test_dynafit_worker_raised_no_exception_sets_dataframe_results_attribute(self) -> None:
+        results = self.mock_results
+        *_, df = results
+        self.assertIsNone(self.ui.dataframe_results)
+        self.ui.dynafit_worker_raised_no_exceptions(results=results)
+        self.assertIsNotNone(self.ui.dataframe_results)
+        self.assertIs(df, self.ui.dataframe_results)
+
+    def test_dynafit_worker_raised_no_exception_calls_plotter_methods_with_correct_axes(self) -> None:
+        results = self.mock_results
+        _, plotter, _ = results
+        for method in plotter.plotting_methods:
+            method.assert_not_called()
+        self.ui.dynafit_worker_raised_no_exceptions(results=results)
+        for method, ax in zip(plotter.plotting_methods, self.axes):
+            if ax == self.ui.cody_ax:
+                method.assert_called_once_with(ax=ax, xlims=self.ui.cvp_ax.get_xlim())
+            else:
+                method.assert_called_once_with(ax=ax)
+
+    def test_dynafit_worker_raised_no_exception_calls_sets_figure_title_with_correct_parameters(self) -> None:
+        results = self.mock_results
+        params, *_ = results
+        params.__getitem__.assert_not_called()
+        self.ui.dynafit_worker_raised_no_exceptions(results=results)
+        params.__getitem__.assert_has_calls([call('filename'), call('sheetname')], any_order=True)
+
+    @patch('src.interface.DynaFitGUI.set_results_table')
+    def test_dynafit_worker_raised_no_exception_calls_sets_results_table(self, mock_set_results_table) -> None:
+        mock_set_results_table.assert_not_called()
+        self.ui.dynafit_worker_raised_no_exceptions(results=self.mock_results)
+        mock_set_results_table.assert_called_once()
+
+    def test_set_figure_title_sets_the_figure_title(self) -> None:
+        self.assertIsNone(self.ui.fig._suptitle)
+        self.ui.set_figure_title(filename='filename', sheetname='sheetname')
+        for param in ['filename', 'sheetname']:
+            self.assertIn(param, self.ui.fig._suptitle.get_text())  # call to private method
+
+    def test_set_results_table_clears_table_contents(self) -> None:
+        self.ui.results_table.clearContents = MagicMock()
+        self.ui.results_table.clearContents.assert_not_called()
+        self.ui.set_results_table(self.mock_dataframe)
+        self.ui.results_table.clearContents.assert_called_once()
+
+    def test_set_results_table_sets_table_number_of_rows(self) -> None:
+        self.ui.results_table.setRowCount = MagicMock()
+        self.ui.results_table.setRowCount.assert_not_called()
+        self.ui.set_results_table(self.mock_dataframe)
+        self.ui.results_table.setRowCount.assert_called_once_with(len(self.mock_dataframe))
+
+    def test_set_results_table_adds_rows_to_table(self) -> None:
+        self.assertEqual(self.ui.results_table.rowCount(), 0)
+        self.ui.set_results_table(self.df_without_nans_after_filtering)
+        self.assertEqual(self.ui.results_table.rowCount(), 3)
+
+    def test_set_results_table_adds_items_to_table_and_replaces_nan_with_empty_strings(self) -> None:
+        for df_before, df_after in zip([self.df_without_nans_before_filtering, self.df_with_nans_before_filtering],
+                                       [self.df_without_nans_after_filtering, self.df_with_nans_after_filtering]):
+            self.ui.results_table.clearContents()
+            self.ui.set_results_table(df_before)
+            for row in range(self.ui.results_table.rowCount()):
+                for column in range(2):
+                    expected_value = df_after.iloc[row, column]
+                    actual_value = self.ui.results_table.item(row, column).text()
+                    with self.subTest(row=row, column=column, expected_value=expected_value, actual_value=actual_value,
+                                      df_before=df_before, df_after=df_after):
+                        self.assertEqual(expected_value, actual_value)
+
+    def test_is_empty_values_returns_true_for_okay_values(self) -> None:
+        for okay_value in [0.1, 5, 90.0009, 'this should not be converted into an empty string']:
+            with self.subTest(okay_value=okay_value):
+                self.assertFalse(self.ui.is_empty_table_value(value=okay_value))
+
+    def test_is_empty_values_returns_false_for_bad_values(self) -> None:
+        for bad_value in ['nan', np.nan]:
+            with self.subTest(okay_value=bad_value):
+                self.assertTrue(self.ui.is_empty_table_value(value=bad_value))
+
+    def test_dynafit_worker_has_finished_enables_plot_button(self) -> None:
+        self.ui.plot_button.setText('Something else')
+        self.ui.plot_button.setEnabled(False)
+        self.ui.dynafit_worker_has_finished()
+        self.assertEqual(self.ui.plot_button.text(), 'Plot CVP')
+        self.assertTrue(self.ui.plot_button.isEnabled())
+
+    def test_dynafit_worker_has_finished_hides_progress_bar_and_label(self) -> None:
+        self.ui.progress_bar.setHidden(True)
+        self.ui.progress_bar_label.setHidden(True)
+        self.ui.dynafit_worker_has_finished()
+        self.assertTrue(self.ui.progress_bar.isHidden())
+        self.assertTrue(self.ui.progress_bar_label.isHidden())
+
+    def test_dynafit_worker_has_finished_sets_progress_bar_to_zero(self) -> None:
+        self.ui.progress_bar.setValue(10)
+        self.ui.dynafit_worker_has_finished()
+        self.assertEqual(self.ui.progress_bar.value(), 0)
+
+    def test_dynafit_worker_has_finished_calls_canvas_draw_method(self) -> None:
+        self.ui.canvas.draw = MagicMock()
+        self.ui.canvas.draw.assert_not_called()
+        self.ui.dynafit_worker_has_finished()
+        self.ui.canvas.draw.assert_called()
+
+    # @patch('PySide2.QtWidgets.QFileDialog.getSaveFileName', return_value=(None, None))
+    # def test_click_to_excel_button_loads_file_save_dialog(self, mock_save_dialog) -> None:
+    #     QTest.mouseClick(self.ui.to_excel_button, Qt.LeftButton)
+    #     mock_save_dialog.assert_called()
+    #
+    # @patch('PySide2.QtWidgets.QFileDialog.getSaveFileName', return_value=(None, None))
+    # def test_click_to_csv_button_loads_file_save_dialog(self, mock_save_dialog) -> None:
+    #     QTest.mouseClick(self.ui.to_csv_button, Qt.LeftButton)
+    #     mock_save_dialog.assert_called()
 
 
 if __name__ == '__main__':
