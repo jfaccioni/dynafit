@@ -9,8 +9,8 @@ from openpyxl import Workbook
 from openpyxl.cell.cell import Cell
 from openpyxl.worksheet.worksheet import Worksheet
 
-from exceptions import (BadCellStringError, DifferentSizeError, EmptyCellError, MismatchedColumnsError,
-                        MismatchedRowsError, NoExcelFileError)
+from src.exceptions import (BadCellStringError, DifferentSizeError, EmptyCellError, MismatchedColumnsError,
+                            MismatchedRowsError, NoExcelFileError)
 
 
 class ExcelValidator:

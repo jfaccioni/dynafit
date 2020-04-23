@@ -21,14 +21,14 @@ from PySide2.QtWidgets import (QApplication, QCheckBox, QComboBox, QDoubleSpinBo
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as Canvas, NavigationToolbar2QT as Navbar
 from matplotlib.pyplot import Figure
 
-from core import dynafit
-from exceptions import AbortedByUser, CorruptedExcelFile
-from plotter import Plotter
-from worker import Worker
+from src.core import dynafit
+from src.exceptions import AbortedByUser, CorruptedExcelFile
+from src.plotter import Plotter
+from src.worker import Worker
 
 # ## GLOBALS ##
 # Set debugging flag
-DEBUG = False
+DEBUG = True
 
 
 class DynaFitGUI(QMainWindow):
