@@ -1,3 +1,10 @@
+# 0.2.0
+- Added new hypothesis plot - closeness to H0/H1
+- Added scrollbar to plot figure
+- Remodelled results table
+- Small fixes/changes to the figures
+- Wrote tests (not fully covered)
+
 # 0.1.1
 - Changed line colors of the CVP (red = horizontal, blue = diagonal)
 - Added decimals to XY mean line values

@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 
-from src.utils import get_missing_coord, get_start_end_values
+from utils import get_missing_coord, get_start_end_values
 
 
 class Plotter:
