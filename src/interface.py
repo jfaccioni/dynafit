@@ -527,10 +527,22 @@ class DynaFitGUI(QMainWindow):
             qApp.clipboard().setText(stream.getvalue())
 
 
-if __name__ == '__main__':
+def main() -> None:
+    """Entry point for dynafit package."""
     app = QApplication()
     dfgui = DynaFitGUI()
-    if DEBUG:
-        dfgui.debug()
     dfgui.show()
     sys.exit(app.exec_())
+
+
+def main_debug() -> None:
+    """Executes GUI in debug mode."""
+    app = QApplication()
+    dfgui = DynaFitGUI()
+    dfgui.debug()
+    dfgui.show()
+    sys.exit(app.exec_())
+
+
+if __name__ == '__main__':
+    main() if not DEBUG else main_debug()
