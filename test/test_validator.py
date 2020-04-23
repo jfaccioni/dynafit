@@ -10,8 +10,8 @@ import openpyxl
 import pandas as pd
 from openpyxl.worksheet.worksheet import Worksheet
 
-from exceptions import (BadCellStringError, DifferentSizeError, EmptyCellError, MismatchedColumnsError,
-                        MismatchedRowsError, NoExcelFileError)
+from src.exceptions import (BadCellStringError, DifferentSizeError, EmptyCellError, MismatchedColumnsError,
+                            MismatchedRowsError, NoExcelFileError)
 from src.validator import ExcelValidator
 
 vec_isinstance = np.vectorize(isinstance)
