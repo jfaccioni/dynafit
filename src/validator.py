@@ -84,7 +84,7 @@ class ExcelValidator:
             return False
         # All letters in cell_str come before all numbers. Source:
         # https://stackoverflow.com/questions/60758670/
-        return bool(re.match("[A-Z]+[1-9]\d*$", cell_str))
+        return bool(re.match("[A-Z]+[1-9]\d*$", cell_str))  # noqa
 
     def validate_cell_range(self, start: str, end: str) -> None:
         """Validates range of cells (from start cell to end cell) in an Excel spreadsheet. Raises an appropriate

@@ -8,9 +8,9 @@ from unittest.mock import MagicMock, call, patch
 import numpy as np
 import openpyxl
 import pandas as pd
-from PySide2.QtCore import Qt, SIGNAL
-from PySide2.QtTest import QTest
-from PySide2.QtWidgets import QApplication, QMessageBox, QFileDialog
+from PySide2.QtCore import Qt, SIGNAL  # noqa
+from PySide2.QtTest import QTest  # noqa
+from PySide2.QtWidgets import QApplication, QMessageBox, QFileDialog  # noqa
 from matplotlib.pyplot import Axes
 
 from src.core import dynafit

@@ -6,7 +6,7 @@ from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 import pandas as pd
-from PySide2.QtCore import Signal
+from PySide2.QtCore import Signal  # noqa
 from openpyxl import Workbook
 from scipy.stats import sem, t
 

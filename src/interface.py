@@ -12,12 +12,12 @@ from zipfile import BadZipFile
 
 import openpyxl
 import pandas as pd
-from PySide2.QtCore import QEvent, QThreadPool, Qt, Slot
-from PySide2.QtGui import QKeySequence
-from PySide2.QtWidgets import (QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFrame, QGridLayout,
-                               QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow, QMessageBox, QProgressBar,
-                               QPushButton, QRadioButton, QScrollArea, QSpinBox, QTableWidget, QTableWidgetItem,
-                               QVBoxLayout, QWidget, qApp)
+from PySide2.QtCore import QEvent, QThreadPool, Qt, Slot  # noqa
+from PySide2.QtGui import QKeySequence  # noqa
+from PySide2.QtWidgets import (QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFrame,  # noqa
+                               QGridLayout, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow,  # noqa
+                               QMessageBox, QProgressBar, QPushButton, QRadioButton, QScrollArea, QSpinBox,  # noqa
+                               QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget, qApp)  # noqa
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as Canvas, NavigationToolbar2QT as Navbar
 from matplotlib.pyplot import Figure
 
@@ -252,7 +252,7 @@ class DynaFitGUI(QMainWindow):
         columns.setStretch(1, 10)
         self.showMaximized()
 
-    def resizeEvent(self, e):
+    def resizeEvent(self, e):  # noqa
         """Overloaded method that resizes the QScrollArea properly."""
         self.canvas.resize(self.scroll_area.width(), self.canvas.height())
         super().resizeEvent(e)
@@ -492,7 +492,7 @@ class DynaFitGUI(QMainWindow):
 
     def debug(self) -> None:
         """Implemented for easier debugging."""
-        self.load_data(query='../test/interface_test_case.xlsx')
+        self.load_data(query='./test/test_cases/interface_test_case.xlsx')
         self.CS_start_textbox.setText('A2')
         self.GR_start_textbox.setText('B2')
         self.cs_gr_button.setChecked(True)
@@ -501,7 +501,7 @@ class DynaFitGUI(QMainWindow):
     # The following methods allows the result table to be copied to the clipboard. Source:
     # https://stackoverflow.com/questions/40469607/
 
-    def eventFilter(self, source: QWidget, event: QEvent) -> bool:
+    def eventFilter(self, source: QWidget, event: QEvent) -> bool:  # noqa
         """Event filter for dataframe_results table."""
         if event.type() == QEvent.KeyPress and event.matches(QKeySequence.Copy):
             self.copy_selection()

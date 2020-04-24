@@ -4,7 +4,7 @@ from typing import List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
-import seaborn as sns
+from seaborn import distplot
 
 from src.utils import get_missing_coord, get_start_end_values
 
@@ -129,7 +129,7 @@ class Plotter:
 
     def plot_distributions(self, ax: plt.Axes) -> None:
         """Plots the histogram."""
-        sns.distplot(np.log2(self.hist_x), bins=np.log2(self.hist_breakpoints), ax=ax)
+        distplot(np.log2(self.hist_x), bins=np.log2(self.hist_breakpoints), ax=ax)
 
     def plot_group_divisions(self, ax: plt.Axes) -> None:
         """Plots the group divisions in the histogram as vertical lines."""

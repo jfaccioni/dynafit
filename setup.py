@@ -1,3 +1,5 @@
+"""setup.py - setup file for DynaFit package."""
+
 from setuptools import setup, find_packages
 
 with open("README.md", "r") as readme:
@@ -18,8 +20,14 @@ setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    install_requires=['pandas', 'PySide2', 'matplotlib', 'numpy', 'openpyxl', 'seaborn', 'scipy'],
-    python_requires='>=3.6',
+    install_requires=['pandas >= 1.0',
+                      'PySide2 >= 5.13',
+                      'matplotlib >= 3.2',
+                      'numpy >= 1.18',
+                      'openpyxl >= 3.0',
+                      'seaborn >= 0.10',
+                      'scipy >= 1.4'],
+    python_requires='>=3.8',
     entry_points={
         'console_scripts': [
             'dynafit=src.interface:main',

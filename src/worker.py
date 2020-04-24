@@ -3,7 +3,7 @@
 import traceback
 from typing import Callable
 
-from PySide2.QtCore import QObject, QRunnable, Signal, Slot
+from PySide2.QtCore import QObject, QRunnable, Signal, Slot  # noqa
 
 
 class Worker(QRunnable):

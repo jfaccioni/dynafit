@@ -48,7 +48,7 @@ class TestUtilsModule(unittest.TestCase):
 
     def test_ws_attribute_raises_exception_when_no_data_was_loaded(self) -> None:
         with self.assertRaises(NoExcelFileError):
-            self.ev.ws
+            self.ev.ws  # noqa
 
     def test_validation_routine_passes_with_valid_cell_ranges(self) -> None:
         for start, end in self.valid_cell_ranges:
