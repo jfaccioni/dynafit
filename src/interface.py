@@ -208,7 +208,11 @@ class DynaFitGUI(QMainWindow):
         self.progress_bar = QProgressBar(self, minimum=0, maximum=100)
         self.progress_bar.setHidden(True)
         plot_grid.addWidget(self.progress_bar, 0, 4, 1, 1)
-        # CoDy table of values
+        # Add section above to left column
+        left_column.addLayout(plot_grid)
+
+        # --Results table--
+        # Region where the results from the DynaFit analysis are shown
         self.results_table = QTableWidget(self, rowCount=0, columnCount=8)
         colnames = ['Parameter', 'Value', 'Log2(Colony Size)', 'Log2(Variance)', 'Closeness to H0 (cumulative)',
                     'Closeness to H1 (cumulative)', 'Closeness to H0 (endpoint)', 'Closeness to H1 (endpoint)']
@@ -216,9 +220,8 @@ class DynaFitGUI(QMainWindow):
             self.results_table.setHorizontalHeaderItem(index, QTableWidgetItem(column_name))
             self.results_table.horizontalHeader().setSectionResizeMode(index, QHeaderView.ResizeToContents)
         self.results_table.installEventFilter(self)
-        plot_grid.addWidget(self.results_table, 1, 0, 5, 5)
-        # Add section above to left column
-        left_column.addLayout(plot_grid)
+        # Add widget above to left column
+        left_column.addWidget(self.results_table)
 
         # ### RIGHT COLUMN
         # --Scroll Area--
@@ -250,6 +253,7 @@ class DynaFitGUI(QMainWindow):
 
         # Set column stretch so that only plot gets rescaled with GUI
         columns.setStretch(1, 10)
+        # Maximizes GUI on startup
         self.showMaximized()
 
     def resizeEvent(self, e):  # noqa
