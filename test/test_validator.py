@@ -17,7 +17,7 @@ from src.validator import ExcelValidator
 vec_isinstance = np.vectorize(isinstance)
 
 
-class TestUtilsModule(unittest.TestCase):
+class TestValidatorModule(unittest.TestCase):
     """Tests the validator.py module."""
     test_case_path = 'test/test_cases/excel_validator_test_case.xlsx'
     valid_cell_strings = ['A1', 'D78', 'C14', 'AB3', 'XYZ3']
