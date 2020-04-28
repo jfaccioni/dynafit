@@ -1,1 +1,1 @@
-"""src/__init__.py - init file for src folder."""
+"""src.__init__.py - init file for src folder."""

@@ -3,7 +3,7 @@
 import traceback
 from typing import Callable
 
-from PySide2.QtCore import QObject, QRunnable, Signal, Slot  # noqa
+from PySide2.QtCore import QObject, QRunnable, Signal, Slot
 
 
 class Worker(QRunnable):
@@ -13,7 +13,7 @@ class Worker(QRunnable):
         self.func = func
         self.args = args
         self.kwargs = kwargs
-        self.signals = WorkerSignals()
+        self.signals = WorkerSignals(self)
         self.add_callbacks_to_kwargs()
 
     def add_callbacks_to_kwargs(self):
@@ -21,18 +21,18 @@ class Worker(QRunnable):
         self.kwargs['progress_callback'] = self.signals.progress
         self.kwargs['warning_callback'] = self.signals.warning
 
-    @Slot()
+    @Slot()  # noqa
     def run(self) -> None:
         """Runs the Worker thread."""
         try:
             return_value = self.func(*self.args, **self.kwargs)
         except Exception as error:
             trace = traceback.format_exc()
-            self.signals.error.emit((error, trace))
+            self.signals.error.emit((error, trace))  # noqa
         else:
-            self.signals.success.emit(return_value)
+            self.signals.success.emit(return_value)  # noqa
         finally:
-            self.signals.finished.emit()
+            self.signals.finished.emit()  # noqa
 
 
 class WorkerSignals(QObject):

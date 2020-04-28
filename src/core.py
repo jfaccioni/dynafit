@@ -6,9 +6,9 @@ from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 import pandas as pd
-from PySide2.QtCore import Signal  # noqa
+from PySide2.QtCore import Signal
 from openpyxl import Workbook
-from scipy.stats import sem, t
+from scipy.stats import t
 
 from src.exceptions import AbortedByUser, TooManyGroupsError
 from src.plotter import Plotter
@@ -75,7 +75,7 @@ def dynafit(workbook: Workbook, filename: str, sheetname: str, must_calculate_gr
     cumcody_upper_ys, cumcody_lower_ys = None, None
     endcody_upper_ys, endcody_lower_ys = None, None
     if show_ci:
-        upper_ys, lower_ys = get_mean_line_confidence_interval(df=df, confidence_value=confidence_value)
+        upper_ys, lower_ys = get_mean_line_confidence_interval(df=df, alpha=confidence_value)
         cumcody_upper_ys, cumcody_lower_ys = get_cumcody_confidence_interval(xs=xs, upper_ys=upper_ys,
                                                                              lower_ys=lower_ys)
         endcody_upper_ys, endcody_lower_ys = get_endcody_confidence_interval(xs=xs, upper_ys=upper_ys,
@@ -106,9 +106,9 @@ def dynafit(workbook: Workbook, filename: str, sheetname: str, must_calculate_gr
 def preprocess_data(df: pd.DataFrame, must_calculate_growth_rate: bool, time_delta: float,
                     must_remove_outliers: bool) -> pd.DataFrame:
     """Calls downstream methods related to data preprocessing, based on boolean flags."""
+    df = filter_colony_sizes_less_than_one(df=df)
     if must_calculate_growth_rate:
         df = calculate_growth_rate(df=df, time_delta=time_delta)
-    df = filter_colony_sizes_less_than_one(df=df)
     if must_remove_outliers:
         df = filter_outliers(df=df)
     return df
@@ -151,7 +151,6 @@ def add_bins(df: pd.DataFrame, individual_colonies: int, bins: int) -> pd.DataFr
     except ValueError:
         mes = (f'Could not divide the population of large colonies into {bins} unique groups. ' 
                'Please reduce the number of large colony groups and try again.')
-
         raise TooManyGroupsError(mes)
     return df.assign(bins=pd.concat([single_bins, multiple_bins]))
 
@@ -174,7 +173,7 @@ def sample_size_warning_answer(warning_info: Optional[Dict[int, int]], callback:
         return False
     answer = Queue()
     warning = answer, warning_info
-    callback.emit(warning)
+    callback.emit(warning)  # noqa
     return answer.get(block=True)
 
 
@@ -197,7 +196,7 @@ def bootstrap_data(df: pd.DataFrame, repeats: int, progress_callback: Signal) ->
 def emit_bootstrap_progress(current: int, total: int, callback: Signal):
     """Emits a integer back to the GUI thread, in order to update the progress bar."""
     progress = int(round(100 * current / total))
-    callback.emit(progress)
+    callback.emit(progress)  # noqa
 
 
 def add_log_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -212,7 +211,7 @@ def get_mean_line_arrays(df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
     return xs, ys
 
 
-def get_mean_line_confidence_interval(df: pd.DataFrame, confidence_value: float) -> Tuple[np.ndarray, np.ndarray]:
+def get_mean_line_confidence_interval(df: pd.DataFrame, alpha: float) -> Tuple[np.ndarray, np.ndarray]:
     """Calculates and returns the a tuple of arrays representing the Y values of the upper and lower confidence
     interval for the bootstrapped population."""
     upper_ys = []
@@ -221,10 +220,11 @@ def get_mean_line_confidence_interval(df: pd.DataFrame, confidence_value: float)
         variance = bin_values['log2_GR_var']
         n = len(variance)
         m = variance.mean()
-        std_err = sem(variance)
-        h = std_err * t.ppf((1 + confidence_value) / 2, n - 1)
+        se = variance.std()
+        h = se * t.ppf((1 + alpha) / 2, n - 1)
         upper_ys.append(m + h)
         lower_ys.append(m - h)
+
     return np.array(upper_ys), np.array(lower_ys)
 
 

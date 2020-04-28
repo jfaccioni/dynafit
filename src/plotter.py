@@ -17,7 +17,7 @@ class Plotter:
                  upper_ys: Optional[np.ndarray], lower_ys: Optional[np.ndarray], cumcody_upper_ys: Optional[np.ndarray],
                  cumcody_lower_ys: Optional[np.ndarray], endcody_upper_ys: Optional[np.ndarray],
                  endcody_lower_ys: Optional[np.ndarray], hist_x: np.ndarray, hist_breakpoints: np.ndarray,
-                 hist_instances: np.ndarray, ) -> None:
+                 hist_instances: np.ndarray) -> None:
         """Init method of Plotter class."""
         self.xs = xs
         self.ys = ys

@@ -8,9 +8,9 @@ from unittest.mock import MagicMock, call, patch
 import numpy as np
 import openpyxl
 import pandas as pd
-from PySide2.QtCore import Qt, SIGNAL  # noqa
-from PySide2.QtTest import QTest  # noqa
-from PySide2.QtWidgets import QApplication, QFileDialog, QMessageBox, QTableWidgetItem  # noqa
+from PySide2.QtCore import Qt, SIGNAL
+from PySide2.QtTest import QTest
+from PySide2.QtWidgets import QApplication, QFileDialog, QMessageBox, QTableWidgetItem
 from matplotlib.pyplot import Axes
 
 from src.core import dynafit
@@ -81,8 +81,8 @@ class TestInterfaceModule(unittest.TestCase):
     def set_results_table_names(self) -> None:
         """Adds some text to the results table so that the excel/csv buttons are able to read a placeholder text."""
         self.ui.results_table.setRowCount(2)
-        self.ui.results_table.setItem(0, 1, QTableWidgetItem('filename'))
-        self.ui.results_table.setItem(1, 1, QTableWidgetItem('sheetname'))
+        self.ui.results_table.setItem(0, 1, QTableWidgetItem('filename'))  # noqa
+        self.ui.results_table.setItem(1, 1, QTableWidgetItem('sheetname'))  # noqa
 
     def enable_export_buttons(self) -> None:
         """Enable buttons related to exporting the data. Simulates a finished DynaFit analysis."""
@@ -91,21 +91,21 @@ class TestInterfaceModule(unittest.TestCase):
 
     def test_click_load_data_button_opens_load_data_dialog(self) -> None:
         QFileDialog.getOpenFileName = MagicMock(return_value=('', None))
-        QTest.mouseClick(self.ui.load_data_button, Qt.LeftButton)
-        QFileDialog.getOpenFileName.assert_called()
+        QTest.mouseClick(self.ui.load_data_button, Qt.LeftButton)  # noqa
+        QFileDialog.getOpenFileName.assert_called()  # noqa
 
     @patch('src.interface.DynaFitGUI.load_data')
     def test_selecting_a_file_on_data_dialog_calls_load_data_method(self, mock_load_data) -> None:
         QFileDialog.getOpenFileName = MagicMock(return_value=('query', None))
         self.ui.load_data_dialog()
-        QFileDialog.getOpenFileName.assert_called()
+        QFileDialog.getOpenFileName.assert_called()  # noqa
         mock_load_data.assert_called_with(query='query')
 
     @patch('src.interface.DynaFitGUI.load_data')
     def test_not_selecting_a_file_on_data_dialog_do_not_call_load_data_method(self, mock_load_data) -> None:
         QFileDialog.getOpenFileName = MagicMock(return_value=('', None))
         self.ui.load_data_dialog()
-        QFileDialog.getOpenFileName.assert_called()
+        QFileDialog.getOpenFileName.assert_called()  # noqa
         mock_load_data.assert_not_called()
 
     @patch('src.interface.DynaFitGUI.load_data_success')
@@ -140,14 +140,14 @@ class TestInterfaceModule(unittest.TestCase):
             self.assertEqual(self.ui.input_sheetname_combobox.currentText(), name)
 
     def test_cs1_cs2_button_clicked_changes_ui_elements(self) -> None:
-        QTest.mouseClick(self.ui.cs1_cs2_button, Qt.LeftButton)
+        QTest.mouseClick(self.ui.cs1_cs2_button, Qt.LeftButton)  # noqa
         self.assertTrue(self.ui.time_interval_label.isEnabled())
         self.assertTrue(self.ui.time_interval_spinbox.isEnabled())
         self.assertEqual(self.ui.CS_label.text(), 'Initial colony size column')
         self.assertEqual(self.ui.GR_label.text(), 'Final colony size column')
 
     def test_cs_cs_button_clicked_changes_ui_elements(self) -> None:
-        QTest.mouseClick(self.ui.cs_gr_button, Qt.LeftButton)
+        QTest.mouseClick(self.ui.cs_gr_button, Qt.LeftButton)  # noqa
         self.assertFalse(self.ui.time_interval_label.isEnabled())
         self.assertFalse(self.ui.time_interval_spinbox.isEnabled())
         self.assertEqual(self.ui.CS_label.text(), 'Colony size column')
@@ -155,9 +155,9 @@ class TestInterfaceModule(unittest.TestCase):
 
     def test_conf_int_checkbox_checked_changes_ui_elements(self) -> None:
         self.assertFalse(self.ui.conf_int_spinbox.isEnabled())
-        QTest.mouseClick(self.ui.conf_int_checkbox, Qt.LeftButton)
+        QTest.mouseClick(self.ui.conf_int_checkbox, Qt.LeftButton)  # noqa
         self.assertTrue(self.ui.conf_int_spinbox.isEnabled())
-        QTest.mouseClick(self.ui.conf_int_checkbox, Qt.LeftButton)
+        QTest.mouseClick(self.ui.conf_int_checkbox, Qt.LeftButton)  # noqa
         self.assertFalse(self.ui.conf_int_spinbox.isEnabled())
 
     @patch('src.interface.DynaFitGUI.dynafit_setup_before_running')
@@ -472,7 +472,7 @@ class TestInterfaceModule(unittest.TestCase):
     def test_click_to_excel_button_calls_save_excel_dialog(self, mock_save_excel_dialog) -> None:
         self.enable_export_buttons()
         mock_save_excel_dialog.assert_not_called()
-        QTest.mouseClick(self.ui.to_excel_button, Qt.LeftButton)
+        QTest.mouseClick(self.ui.to_excel_button, Qt.LeftButton)  # noqa
         mock_save_excel_dialog.assert_called()
 
     @patch('src.interface.DynaFitGUI.save_excel')
@@ -501,7 +501,7 @@ class TestInterfaceModule(unittest.TestCase):
     def test_click_to_csv_button_calls_save_csv_dialog(self, mock_save_csv_dialog) -> None:
         self.enable_export_buttons()
         mock_save_csv_dialog.assert_not_called()
-        QTest.mouseClick(self.ui.to_csv_button, Qt.LeftButton)
+        QTest.mouseClick(self.ui.to_csv_button, Qt.LeftButton)  # noqa
         mock_save_csv_dialog.assert_called()
 
     @patch('src.interface.DynaFitGUI.save_csv')
