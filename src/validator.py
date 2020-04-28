@@ -19,6 +19,8 @@ class ExcelValidator:
     def __init__(self, workbook: Optional[Workbook], sheetname: str, cs_start_cell: str, cs_end_cell: str,
                  gr_start_cell: str, gr_end_cell: str) -> None:
         """Init method of ExcelValidator class."""
+        if workbook is None:
+            raise NoExcelFileError('Please select an Excel spreadsheet as the input file')
         self.wb = workbook
         self.sheetname = sheetname
         # Add character '1' column strings (typing 'A' implies starting from cell '1A'
@@ -33,10 +35,7 @@ class ExcelValidator:
     @property
     def ws(self) -> Worksheet:
         """Returns the worksheet associated to the Excel workbook and sheetname defined in the __init__ method."""
-        try:
-            return self.wb[self.sheetname]
-        except TypeError:  # self.wb is None
-            raise NoExcelFileError('Please select an Excel spreadsheet as the input file')
+        return self.wb[self.sheetname]
 
     def convert_column_to_first_cell(self, cell_str: str) -> str:
         """Converts and returns an Excel column accessor such as "A" to a first row cell accessor ("A1").

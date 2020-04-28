@@ -19,7 +19,7 @@ from src.validator import ExcelValidator
 WARNING_LEVEL = 20
 
 
-def dynafit(data: Workbook, filename: str, sheetname: str, must_calculate_growth_rate: bool, time_delta: float,
+def dynafit(workbook: Workbook, filename: str, sheetname: str, must_calculate_growth_rate: bool, time_delta: float,
             cs_start_cell: str, cs_end_cell: str, gr_start_cell: str, gr_end_cell: str, individual_colonies: int,
             large_colony_groups: int, bootstrap_repeats: int, show_ci: bool, confidence_value: float,
             must_remove_outliers: bool, show_violin: bool, **kwargs) -> Tuple[Dict[str, Any], Plotter, pd.DataFrame]:
@@ -29,7 +29,7 @@ def dynafit(data: Workbook, filename: str, sheetname: str, must_calculate_growth
     warning_callback = kwargs.get('warning_callback')
 
     # Validate input data and return it
-    df = ExcelValidator(workbook=data, sheetname=sheetname, cs_start_cell=cs_start_cell, cs_end_cell=cs_end_cell,
+    df = ExcelValidator(workbook=workbook, sheetname=sheetname, cs_start_cell=cs_start_cell, cs_end_cell=cs_end_cell,
                         gr_start_cell=gr_start_cell, gr_end_cell=gr_end_cell).get_data()
 
     # Preprocess data
