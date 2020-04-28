@@ -29,8 +29,8 @@ class TestUtilsModule(unittest.TestCase):
 
     def setUp(self) -> None:
         """Sets up each unit test by refreshing the ExcelValidator instance."""
-        self.ev = ExcelValidator(workbook=None, sheetname='sheetname', cs_start_cell='A1', cs_end_cell='A100',
-                                 gr_start_cell='B1', gr_end_cell='B100')
+        self.ev = ExcelValidator(workbook=openpyxl.Workbook(), sheetname='sheetname', cs_start_cell='A1',
+                                 cs_end_cell='A10', gr_start_cell='B1', gr_end_cell='B10')
 
     def load_test_case(self, sheetname: str):
         """Loads the test case file as if it were passed in the ExcelValidator's __init__ method."""
@@ -42,13 +42,14 @@ class TestUtilsModule(unittest.TestCase):
         """Deletes the ExcelValidator instance after a unit test ends."""
         del self.ev
 
+    def test_none_value_as_workbook_raises_exception_when_no_data_was_loaded(self) -> None:
+        with self.assertRaises(NoExcelFileError):
+            ExcelValidator(workbook=None, sheetname='sheetname', cs_start_cell='A1', cs_end_cell='A10',
+                           gr_start_cell='B1', gr_end_cell='B10')
+
     def test_ws_attribute_returns_excel_worksheet(self) -> None:
         self.load_test_case(sheetname='okay_spreadsheet')
         self.assertIsInstance(self.ev.ws, Worksheet)
-
-    def test_ws_attribute_raises_exception_when_no_data_was_loaded(self) -> None:
-        with self.assertRaises(NoExcelFileError):
-            self.ev.ws  # noqa
 
     def test_validation_routine_passes_with_valid_cell_ranges(self) -> None:
         for start, end in self.valid_cell_ranges:

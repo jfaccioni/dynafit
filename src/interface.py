@@ -5,7 +5,6 @@ import sys
 import traceback
 from csv import writer
 from io import StringIO
-from math import isnan
 from queue import Queue
 from typing import Any, Dict, Tuple
 from zipfile import BadZipFile
@@ -40,9 +39,9 @@ class DynaFitGUI(QMainWindow):
         # ### MAIN SETUP
 
         # --Application attributes--
-        self.threadpool = QThreadPool()
-        self.data = None
-        self.dataframe_results = None
+        self.threadpool = QThreadPool(self)
+        self.workbook = None
+        self.results_dataframe = None
 
         # --Central widget--
         self.frame = QWidget(self)
@@ -226,7 +225,7 @@ class DynaFitGUI(QMainWindow):
         # ### RIGHT COLUMN
         # --Scroll Area--
         # Box with a vertical scroll bar which contains the canvas
-        self.scroll_area = QScrollArea()
+        self.scroll_area = QScrollArea(self)
         self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.scroll_area.horizontalScrollBar().setEnabled(False)
         # --Plot canvas--
@@ -256,11 +255,6 @@ class DynaFitGUI(QMainWindow):
         # Maximizes GUI on startup
         self.showMaximized()
 
-    def resizeEvent(self, e):  # noqa
-        """Overloaded method that resizes the QScrollArea properly."""
-        self.canvas.resize(self.scroll_area.width(), self.canvas.height())
-        super().resizeEvent(e)
-
     def load_data_dialog(self) -> None:
         """Opens a file dialog, prompting the user to select the data (Excel spreadsheet) to load."""
         query, _ = QFileDialog.getOpenFileName(self, 'Select input file', '', 'Excel Spreadsheet (*.xlsx)')
@@ -270,7 +264,7 @@ class DynaFitGUI(QMainWindow):
     def load_data(self, query: str) -> None:
         """Loads input data into memory, storing it in the GUI's self.data attribute."""
         try:
-            self.data = openpyxl.load_workbook(query, data_only=True)
+            self.workbook = openpyxl.load_workbook(query, data_only=True)
         except BadZipFile:
             self.raise_main_thread_error(CorruptedExcelFile('Cannot load input Excel file. Is it corrupted?'))
         else:
@@ -282,7 +276,7 @@ class DynaFitGUI(QMainWindow):
         self.input_filename_label.setText(filename)
         self.input_sheetname_combobox.setEnabled(True)
         self.input_sheetname_combobox.clear()
-        self.input_sheetname_combobox.addItems(self.data.sheetnames)
+        self.input_sheetname_combobox.addItems(self.workbook.sheetnames)
 
     def cs1_cs2_button_clicked(self) -> None:
         """Changes interface widgets when the user clicks on the CS1 and CS2 radio button."""
@@ -315,6 +309,28 @@ class DynaFitGUI(QMainWindow):
         else:
             self.dynafit_worker_run(dynafit_settings=dynafit_settings)
 
+    def get_dynafit_settings(self) -> Dict[str, Any]:
+        """Bundles the information and parameters selected by the user into a single dictionary and then returns it.
+        Does not perform any kind of validation (this is delegated to the validator.py module)."""
+        return {
+            'workbook': self.workbook,
+            'filename': os.path.splitext(self.input_filename_label.text())[0],
+            'sheetname': self.input_sheetname_combobox.currentText(),
+            'must_calculate_growth_rate': self.cs1_cs2_button.isChecked(),
+            'time_delta': self.time_interval_spinbox.value(),
+            'cs_start_cell': self.CS_start_textbox.text(),
+            'cs_end_cell': self.CS_end_textbox.text(),
+            'gr_start_cell': self.GR_start_textbox.text(),
+            'gr_end_cell': self.GR_end_textbox.text(),
+            'individual_colonies': self.max_individual_cs_spinbox.value(),
+            'large_colony_groups': self.large_colony_groups_spinbox.value(),
+            'bootstrap_repeats': self.bootstrap_repeats_spinbox.value(),
+            'show_ci': self.conf_int_checkbox.isChecked(),
+            'confidence_value': self.conf_int_spinbox.value(),
+            'must_remove_outliers': self.remove_outliers_checkbox.isChecked(),
+            'show_violin': self.add_violins_checkbox.isChecked(),
+        }
+
     def dynafit_worker_run(self, dynafit_settings: Dict[str, Any]) -> None:
         """Runs Worker thread through QThreadPool after instantiating and connecting it."""
         worker = Worker(func=dynafit, **dynafit_settings)
@@ -339,28 +355,6 @@ class DynaFitGUI(QMainWindow):
         self.plot_button.setDisabled(True)
         self.to_excel_button.setDisabled(True)
         self.to_csv_button.setDisabled(True)
-
-    def get_dynafit_settings(self) -> Dict[str, Any]:
-        """Bundles the information and parameters selected by the user into a single dictionary and then returns it.
-        Does not perform any kind of validation (this is delegated to the validator.py module)."""
-        return {
-            'data': self.data,
-            'filename': os.path.splitext(self.input_filename_label.text())[0],
-            'sheetname': self.input_sheetname_combobox.currentText(),
-            'must_calculate_growth_rate': self.cs1_cs2_button.isChecked(),
-            'time_delta': self.time_interval_spinbox.value(),
-            'cs_start_cell': self.CS_start_textbox.text(),
-            'cs_end_cell': self.CS_end_textbox.text(),
-            'gr_start_cell': self.GR_start_textbox.text(),
-            'gr_end_cell': self.GR_end_textbox.text(),
-            'individual_colonies': self.max_individual_cs_spinbox.value(),
-            'large_colony_groups': self.large_colony_groups_spinbox.value(),
-            'bootstrap_repeats': self.bootstrap_repeats_spinbox.value(),
-            'show_ci': self.conf_int_checkbox.isChecked(),
-            'confidence_value': self.conf_int_spinbox.value(),
-            'must_remove_outliers': self.remove_outliers_checkbox.isChecked(),
-            'show_violin': self.add_violins_checkbox.isChecked(),
-        }
 
     @Slot(int)
     def dynafit_worker_progress_updated(self, number: int):
@@ -391,6 +385,7 @@ class DynaFitGUI(QMainWindow):
         self.cody_ax.set_visible(False)
         self.histogram_ax.set_visible(False)
         self.results_table.clearContents()
+        self.results_dataframe = None
         if not isinstance(exception_tuple[0], AbortedByUser):
             self.raise_worker_thread_error(exception_tuple)
 
@@ -401,33 +396,32 @@ class DynaFitGUI(QMainWindow):
         self.cvp_ax.set_visible(True)
         self.cody_ax.set_visible(True)
         self.histogram_ax.set_visible(True)
-        original_parameters, plotter, dataframe_results = results
+        params, plotter, df = results
         plotter.plot_cvp_ax(ax=self.cvp_ax)
         plotter.plot_cody_ax(ax=self.cody_ax, xlims=self.cvp_ax.get_xlim())
         plotter.plot_histogram_ax(ax=self.histogram_ax)
-        self.set_figure_title(filename=original_parameters['filename'], sheetname=original_parameters['sheetname'])
-        self.set_results_table(dataframe_results=dataframe_results)
-        self.dataframe_results = dataframe_results
+        self.set_figure_title(filename=params['filename'], sheetname=params['sheetname'])
+        self.set_results_table(df=df)
+        self.results_dataframe = self.remove_nan_strings(df=df)
 
     def set_figure_title(self, filename: str, sheetname: str):
         """Sets the figure title based on the parameters used in the DynaFit analysis."""
         self.fig.suptitle(f'CVP - Exp: {filename}, Sheet: {sheetname}')
 
-    def set_results_table(self, dataframe_results: pd.DataFrame) -> None:
+    def set_results_table(self, df: pd.DataFrame) -> None:
         """Sets values obtained from DynaFit analysis onto dataframe_results table."""
         self.results_table.clearContents()
-        self.results_table.setRowCount(len(dataframe_results))
-        for row_index, row_contents in dataframe_results.iterrows():
+        self.results_table.setRowCount(len(df))
+        string_df = self.remove_nan_strings(df.astype(str))
+        for row_index, row_contents in string_df.iterrows():
             for column_index, value in enumerate(row_contents):
-                value = '' if self.is_empty_table_value(value) else str(value)
                 self.results_table.setItem(row_index, column_index, QTableWidgetItem(value))
 
     @staticmethod
-    def is_empty_table_value(value):
-        """Returns whether the value passed in should be represented as an empty cell in the results table."""
-        if isinstance(value, float) and isnan(value):
-            return True
-        return value == 'nan'
+    def remove_nan_strings(df: pd.DataFrame) -> pd.DataFrame:
+        """Returns the same DataFrame stored in the self.results_dataframe attribute, but with the strings 'nan'
+        replaced by empty strings."""
+        return df.replace({'nan': ''}, regex=True)
 
     def dynafit_worker_has_finished(self) -> None:
         """Called when DynaFit analysis finishes running (regardless of errors). Restores label on the plot
@@ -441,39 +435,31 @@ class DynaFitGUI(QMainWindow):
 
     def save_excel_dialog(self) -> None:
         """Opens a file dialog, prompting the user to select the name/location for the Excel export of the results."""
-        if self.dataframe_results is None:
-            e = ValueError('No dataframe_results yet. Please plot the CVP first.')
-            self.raise_main_thread_error(e)
-        else:
-            placeholder = f'{self.results_table.item(0, 1).text()}_{self.results_table.item(1, 1).text()}.xlsx'
-            query, _ = QFileDialog.getSaveFileName(self, 'Select file to save dataframe_results', placeholder,
-                                                   'Excel Spreadsheet (*.xlsx)')
-            if query:
-                self.save_excel(path=query, placeholder=placeholder)
+        placeholder = f'{self.results_table.item(0, 1).text()}_{self.results_table.item(1, 1).text()}.xlsx'
+        query, _ = QFileDialog.getSaveFileName(self, 'Select file to save dataframe_results', placeholder,
+                                               'Excel Spreadsheet (*.xlsx)')
+        if query:
+            self.save_excel(path=query, sheet_name=placeholder[:-5])
 
-    def save_excel(self, path: str, placeholder: str) -> None:
+    def save_excel(self, path: str, sheet_name: str) -> None:
         """Saves the DynaFit dataframe_results to the given path as an Excel spreadsheet."""
         if not path.endswith('.xlsx'):
             path += '.xlsx'
-        self.dataframe_results.to_excel(path, index=None, sheet_name=placeholder)
+        self.results_dataframe.to_excel(path, index=False, sheet_name=sheet_name)
 
     def save_csv_dialog(self) -> None:
         """Opens a file dialog, prompting the user to select the name/location for the csv export of the results."""
-        if self.dataframe_results is None:
-            e = ValueError('No dataframe_results yet. Please plot the CVP first.')
-            self.raise_main_thread_error(e)
-        else:
-            placeholder = f'{self.results_table.item(0, 1).text()}_{self.results_table.item(1, 1).text()}.csv'
-            query, _ = QFileDialog.getSaveFileName(self, 'Select file to save dataframe_results', placeholder,
-                                                   'Comma-separated values (*.csv)')
-            if query:
-                self.save_csv(path=query)
+        placeholder = f'{self.results_table.item(0, 1).text()}_{self.results_table.item(1, 1).text()}.csv'
+        query, _ = QFileDialog.getSaveFileName(self, 'Select file to save dataframe_results', placeholder,
+                                               'Comma-separated values (*.csv)')
+        if query:
+            self.save_csv(path=query)
 
     def save_csv(self, path: str) -> None:
         """Saves the DynaFit dataframe_results to the given path as a csv file."""
         if not path.endswith('.csv'):
             path += '.csv'
-        self.dataframe_results.to_csv(path, index=None)
+        self.results_dataframe.to_csv(path, index=False)
 
     def raise_main_thread_error(self, error: Exception) -> None:
         """Generic function for catching errors in the main GUI thread and re-raising them as properly formatted
@@ -501,6 +487,11 @@ class DynaFitGUI(QMainWindow):
         self.GR_start_textbox.setText('B2')
         self.cs_gr_button.setChecked(True)
         self.cs_gr_button_clicked()
+
+    def resizeEvent(self, e):  # noqa
+        """Overloaded method that resizes the QScrollArea properly."""
+        self.canvas.resize(self.scroll_area.width(), self.canvas.height())
+        super().resizeEvent(e)
 
     # The following methods allows the result table to be copied to the clipboard. Source:
     # https://stackoverflow.com/questions/40469607/
