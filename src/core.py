@@ -12,7 +12,7 @@ from scipy.stats import t
 
 from src.exceptions import AbortedByUser, TooManyGroupsError
 from src.plotter import Plotter
-from src.utils import truncate_arrays, calculate_triangle_area, trapezium_integration
+from src.utils import truncate_arrays, calculate_triangle_area, trapezium_integration, get_missing_coordinate, calculate_triangle_area_with_missing_coordinate
 from src.validator import ExcelValidator
 
 # Value from which to throw a warning of low N
@@ -86,14 +86,19 @@ def dynafit(workbook: Workbook, filename: str, sheetname: str, must_calculate_gr
         'bootstrapping repeats': bootstrap_repeats
     }
     dataframe_results = results_to_dataframe(original_parameters=original_parameters, xs=xs, ys=ys,
-                                             cumulative_hyp_ys=cumulative_hyp_ys, endpoint_hyp_ys=endpoint_hyp_ys)
+                                             cumulative_hyp_ys=cumulative_hyp_ys, endpoint_hyp_ys=endpoint_hyp_ys,
+                                             show_ci=show_ci, upper_ys=upper_ys, lower_ys=lower_ys,
+                                             cumulative_hyp_upper_ys=cumulative_hyp_upper_ys,
+                                             cumulative_hyp_lower_ys=cumulative_hyp_lower_ys,
+                                             endpoint_hyp_upper_ys=endpoint_hyp_upper_ys,
+                                             endpoint_hyp_lower_ys=endpoint_hyp_lower_ys)
     # Encapsulates data for plots
     plot_results = Plotter(xs=xs, ys=ys, scatter_xs=scatter_xs, scatter_ys=scatter_ys, scatter_colors=scatter_colors,
                            show_violin=show_violin, violin_ys=violin_ys, violin_colors=violin_colors,
                            cumulative_hyp_ys=cumulative_hyp_ys, endpoint_hyp_ys=endpoint_hyp_ys, show_ci=show_ci,
                            upper_ys=upper_ys, lower_ys=lower_ys, cumulative_hyp_upper_ys=cumulative_hyp_upper_ys,
-                           cumulative_hyp_lower_ys=cumulative_hyp_upper_ys, endpoint_hyp_lower_ys=endpoint_hyp_lower_ys,
-                           endpoint_hyp_upper_ys=endpoint_hyp_upper_ys, hist_x=hist_x,
+                           cumulative_hyp_lower_ys=cumulative_hyp_lower_ys, endpoint_hyp_upper_ys=endpoint_hyp_upper_ys,
+                           endpoint_hyp_lower_ys=endpoint_hyp_lower_ys, hist_x=hist_x,
                            hist_breakpoints=hist_breakpoints, hist_instances=hist_instances)
 
     # Return results
@@ -239,6 +244,42 @@ def get_element_color(element: float, cutoff: float):
     return 'red' if element <= cutoff else 'gray'
 
 
+def get_cumulative_hypothesis_values(xs: np.ndarray, ys: np.ndarray) -> np.ndarray:
+    """Calculates cumulative hypothesis values for all points in the mean line arrays."""
+    # hypothesis_ys = np.array([calculate_cumulative_hypothesis_distance(xs=xs, ys=ys, x_cutoff=x) for x in xs])
+    xs_h0 = np.array([xs[0] for _ in xs])
+    xs_h1 = np.array([get_missing_coordinate(x1=xs[0], y1=ys[0], x2=x, angular_coefficient=-1.0) for x in xs])
+    hypothesis_ys = (xs_h0 - xs) / (xs_h0 - xs_h1)
+    return hypothesis_ys
+
+
+def calculate_cumulative_hypothesis_distance(xs: np.ndarray, ys: np.ndarray, x_cutoff: Optional[int]) -> float:
+    """Returns the area above the curve (mean green line) up to the X coordinate equivalent to the "x_cutoff" parameter.
+    If that parameter is a None value, uses the entire range of X values instead."""
+    if x_cutoff is not None:
+        # Truncate arrays so that a hypothesis distance up to a certain X coordinate is calculated
+        xs, ys = truncate_arrays(xs=xs, ys=ys, x_cutoff=x_cutoff)
+    triangle_area = calculate_triangle_area_with_missing_coordinate(xs=xs, ys=ys)
+    area_above_curve = trapezium_integration(xs=xs, ys=ys)
+    return area_above_curve / triangle_area if triangle_area != 0 else 0.0
+
+
+def get_endpoint_hypothesis_values(xs: np.ndarray, ys: np.ndarray) -> np.ndarray:
+    """Calculates endpoint hypothesis values for all points in the mean line arrays."""
+    hypothesis_ys = np.array([calculate_endpoint_hypothesis_distance(xs=xs, ys=ys, x_cutoff=x) for x in xs])
+    return hypothesis_ys
+
+
+def calculate_endpoint_hypothesis_distance(xs: np.ndarray, ys: np.ndarray, x_cutoff: Optional[int]) -> float:
+    """Returns the normed triangular area defined by (xs[0], ys[0]), (xs[-1], ys[0]) and (xs[-1], ys[-1])"""
+    if x_cutoff is not None:
+        # Truncate arrays so that a hypothesis distance up to a certain X coordinate is calculated
+        xs, ys = truncate_arrays(xs=xs, ys=ys, x_cutoff=x_cutoff)
+    triangle_area = calculate_triangle_area_with_missing_coordinate(xs=xs, ys=ys)
+    hypothesis_triangle_area = calculate_triangle_area(xs=xs, ys=ys)
+    return hypothesis_triangle_area / triangle_area if triangle_area != 0 else 0.0
+
+
 def get_mean_line_ci(df: pd.DataFrame, confidence_value: float) -> Tuple[np.ndarray, np.ndarray]:
     """Calculates and returns the a tuple of arrays representing the Y values of the upper and lower confidence
     interval for the bootstrapped population."""
@@ -263,22 +304,6 @@ def calculate_bootstrap_ci_from_t_distribution(data_series: pd.Series, alpha: fl
     return mean + h, mean - h
 
 
-def get_cumulative_hypothesis_values(xs: np.ndarray, ys: np.ndarray) -> np.ndarray:
-    """Calculates cumulative hypothesis values for all points in the mean line arrays."""
-    hypothesis_ys = np.array([calculate_cumulative_hypothesis_distance(xs=xs, ys=ys, x_cutoff=x) for x in xs])
-    return hypothesis_ys
-
-
-def calculate_cumulative_hypothesis_distance(xs: np.ndarray, ys: np.ndarray, x_cutoff: Optional[int]) -> float:
-    """Returns the area above the curve (mean green line) up to the X coordinate equivalent to the "x_cutoff" parameter.
-    If that parameter is a None value, uses the entire range of X values instead."""
-    if x_cutoff is not None:  # Truncate arrays so that a hypothesis distance up to a certain X coordinate is calculated
-        xs, ys = truncate_arrays(xs=xs, ys=ys, x_cutoff=x_cutoff)
-    triangle_area = calculate_triangle_area(xs=xs, ys=ys)
-    area_above_curve = trapezium_integration(xs=xs, ys=ys)
-    return area_above_curve / triangle_area if triangle_area != 0 else 0.0
-
-
 def get_cumulative_hypothesis_ci(xs: np.ndarray, upper_ys: np.ndarray,
                                  lower_ys: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """Calculates the confidence interval values for the cumulative hypothesis plot."""
@@ -287,28 +312,6 @@ def get_cumulative_hypothesis_ci(xs: np.ndarray, upper_ys: np.ndarray,
     hypothesis_lower_ys = np.array([calculate_cumulative_hypothesis_distance(xs=xs, ys=lower_ys, x_cutoff=x)
                                     for x in xs])
     return hypothesis_upper_ys, hypothesis_lower_ys
-
-
-def get_endpoint_hypothesis_values(xs: np.ndarray, ys: np.ndarray) -> np.ndarray:
-    """Calculates endpoint hypothesis values for all points in the mean line arrays."""
-    hypothesis_ys = np.array([calculate_endpoint_hypothesis_distance(xs=xs, ys=ys, x_cutoff=x) for x in xs])
-    return hypothesis_ys
-
-
-def calculate_endpoint_hypothesis_distance(xs: np.ndarray, ys: np.ndarray, x_cutoff: Optional[int]) -> float:
-    """Returns the normed triangular area defined by (xs[0], ys[0]), (xs[-1], ys[0]) and (xs[-1], ys[-1])"""
-    if x_cutoff is not None:  # Truncate arrays so that a hypothesis distance up to a certain X coordinate is calculated
-        xs, ys = truncate_arrays(xs=xs, ys=ys, x_cutoff=x_cutoff)
-    triangle_area = calculate_triangle_area(xs=xs, ys=ys)
-    hypothesis_triangle_area = calculate_endpoint_hypothesis_triangle_area(xs=xs, ys=ys)
-    return hypothesis_triangle_area / triangle_area if triangle_area != 0 else 0.0
-
-
-def calculate_endpoint_hypothesis_triangle_area(xs: np.ndarray, ys: np.ndarray) -> float:
-    """Calculates the endpoint hypothesis triangle area."""
-    width = xs[-1] - xs[0]
-    height = ys[0] - ys[-1]  # SIGNED area
-    return (width * height) / 2
 
 
 def get_endpoint_hypothesis_ci(xs: np.ndarray, upper_ys: np.ndarray,
@@ -320,7 +323,11 @@ def get_endpoint_hypothesis_ci(xs: np.ndarray, upper_ys: np.ndarray,
 
 
 def results_to_dataframe(original_parameters: Dict[str, Any], xs: np.ndarray, ys: np.ndarray,
-                         cumulative_hyp_ys: np.ndarray, endpoint_hyp_ys: np.ndarray) -> pd.DataFrame:
+                         cumulative_hyp_ys: np.ndarray, endpoint_hyp_ys: np.ndarray, show_ci: bool,
+                         upper_ys: Optional[np.ndarray], lower_ys: Optional[np.ndarray],
+                         cumulative_hyp_upper_ys: Optional[np.ndarray], cumulative_hyp_lower_ys: Optional[np.ndarray],
+                         endpoint_hyp_lower_ys: Optional[np.ndarray],
+                         endpoint_hyp_upper_ys: Optional[np.ndarray]) -> pd.DataFrame:
     """Saves DynaFit dataframe_results as a pandas DataFrame (used for Excel/csv export)."""
     largest_seq_size = max(len(original_parameters), len(xs))
     params_padding = largest_seq_size - len(original_parameters)
@@ -330,13 +337,42 @@ def results_to_dataframe(original_parameters: Dict[str, Any], xs: np.ndarray, ys
         'Value': np.concatenate([list(original_parameters.values()), np.full(params_padding, np.nan)]),
         'Log2(Colony Size)': np.concatenate([xs, np.full(array_padding, np.nan)]).round(2),
         'Log2(Variance)': np.concatenate([ys, np.full(array_padding, np.nan)]).round(2),
+        'Log2(Variance) upper CI': np.concatenate([upper_ys, np.full(array_padding, np.nan)]).round(2)
+        if show_ci else None,
+        'Log2(Variance) lower CI': np.concatenate([lower_ys, np.full(array_padding, np.nan)]).round(2)
+        if show_ci else None,
         'Closeness to H0 (cumulative)': np.concatenate([np.abs(cumulative_hyp_ys),
                                                         np.full(array_padding, np.nan)]).round(2),
+        'Closeness to H0 (cumulative) upper CI': np.concatenate([np.abs(cumulative_hyp_upper_ys),
+                                                                 np.full(array_padding, np.nan)]).round(2)
+        if show_ci else None,
+        'Closeness to H0 (cumulative) lower CI': np.concatenate([np.abs(cumulative_hyp_lower_ys),
+                                                                 np.full(array_padding, np.nan)]).round(2)
+        if show_ci else None,
         'Closeness to H1 (cumulative)': np.concatenate([np.abs(cumulative_hyp_ys - 1),
                                                         np.full(array_padding, np.nan)]).round(2),
+        'Closeness to H1 (cumulative) upper CI': np.concatenate([np.abs(cumulative_hyp_upper_ys - 1),
+                                                                 np.full(array_padding, np.nan)]).round(2)
+        if show_ci else None,
+        'Closeness to H1 (cumulative) lower CI': np.concatenate([np.abs(cumulative_hyp_lower_ys - 1),
+                                                                 np.full(array_padding, np.nan)]).round(2)
+        if show_ci else None,
         'Closeness to H0 (endpoint)': np.concatenate([np.abs(endpoint_hyp_ys),
                                                       np.full(array_padding, np.nan)]).round(2),
+        'Closeness to H0 (endpoint) upper CI': np.concatenate([np.abs(endpoint_hyp_upper_ys),
+                                                               np.full(array_padding, np.nan)]).round(2)
+        if show_ci else None,
+        'Closeness to H0 (endpoint) lower CI': np.concatenate([np.abs(endpoint_hyp_lower_ys),
+                                                               np.full(array_padding, np.nan)]).round(2)
+        if show_ci else None,
         'Closeness to H1 (endpoint)': np.concatenate([np.abs(endpoint_hyp_ys - 1),
                                                       np.full(array_padding, np.nan)]).round(2),
+        'Closeness to H1 (endpoint) upper CI': np.concatenate([np.abs(endpoint_hyp_upper_ys - 1),
+                                                               np.full(array_padding, np.nan)]).round(2)
+        if show_ci else None,
+        'Closeness to H1 (endpoint) lower CI': np.concatenate([np.abs(endpoint_hyp_lower_ys - 1),
+                                                               np.full(array_padding, np.nan)]).round(2)
+        if show_ci else None,
     }
-    return pd.DataFrame(data)
+    filtered_data = {k: v for k, v in data.items() if v is not None}
+    return pd.DataFrame(filtered_data)
