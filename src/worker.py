@@ -13,7 +13,7 @@ class Worker(QRunnable):
         self.func = func
         self.args = args
         self.kwargs = kwargs
-        self.signals = WorkerSignals(self)
+        self.signals = WorkerSignals()  # noqa
         self.add_callbacks_to_kwargs()
 
     def add_callbacks_to_kwargs(self):

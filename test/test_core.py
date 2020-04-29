@@ -204,6 +204,19 @@ class TestCoreModule(unittest.TestCase):
             return_value = sample_size_warning_answer(warning_info={3: 1}, callback=MagicMock())
         self.assertTrue(return_value)
 
+    def test_get_histogram_values_gets_expected_values_properly(self) -> None:
+        test_case_df = pd.DataFrame({
+            'CS': [1, 2, 3, 4, 5, 6],
+            'bins': [1, 1, 2, 2, 3, 3]
+        })
+        expected_xs = np.array([1, 2, 3, 4, 5, 6])  # same values as test_case_df['CS']
+        expected_breakpoints = np.array([2, 4, 6])  # max value inside each bin
+        expected_instances = np.array([2, 2, 2])  # number of values inside each bin
+        actual_values = get_histogram_values(df=test_case_df)
+        for expected, actual in zip([expected_xs, expected_breakpoints, expected_instances], actual_values):
+            with self.subTest(expected=expected, actual=actual):
+                np.testing.assert_allclose(expected, actual)
+
     def test_bootstrap_data(self) -> None:
         """This code should test the bootstrap_data function, but it is pretty large. I'll leave it for later."""
 
@@ -238,7 +251,7 @@ class TestCoreModule(unittest.TestCase):
             actual_values = actual_df[column_name].values
             np.testing.assert_allclose(expected_values, actual_values)
 
-    def test_get_mean_line_arrays_returns_mean_values_for_each_bin(self):
+    def test_get_mean_line_arrays_returns_mean_values_for_each_bin(self) -> None:
         test_case_df = pd.DataFrame({
             'log2_CS_mean': [1, 2, 3, 4, 5, 6],
             'log2_GR_var': [10, 20, 30, 40, 50, 60],
@@ -250,6 +263,60 @@ class TestCoreModule(unittest.TestCase):
         for expected_array, actual_array in zip([expected_xs, expected_ys], [actual_xs, actual_ys]):
             with self.subTest(expected_array=expected_array, actual_array=actual_array):
                 np.testing.assert_allclose(expected_array, actual_array)
+
+    def test_get_get_scatter_values_returns_appropriate_scatter_values(self) -> None:
+        test_case_df = pd.DataFrame({
+            'log2_CS_mean': [1, 2, 3, 4, 5, 6],
+            'log2_GR_var': [10, 20, 30, 40, 50, 60],
+            'bins': [1, 1, 2, 2, 3, 3]
+        })
+        expected_xs = test_case_df['log2_CS_mean'].values
+        expected_ys = test_case_df['log2_GR_var'].values
+        expected_colors = np.array((['red'] * 4) + (['gray'] * 2))
+        actual_values = get_scatter_values(df=test_case_df, individual_colonies=2)
+        for expected, actual in zip([expected_xs, expected_ys, expected_colors], actual_values):
+            with self.subTest(expected=expected, actual=actual):
+                np.testing.assert_array_equal(expected, actual)
+
+    def test_get_get_violin_values_returns_appropriate_violin_values(self) -> None:
+        test_case_df = pd.DataFrame({
+            'log2_GR_var': [10, 20, 30, 40, 50, 60],
+            'bins': [1, 1, 2, 2, 3, 3]
+        })
+        expected_ys = [np.array([10, 20]), np.array([30, 40]), np.array([50, 60])]
+        expected_colors = np.array((['red'] * 2) + (['gray'] * 1))
+        actual_values = get_violin_values(df=test_case_df, individual_colonies=2)
+        for expected, actual in zip([expected_ys, expected_colors], actual_values):
+            with self.subTest(expected=expected, actual=actual):
+                np.testing.assert_array_equal(expected, actual)
+
+    def test_get_element_color_returns_either_red_or_gray_depending_on_element_and_cutoff(self) -> None:
+        cutoff = 5
+        self.assertEqual(get_element_color(element=1, cutoff=cutoff), 'red')
+        self.assertEqual(get_element_color(element=5, cutoff=cutoff), 'red')
+        self.assertEqual(get_element_color(element=10, cutoff=cutoff), 'gray')
+
+    def test_get_mean_line_confidence_interval_returns_two_numpy_arrays_with_one_element_for_each_bin(self) -> None:
+        test_case_df = pd.DataFrame({
+            'log2_GR_var': [10, 20, 30, 40, 50, 60],
+            'bins': [1, 1, 2, 2, 3, 3]
+        })
+        upp, low = get_mean_line_ci(df=test_case_df, confidence_value=0.95)
+        number_of_bins = len(test_case_df.bins.unique())
+        for array in (upp, low):
+            with self.subTest(array=array):
+                self.assertIsInstance(array, np.ndarray)
+                self.assertEqual(len(array), number_of_bins)
+
+    def test_calculate_bootstrap_ci_from_t_distribution_calculates_ci_properly(self) -> None:
+        np.random.seed(42)  # set RNG for test reproducibility
+        a = np.random.normal(size=500)
+        expected_upper = a.mean() + a.std() * 1.96
+        expected_lower = a.mean() - a.std() * 1.96
+        actual_upper, actual_lower = calculate_bootstrap_ci_from_t_distribution(data_series=pd.Series(a), alpha=0.05)
+        self.assertAlmostEqual(expected_upper, actual_upper, 1)
+        self.assertAlmostEqual(expected_lower, actual_lower, 1)
+        np.random.seed()  # noqa
 
 
 if __name__ == '__main__':

@@ -2,7 +2,7 @@
 
 from itertools import count
 from queue import Queue
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, List
 
 import numpy as np
 import pandas as pd
@@ -12,7 +12,7 @@ from scipy.stats import t
 
 from src.exceptions import AbortedByUser, TooManyGroupsError
 from src.plotter import Plotter
-from src.utils import get_missing_coord, get_start_end_values
+from src.utils import truncate_arrays, calculate_triangle_area, trapezium_integration
 from src.validator import ExcelValidator
 
 # Value from which to throw a warning of low N
@@ -45,8 +45,7 @@ def dynafit(workbook: Workbook, filename: str, sheetname: str, must_calculate_gr
         raise AbortedByUser("User decided to stop DynaFit analysis.")
 
     # Get histogram values
-    hist_x = df['CS']
-    hist_breakpoints, hist_instances = get_histogram_values(df=df)
+    hist_x, hist_breakpoints, hist_instances = get_histogram_values(df=df)
 
     # Perform DynaFit bootstrap
     df = bootstrap_data(df=df, repeats=bootstrap_repeats, progress_callback=progress_callback)
@@ -56,30 +55,27 @@ def dynafit(workbook: Workbook, filename: str, sheetname: str, must_calculate_gr
     xs, ys = get_mean_line_arrays(df=df)
 
     # Get scatter values
-    scatter_xs = df['log2_CS_mean'].values
-    scatter_ys = df['log2_GR_var'].values
-    scatter_colors = df['bins'].apply(lambda curr_bin: 'red' if curr_bin <= individual_colonies else 'gray').values
+    scatter_xs, scatter_ys, scatter_colors = get_scatter_values(df=df, individual_colonies=individual_colonies)
 
     # Get violin values (if user wants to do so)
     violin_ys, violin_colors = None, None
     if show_violin:
-        violin_ys = [df.loc[df['bins'] == b]['log2_GR_var'].values for b in sorted(df['bins'].unique())]
-        violin_colors = ['red' if i < individual_colonies else 'gray' for i, _ in enumerate(xs)]
+        violin_ys, violin_colors = get_violin_values(df=df, individual_colonies=individual_colonies)
 
-    # Get CoDy values for CoDy plot
-    cumcody_ys = get_cumulative_cody_values(xs=xs, ys=ys)
-    endcody_ys = get_endpoint_cody_values(xs=xs, ys=ys)
+    # Get hypothesis values for hypothesis plot
+    cumulative_hyp_ys = get_cumulative_hypothesis_values(xs=xs, ys=ys)
+    endpoint_hyp_ys = get_endpoint_hypothesis_values(xs=xs, ys=ys)
 
     # Get CI values (if user wants to do so)
     upper_ys, lower_ys = None, None
-    cumcody_upper_ys, cumcody_lower_ys = None, None
-    endcody_upper_ys, endcody_lower_ys = None, None
+    cumulative_hyp_upper_ys, cumulative_hyp_lower_ys = None, None
+    endpoint_hyp_upper_ys, endpoint_hyp_lower_ys = None, None
     if show_ci:
-        upper_ys, lower_ys = get_mean_line_confidence_interval(df=df, alpha=confidence_value)
-        cumcody_upper_ys, cumcody_lower_ys = get_cumcody_confidence_interval(xs=xs, upper_ys=upper_ys,
-                                                                             lower_ys=lower_ys)
-        endcody_upper_ys, endcody_lower_ys = get_endcody_confidence_interval(xs=xs, upper_ys=upper_ys,
-                                                                             lower_ys=lower_ys)
+        upper_ys, lower_ys = get_mean_line_ci(df=df, confidence_value=confidence_value)
+        cumulative_hyp_upper_ys, cumulative_hyp_lower_ys = get_cumulative_hypothesis_ci(xs=xs, upper_ys=upper_ys,
+                                                                                        lower_ys=lower_ys)
+        endpoint_hyp_upper_ys, endpoint_hyp_lower_ys = get_endpoint_hypothesis_ci(xs=xs, upper_ys=upper_ys,
+                                                                                  lower_ys=lower_ys)
 
     # Store parameters used for DynaFit analysis
     original_parameters = {
@@ -90,13 +86,14 @@ def dynafit(workbook: Workbook, filename: str, sheetname: str, must_calculate_gr
         'bootstrapping repeats': bootstrap_repeats
     }
     dataframe_results = results_to_dataframe(original_parameters=original_parameters, xs=xs, ys=ys,
-                                             cumcody_ys=cumcody_ys, endcody_ys=endcody_ys)
+                                             cumulative_hyp_ys=cumulative_hyp_ys, endpoint_hyp_ys=endpoint_hyp_ys)
     # Encapsulates data for plots
     plot_results = Plotter(xs=xs, ys=ys, scatter_xs=scatter_xs, scatter_ys=scatter_ys, scatter_colors=scatter_colors,
                            show_violin=show_violin, violin_ys=violin_ys, violin_colors=violin_colors,
-                           cumcody_ys=cumcody_ys, endcody_ys=endcody_ys, show_ci=show_ci, upper_ys=upper_ys,
-                           lower_ys=lower_ys, cumcody_upper_ys=cumcody_upper_ys, cumcody_lower_ys=cumcody_lower_ys,
-                           endcody_lower_ys=endcody_lower_ys, endcody_upper_ys=endcody_upper_ys,  hist_x=hist_x,
+                           cumulative_hyp_ys=cumulative_hyp_ys, endpoint_hyp_ys=endpoint_hyp_ys, show_ci=show_ci,
+                           upper_ys=upper_ys, lower_ys=lower_ys, cumulative_hyp_upper_ys=cumulative_hyp_upper_ys,
+                           cumulative_hyp_lower_ys=cumulative_hyp_upper_ys, endpoint_hyp_lower_ys=endpoint_hyp_lower_ys,
+                           endpoint_hyp_upper_ys=endpoint_hyp_upper_ys, hist_x=hist_x,
                            hist_breakpoints=hist_breakpoints, hist_instances=hist_instances)
 
     # Return results
@@ -177,6 +174,15 @@ def sample_size_warning_answer(warning_info: Optional[Dict[int, int]], callback:
     return answer.get(block=True)
 
 
+def get_histogram_values(df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Returns values for the histogram of the colony size, indicating the group sizes made by the binning process."""
+    hist_xs = df['CS']
+    grouped_data = df.groupby('bins')
+    hist_breakpoints = grouped_data.max()['CS'].values
+    hist_instances = grouped_data.count()['CS'].values
+    return hist_xs, hist_breakpoints, hist_instances
+
+
 def bootstrap_data(df: pd.DataFrame, repeats: int, progress_callback: Signal) -> pd.DataFrame:
     """Performs bootstrapping. Each bin is sampled N times (N="repeats" parameter)."""
     total_progress = repeats * len(df['bins'].unique())
@@ -211,124 +217,110 @@ def get_mean_line_arrays(df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
     return xs, ys
 
 
-def get_mean_line_confidence_interval(df: pd.DataFrame, alpha: float) -> Tuple[np.ndarray, np.ndarray]:
+def get_scatter_values(df: pd.DataFrame, individual_colonies: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Returns a tuple of numpy arrays representing the X, Y and color values of the bootstrap scatter."""
+    scatter_xs = df['log2_CS_mean'].values
+    scatter_ys = df['log2_GR_var'].values
+    scatter_colors = df['bins'].apply(get_element_color, cutoff=individual_colonies).values
+    return scatter_xs, scatter_ys, scatter_colors
+
+
+def get_violin_values(df: pd.DataFrame, individual_colonies: int) -> Tuple[List[np.ndarray], np.ndarray]:
+    """Returns a List of numpy arrays representing the values that serve as the base for a violin, and a secondary
+    numpy array of violin colors."""
+    unique_bins = df['bins'].unique()
+    violin_ys = [df.loc[df['bins'] == b]['log2_GR_var'].values for b in unique_bins]
+    violin_colors = np.array([get_element_color(b, cutoff=individual_colonies) for b in unique_bins])
+    return violin_ys, violin_colors
+
+
+def get_element_color(element: float, cutoff: float):
+    """Returns whether a given plot element should be red or gray, based on it being above or below a cutoff."""
+    return 'red' if element <= cutoff else 'gray'
+
+
+def get_mean_line_ci(df: pd.DataFrame, confidence_value: float) -> Tuple[np.ndarray, np.ndarray]:
     """Calculates and returns the a tuple of arrays representing the Y values of the upper and lower confidence
     interval for the bootstrapped population."""
     upper_ys = []
     lower_ys = []
+    alpha = 1 - confidence_value
     for bin_number, bin_values in df.groupby('bins'):
-        variance = bin_values['log2_GR_var']
-        n = len(variance)
-        m = variance.mean()
-        se = variance.std()
-        h = se * t.ppf((1 + alpha) / 2, n - 1)
-        upper_ys.append(m + h)
-        lower_ys.append(m - h)
-
+        upper, lower = calculate_bootstrap_ci_from_t_distribution(data_series=bin_values['log2_GR_var'], alpha=alpha)
+        upper_ys.append(upper)
+        lower_ys.append(lower)
     return np.array(upper_ys), np.array(lower_ys)
 
 
-def get_histogram_values(df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
-    """Returns values for the histogram of the colony size, indicating the group sizes made by the binning process."""
-    grouped_data = df.groupby('bins')
-    bin_breakpoints = grouped_data.max()['CS']
-    bin_instances = grouped_data.count()['CS'].values
-    return bin_breakpoints, bin_instances
+def calculate_bootstrap_ci_from_t_distribution(data_series: pd.Series, alpha: float) -> Tuple[float, float]:
+    """Returns the CI upper and lower bounds from a series of data, using a t distribution."""
+    degrees_of_freedom = len(data_series) - 1
+    mean = data_series.mean()
+    # IMPORTANT: the bootstrap distribution's SD is already an estimation of the sample's SEM.
+    # This is why we use SD here.
+    standard_error = data_series.std()
+    h = standard_error * t.ppf(1 - (alpha / 2), degrees_of_freedom)
+    return mean + h, mean - h
 
 
-def calculate_cumcody(xs: np.ndarray, ys: np.ndarray, cody_n: Optional[int]) -> float:
-    """Returns the area above the curve (mean green line) up to the X coordinate equivalent to the "cody_n" parameter.
+def get_cumulative_hypothesis_values(xs: np.ndarray, ys: np.ndarray) -> np.ndarray:
+    """Calculates cumulative hypothesis values for all points in the mean line arrays."""
+    hypothesis_ys = np.array([calculate_cumulative_hypothesis_distance(xs=xs, ys=ys, x_cutoff=x) for x in xs])
+    return hypothesis_ys
+
+
+def calculate_cumulative_hypothesis_distance(xs: np.ndarray, ys: np.ndarray, x_cutoff: Optional[int]) -> float:
+    """Returns the area above the curve (mean green line) up to the X coordinate equivalent to the "x_cutoff" parameter.
     If that parameter is a None value, uses the entire range of X values instead."""
-    if cody_n is not None:  # Truncate arrays so that a specific CoDy value is calculated
-        xs, ys = truncate_arrays(xs=xs, ys=ys, cutoff=cody_n)
+    if x_cutoff is not None:  # Truncate arrays so that a hypothesis distance up to a certain X coordinate is calculated
+        xs, ys = truncate_arrays(xs=xs, ys=ys, x_cutoff=x_cutoff)
     triangle_area = calculate_triangle_area(xs=xs, ys=ys)
     area_above_curve = trapezium_integration(xs=xs, ys=ys)
     return area_above_curve / triangle_area if triangle_area != 0 else 0.0
 
 
-def truncate_arrays(xs: np.ndarray, ys: np.ndarray, cutoff: int) -> Tuple[np.ndarray, np.ndarray]:
-    """Truncates and returns the arrays "xs" and "ys" by removing values from the "xs" arrays lower than the cutoff,
-    and the removing "ys"'s last elements until both arrays have the same size."""
-    xs_trunc = np.array([x for x in xs if x < cutoff] + [cutoff])
-    end_y = np.interp(cutoff, xs, ys)
-    ys_trunc = np.array(ys[:len(xs_trunc)] + [end_y])
-    return xs_trunc, ys_trunc
+def get_cumulative_hypothesis_ci(xs: np.ndarray, upper_ys: np.ndarray,
+                                 lower_ys: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    """Calculates the confidence interval values for the cumulative hypothesis plot."""
+    hypothesis_upper_ys = np.array([calculate_cumulative_hypothesis_distance(xs=xs, ys=upper_ys, x_cutoff=x)
+                                    for x in xs])
+    hypothesis_lower_ys = np.array([calculate_cumulative_hypothesis_distance(xs=xs, ys=lower_ys, x_cutoff=x)
+                                    for x in xs])
+    return hypothesis_upper_ys, hypothesis_lower_ys
 
 
-def calculate_triangle_area(xs: np.ndarray, ys: np.ndarray) -> float:
-    """Calculates the triangle area of the CVP, i.e. the are delimited by H0 and H1 up to the max X coordinate present
-    in the "xs" array."""
-    start_x, end_x = get_start_end_values(array=xs)
-    triangle_length = abs(end_x - start_x)
-    start_y, end_y = get_start_end_values(array=ys)
-    final_height = get_missing_coord(x1=start_x, y1=start_y, x2=end_x)
-    triangle_height = abs(start_y - final_height)
-    triangle_area = (triangle_length * triangle_height) / 2
-    return triangle_area
+def get_endpoint_hypothesis_values(xs: np.ndarray, ys: np.ndarray) -> np.ndarray:
+    """Calculates endpoint hypothesis values for all points in the mean line arrays."""
+    hypothesis_ys = np.array([calculate_endpoint_hypothesis_distance(xs=xs, ys=ys, x_cutoff=x) for x in xs])
+    return hypothesis_ys
 
 
-def trapezium_integration(xs: np.ndarray, ys: np.ndarray) -> float:
-    """Performs trapezium integration over the XY series of coordinates (mean green line), calculating the area
-    above the line and below H0. Any area above H0 is calculated as negative area."""
-    integrated_area = 0.0
-    for i, (x, y) in enumerate(zip(xs, ys)):
-        try:
-            next_x = xs[i+1]
-            next_y = ys[i+1]
-        except IndexError:  # Nothing more to add
-            return integrated_area
-        square = (next_x - x) * (ys[0] - y)  # SIGNED area
-        triangle = (next_x - x) * (y - next_y) / 2  # SIGNED area
-        trapezium = square + triangle
-        integrated_area += trapezium
-
-
-def calculate_endcody(xs: np.ndarray, ys: np.ndarray, cody_n: Optional[int]) -> float:
+def calculate_endpoint_hypothesis_distance(xs: np.ndarray, ys: np.ndarray, x_cutoff: Optional[int]) -> float:
     """Returns the normed triangular area defined by (xs[0], ys[0]), (xs[-1], ys[0]) and (xs[-1], ys[-1])"""
-    if cody_n is not None:  # Truncate arrays so that a specific CoDy value is calculated
-        xs, ys = truncate_arrays(xs=xs, ys=ys, cutoff=cody_n)
+    if x_cutoff is not None:  # Truncate arrays so that a hypothesis distance up to a certain X coordinate is calculated
+        xs, ys = truncate_arrays(xs=xs, ys=ys, x_cutoff=x_cutoff)
     triangle_area = calculate_triangle_area(xs=xs, ys=ys)
-    cody_triangle_area = calculate_cody_triangle_area(xs=xs, ys=ys)
-    return cody_triangle_area / triangle_area if triangle_area != 0 else 0.0
+    hypothesis_triangle_area = calculate_endpoint_hypothesis_triangle_area(xs=xs, ys=ys)
+    return hypothesis_triangle_area / triangle_area if triangle_area != 0 else 0.0
 
 
-def calculate_cody_triangle_area(xs: np.ndarray, ys: np.ndarray) -> float:
-    """Calculates the CoDy triangle area."""
+def calculate_endpoint_hypothesis_triangle_area(xs: np.ndarray, ys: np.ndarray) -> float:
+    """Calculates the endpoint hypothesis triangle area."""
     width = xs[-1] - xs[0]
     height = ys[0] - ys[-1]  # SIGNED area
     return (width * height) / 2
 
 
-def get_cumulative_cody_values(xs: np.ndarray, ys: np.ndarray) -> np.ndarray:
-    """Calculates cumulative CoDy values for all points in the mean line arrays."""
-    cody_ys = np.array([calculate_cumcody(xs=xs, ys=ys, cody_n=x) for x in xs])
-    return cody_ys
-
-
-def get_cumcody_confidence_interval(xs: np.ndarray, upper_ys: np.ndarray,
-                                    lower_ys: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-    """Calculates the confidence interval values for the cumulative hypothesis plot."""
-    cody_upper_ys = np.array([calculate_cumcody(xs=xs, ys=upper_ys, cody_n=x) for x in xs])
-    cody_lower_ys = np.array([calculate_cumcody(xs=xs, ys=lower_ys, cody_n=x) for x in xs])
-    return cody_upper_ys, cody_lower_ys
-
-
-def get_endpoint_cody_values(xs: np.ndarray, ys: np.ndarray) -> np.ndarray:
-    """Calculates endpoint CoDy values for all points in the mean line arrays."""
-    cody_ys = np.array([calculate_endcody(xs=xs, ys=ys, cody_n=x) for x in xs])
-    return cody_ys
-
-
-def get_endcody_confidence_interval(xs: np.ndarray, upper_ys: np.ndarray,
-                                    lower_ys: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+def get_endpoint_hypothesis_ci(xs: np.ndarray, upper_ys: np.ndarray,
+                               lower_ys: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """Calculates the confidence interval values for the endpoint hypothesis plot."""
-    cody_upper_ys = np.array([calculate_endcody(xs=xs, ys=upper_ys, cody_n=x) for x in xs])
-    cody_lower_ys = np.array([calculate_endcody(xs=xs, ys=lower_ys, cody_n=x) for x in xs])
-    return cody_upper_ys, cody_lower_ys
+    hypothesis_upper_ys = np.array([calculate_endpoint_hypothesis_distance(xs=xs, ys=upper_ys, x_cutoff=x) for x in xs])
+    hypothesis_lower_ys = np.array([calculate_endpoint_hypothesis_distance(xs=xs, ys=lower_ys, x_cutoff=x) for x in xs])
+    return hypothesis_upper_ys, hypothesis_lower_ys
 
 
-def results_to_dataframe(original_parameters: Dict[str, Any], xs: np.ndarray, ys: np.ndarray, cumcody_ys: np.ndarray,
-                         endcody_ys: np.ndarray) -> pd.DataFrame:
+def results_to_dataframe(original_parameters: Dict[str, Any], xs: np.ndarray, ys: np.ndarray,
+                         cumulative_hyp_ys: np.ndarray, endpoint_hyp_ys: np.ndarray) -> pd.DataFrame:
     """Saves DynaFit dataframe_results as a pandas DataFrame (used for Excel/csv export)."""
     largest_seq_size = max(len(original_parameters), len(xs))
     params_padding = largest_seq_size - len(original_parameters)
@@ -338,9 +330,13 @@ def results_to_dataframe(original_parameters: Dict[str, Any], xs: np.ndarray, ys
         'Value': np.concatenate([list(original_parameters.values()), np.full(params_padding, np.nan)]),
         'Log2(Colony Size)': np.concatenate([xs, np.full(array_padding, np.nan)]).round(2),
         'Log2(Variance)': np.concatenate([ys, np.full(array_padding, np.nan)]).round(2),
-        'Closeness to H0 (cumulative)': np.concatenate([np.abs(cumcody_ys), np.full(array_padding, np.nan)]).round(2),
-        'Closeness to H1 (cumulative)': np.concatenate([np.abs(cumcody_ys-1), np.full(array_padding, np.nan)]).round(2),
-        'Closeness to H0 (endpoint)': np.concatenate([np.abs(endcody_ys), np.full(array_padding, np.nan)]).round(2),
-        'Closeness to H1 (endpoint)': np.concatenate([np.abs(endcody_ys-1), np.full(array_padding, np.nan)]).round(2),
+        'Closeness to H0 (cumulative)': np.concatenate([np.abs(cumulative_hyp_ys),
+                                                        np.full(array_padding, np.nan)]).round(2),
+        'Closeness to H1 (cumulative)': np.concatenate([np.abs(cumulative_hyp_ys - 1),
+                                                        np.full(array_padding, np.nan)]).round(2),
+        'Closeness to H0 (endpoint)': np.concatenate([np.abs(endpoint_hyp_ys),
+                                                      np.full(array_padding, np.nan)]).round(2),
+        'Closeness to H1 (endpoint)': np.concatenate([np.abs(endpoint_hyp_ys - 1),
+                                                      np.full(array_padding, np.nan)]).round(2),
     }
     return pd.DataFrame(data)

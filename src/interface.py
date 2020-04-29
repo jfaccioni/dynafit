@@ -237,9 +237,9 @@ class DynaFitGUI(QMainWindow):
         # Axes instance used to plot CVP
         self.cvp_ax = self.fig.add_axes([0.1, 0.45, 0.85, 0.5], label='cvp')
         self.cvp_ax.set_visible(False)
-        # Axes instance used to plot CoDy results (closeness to H0 and H1)
-        self.cody_ax = self.fig.add_axes([0.1, 0.25, 0.85, 0.1], label='cody')
-        self.cody_ax.set_visible(False)
+        # Axes instance used to plot hypothesis distance (closeness to H0 and H1)
+        self.hypothesis_ax = self.fig.add_axes([0.1, 0.25, 0.85, 0.1], label='hypothesis')
+        self.hypothesis_ax.set_visible(False)
         # Axes instance used to plot population histogram
         self.histogram_ax = self.fig.add_axes([0.1, 0.05, 0.85, 0.1], label='histogram')
         self.histogram_ax.set_visible(False)
@@ -348,7 +348,7 @@ class DynaFitGUI(QMainWindow):
     def dynafit_setup_before_running(self) -> None:
         """Called before DynaFit analysis starts. Modifies the label on the plot button and clears both Axes."""
         self.cvp_ax.clear()
-        self.cody_ax.clear()
+        self.hypothesis_ax.clear()
         self.histogram_ax.clear()
         self.progress_bar.setHidden(False)
         self.progress_bar_label.setHidden(False)
@@ -382,7 +382,7 @@ class DynaFitGUI(QMainWindow):
         """Called if an error is raised during DynaFit analysis. Clears axes and shows the error in a message box."""
         self.fig.suptitle('')
         self.cvp_ax.set_visible(False)
-        self.cody_ax.set_visible(False)
+        self.hypothesis_ax.set_visible(False)
         self.histogram_ax.set_visible(False)
         self.results_table.clearContents()
         self.results_dataframe = None
@@ -394,11 +394,11 @@ class DynaFitGUI(QMainWindow):
         self.to_excel_button.setEnabled(True)
         self.to_csv_button.setEnabled(True)
         self.cvp_ax.set_visible(True)
-        self.cody_ax.set_visible(True)
+        self.hypothesis_ax.set_visible(True)
         self.histogram_ax.set_visible(True)
         params, plotter, df = results
         plotter.plot_cvp_ax(ax=self.cvp_ax)
-        plotter.plot_cody_ax(ax=self.cody_ax, xlims=self.cvp_ax.get_xlim())
+        plotter.plot_hypothesis_ax(ax=self.hypothesis_ax, xlims=self.cvp_ax.get_xlim())
         plotter.plot_histogram_ax(ax=self.histogram_ax)
         self.set_figure_title(filename=params['filename'], sheetname=params['sheetname'])
         self.set_results_table(df=df)

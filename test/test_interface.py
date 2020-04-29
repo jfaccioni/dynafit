@@ -64,7 +64,7 @@ class TestInterfaceModule(unittest.TestCase):
         """Returns mocked results for the DynaFit Analysis"""
         params = MagicMock()
         plotter = MagicMock()
-        plotter.plotting_methods = [plotter.plot_cvp_ax, plotter.plot_cody_ax, plotter.plot_histogram_ax]
+        plotter.plotting_methods = [plotter.plot_cvp_ax, plotter.plot_hypothesis_ax, plotter.plot_histogram_ax]
         df = MagicMock()
         return params, plotter, df
 
@@ -76,7 +76,7 @@ class TestInterfaceModule(unittest.TestCase):
     @property
     def axes(self) -> List[Axes]:
         """Convenience property for accessing all Axes instances of the DynaFitGUI."""
-        return [self.ui.cvp_ax, self.ui.cody_ax, self.ui.histogram_ax]
+        return [self.ui.cvp_ax, self.ui.hypothesis_ax, self.ui.histogram_ax]
 
     def set_results_table_names(self) -> None:
         """Adds some text to the results table so that the excel/csv buttons are able to read a placeholder text."""
@@ -377,7 +377,7 @@ class TestInterfaceModule(unittest.TestCase):
             method.assert_not_called()
         self.ui.dynafit_worker_raised_no_exceptions(results=results)
         for method, ax in zip(plotter.plotting_methods, self.axes):
-            if ax == self.ui.cody_ax:
+            if ax == self.ui.hypothesis_ax:
                 method.assert_called_once_with(ax=ax, xlims=self.ui.cvp_ax.get_xlim())
             else:
                 method.assert_called_once_with(ax=ax)
