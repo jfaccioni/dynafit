@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from seaborn import distplot
 
-from src.utils import get_missing_coord, get_start_end_values
+from src.utils import get_missing_coordinate, get_start_end_values
 
 
 class Plotter:
@@ -62,13 +62,13 @@ class Plotter:
 
     @staticmethod
     def plot_h0(start: float, end: float, initial_height: float, ax: plt.Axes) -> None:
-        """Plots H0 on the CVP (horizontal red line)"""
+        """Plots H0 on the CVP (horizontal red line)."""
         ax.plot([start, end], [initial_height, initial_height], color='red', lw=3)
 
     @staticmethod
     def plot_h1(start: float, end: float, initial_height: float, ax: plt.Axes) -> None:
-        """Plots H1 on the CVP (diagonal blue line)"""
-        final_height = get_missing_coord(x1=start, y1=initial_height, x2=end)
+        """Plots H1 on the CVP (diagonal blue line)."""
+        final_height = get_missing_coordinate(x1=start, y1=initial_height, x2=end)
         ax.plot([start, end], [initial_height, final_height], color='blue', lw=3)
 
     @staticmethod
@@ -110,8 +110,8 @@ class Plotter:
     @staticmethod
     def plot_h1_ci(start: float, end: float, upper: float, lower: float, ax: plt.Axes) -> None:
         """Plots H1 confidence interval on the CVP (diagonal blue line)"""
-        final_height_upper = get_missing_coord(x1=start, y1=upper, x2=end)
-        final_height_lower = get_missing_coord(x1=start, y1=lower, x2=end)
+        final_height_upper = get_missing_coordinate(x1=start, y1=upper, x2=end)
+        final_height_lower = get_missing_coordinate(x1=start, y1=lower, x2=end)
         ax.fill_between([start, end], [upper, final_height_upper], [lower, final_height_lower], color='blue', alpha=0.3)
 
     def plot_mean_line_ci(self, ax: plt.Axes) -> None:
@@ -123,28 +123,6 @@ class Plotter:
         """Adds formatting to the CVP."""
         ax.set_xlabel('log2(Colony Size)')
         ax.set_ylabel('log2(Growth Rate Variance)')
-
-    def plot_histogram_ax(self, ax: plt.Axes) -> None:
-        """Calls all the functions related to plotting the histogram."""
-        self.plot_distributions(ax=ax)
-        self.plot_group_divisions(ax=ax)
-        self.format_histogram(ax=ax)
-
-    def plot_distributions(self, ax: plt.Axes) -> None:
-        """Plots the histogram."""
-        distplot(np.log2(self.hist_x), bins=np.log2(self.hist_breakpoints), ax=ax)
-
-    def plot_group_divisions(self, ax: plt.Axes) -> None:
-        """Plots the group divisions in the histogram as vertical lines."""
-        for bp in self.hist_breakpoints:
-            ax.axvline(np.log2(bp), color='black', linestyle='dotted', alpha=0.8)
-
-    @staticmethod
-    def format_histogram(ax: plt.Axes) -> None:
-        """Adds formatting to the histogram."""
-        ax.set_title('Histogram of colony groups')
-        ax.set_xlabel('log2(Colony Size)')
-        ax.set_ylabel('% of colonies')
 
     def plot_hypothesis_ax(self, ax: plt.Axes, xlims: Tuple[float, float]) -> None:
         """Calls all the functions related to plotting the hypothesis distance plot."""
@@ -198,3 +176,25 @@ class Plotter:
         ax.set_yticks([0, 1])
         ax.set_yticklabels(['H0', 'H1'])
         ax.legend()
+
+    def plot_histogram_ax(self, ax: plt.Axes) -> None:
+        """Calls all the functions related to plotting the histogram."""
+        self.plot_distributions(ax=ax)
+        self.plot_group_divisions(ax=ax)
+        self.format_histogram(ax=ax)
+
+    def plot_distributions(self, ax: plt.Axes) -> None:
+        """Plots the histogram."""
+        distplot(np.log2(self.hist_x), bins=np.log2(self.hist_breakpoints), ax=ax)
+
+    def plot_group_divisions(self, ax: plt.Axes) -> None:
+        """Plots the group divisions in the histogram as vertical lines."""
+        for bp in self.hist_breakpoints:
+            ax.axvline(np.log2(bp), color='black', linestyle='dotted', alpha=0.8)
+
+    @staticmethod
+    def format_histogram(ax: plt.Axes) -> None:
+        """Adds formatting to the histogram."""
+        ax.set_title('Histogram of colony groups')
+        ax.set_xlabel('log2(Colony Size)')
+        ax.set_ylabel('% of colonies')

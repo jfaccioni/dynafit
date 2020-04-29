@@ -212,12 +212,7 @@ class DynaFitGUI(QMainWindow):
 
         # --Results table--
         # Region where the results from the DynaFit analysis are shown
-        self.results_table = QTableWidget(self, rowCount=0, columnCount=8)
-        colnames = ['Parameter', 'Value', 'Log2(Colony Size)', 'Log2(Variance)', 'Closeness to H0 (cumulative)',
-                    'Closeness to H1 (cumulative)', 'Closeness to H0 (endpoint)', 'Closeness to H1 (endpoint)']
-        for index, column_name in enumerate(colnames):
-            self.results_table.setHorizontalHeaderItem(index, QTableWidgetItem(column_name))  # noqa
-            self.results_table.horizontalHeader().setSectionResizeMode(index, QHeaderView.ResizeToContents)
+        self.results_table = QTableWidget(self)
         self.results_table.installEventFilter(self)
         # Add widget above to left column
         left_column.addWidget(self.results_table)
@@ -412,6 +407,10 @@ class DynaFitGUI(QMainWindow):
         """Sets values obtained from DynaFit analysis onto dataframe_results table."""
         self.results_table.clearContents()
         self.results_table.setRowCount(len(df))
+        self.results_table.setColumnCount(len(df.columns))
+        for index, column_name in enumerate(df.columns):
+            self.results_table.setHorizontalHeaderItem(index, QTableWidgetItem(column_name))  # noqa
+            self.results_table.horizontalHeader().setSectionResizeMode(index, QHeaderView.ResizeToContents)
         string_df = self.remove_nan_strings(df.astype(str))
         for row_index, row_contents in string_df.iterrows():
             for column_index, value in enumerate(row_contents):

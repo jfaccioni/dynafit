@@ -10,7 +10,7 @@ import openpyxl
 import pandas as pd
 from PySide2.QtCore import Qt, SIGNAL
 from PySide2.QtTest import QTest
-from PySide2.QtWidgets import QApplication, QFileDialog, QMessageBox, QTableWidgetItem
+from PySide2.QtWidgets import QApplication, QFileDialog, QMessageBox, QTableWidgetItem, QHeaderView
 from matplotlib.pyplot import Axes
 
 from src.core import dynafit
@@ -80,6 +80,7 @@ class TestInterfaceModule(unittest.TestCase):
 
     def set_results_table_names(self) -> None:
         """Adds some text to the results table so that the excel/csv buttons are able to read a placeholder text."""
+        self.ui.results_table.setColumnCount(2)
         self.ui.results_table.setRowCount(2)
         self.ui.results_table.setItem(0, 1, QTableWidgetItem('filename'))  # noqa
         self.ui.results_table.setItem(1, 1, QTableWidgetItem('sheetname'))  # noqa

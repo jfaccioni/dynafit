@@ -296,7 +296,7 @@ class TestCoreModule(unittest.TestCase):
         self.assertEqual(get_element_color(element=5, cutoff=cutoff), 'red')
         self.assertEqual(get_element_color(element=10, cutoff=cutoff), 'gray')
 
-    def test_get_mean_line_confidence_interval_returns_two_numpy_arrays_with_one_element_for_each_bin(self) -> None:
+    def test_get_mean_line_ci_returns_two_numpy_arrays_with_one_element_for_each_bin(self) -> None:
         test_case_df = pd.DataFrame({
             'log2_GR_var': [10, 20, 30, 40, 50, 60],
             'bins': [1, 1, 2, 2, 3, 3]
@@ -318,6 +318,16 @@ class TestCoreModule(unittest.TestCase):
         self.assertAlmostEqual(expected_lower, actual_lower, 1)
         np.random.seed()  # noqa
 
+    def test_get_cumulative_hypothesis_value_calls_calculate_cumulative_hypothesis_distance(self) -> None:
+        xs = np.array([1, 2, 3])
+        ys = np.array([4, 5, 6])
+        with patch('src.core.calculate_cumulative_hypothesis_distance') as func:
+            return_value = get_cumulative_hypothesis_values(xs=xs, ys=ys)
+        func.assert_called()
+        self.assertIsInstance(return_value, np.ndarray)
+
+    def test_calculate_cumulative_hypothesis_distance_calculates_distance_properly(self) -> None:
+        xs = np.array([])
 
 if __name__ == '__main__':
     unittest.main()

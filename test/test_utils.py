@@ -4,7 +4,7 @@ import unittest
 
 import numpy as np
 
-from src.utils import get_missing_coord, get_start_end_values
+from src.utils import get_missing_coordinate, get_start_end_values
 
 
 class TestUtilsModule(unittest.TestCase):
@@ -34,7 +34,7 @@ class TestUtilsModule(unittest.TestCase):
         x1, y1 = p1
         p2 = (1, 1)
         x2, expected_y2 = p2
-        actual_y2 = get_missing_coord(x1=x1, y1=y1, x2=x2, angular_coefficient=1.0)
+        actual_y2 = get_missing_coordinate(x1=x1, y1=y1, x2=x2, angular_coefficient=1.0)
         self.assertEqual(expected_y2, actual_y2)
 
     def test_get_missing_coord_y_equals_minus_two_x_plus_three_line(self) -> None:
@@ -43,7 +43,7 @@ class TestUtilsModule(unittest.TestCase):
         x1, y1 = p1
         p2 = (5, -7)
         x2, expected_y2 = p2
-        actual_y2 = get_missing_coord(x1=x1, y1=y1, x2=x2, angular_coefficient=-2.0)
+        actual_y2 = get_missing_coordinate(x1=x1, y1=y1, x2=x2, angular_coefficient=-2.0)
         self.assertEqual(expected_y2, actual_y2)
 
 
