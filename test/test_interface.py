@@ -10,7 +10,7 @@ import openpyxl
 import pandas as pd
 from PySide2.QtCore import Qt, SIGNAL
 from PySide2.QtTest import QTest
-from PySide2.QtWidgets import QApplication, QFileDialog, QMessageBox, QTableWidgetItem, QHeaderView
+from PySide2.QtWidgets import QApplication, QFileDialog, QMessageBox, QTableWidgetItem
 from matplotlib.pyplot import Axes
 
 from src.core import dynafit
@@ -281,21 +281,21 @@ class TestInterfaceModule(unittest.TestCase):
 
     @patch('src.interface.QMessageBox')
     def test_dynafit_worker_small_sample_warning_displays_message_box(self, mock_message_box) -> None:
-        warning_contents = (Queue(), {1: 2})
+        warning_contents = (Queue(), {1: (2, 3)})
         self.ui.dynafit_worker_small_sample_size_warning(warning=warning_contents)
         mock_message_box.assert_called()
         mock_message_box.return_value.exec_.assert_called()
 
     def test_dynafit_worker_small_sample_warning_yes_button_puts_false_in_queue(self) -> None:
         q = Queue()
-        warning_contents = (q, {1: 2})
+        warning_contents = (q, {1: (2, 3)})
         with patch('src.interface.QMessageBox.exec_', return_value=QMessageBox.Yes):
             self.ui.dynafit_worker_small_sample_size_warning(warning=warning_contents)
         self.assertFalse(q.get())
 
     def test_dynafit_worker_small_sample_warning_no_button_puts_true_in_queue(self) -> None:
         q = Queue()
-        warning_contents = (q, {1: 2})
+        warning_contents = (q, {1: (2, 3)})
         with patch('src.interface.QMessageBox.exec_', return_value=QMessageBox.No):
             self.ui.dynafit_worker_small_sample_size_warning(warning=warning_contents)
         self.assertTrue(q.get())

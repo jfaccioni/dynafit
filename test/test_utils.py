@@ -2,9 +2,7 @@
 
 import unittest
 
-import numpy as np
-
-from src.utils import get_missing_coordinate, get_start_end_values
+from src.utils import *
 
 
 class TestUtilsModule(unittest.TestCase):

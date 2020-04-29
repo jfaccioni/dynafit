@@ -12,7 +12,7 @@ from scipy.stats import t
 
 from src.exceptions import AbortedByUser, TooManyGroupsError
 from src.plotter import Plotter
-from src.utils import truncate_arrays, calculate_triangle_area, trapezium_integration, get_missing_coordinate, calculate_triangle_area_with_missing_coordinate
+from src.utils import get_missing_coordinate
 from src.validator import ExcelValidator
 
 # Value from which to throw a warning of low N
@@ -72,10 +72,10 @@ def dynafit(workbook: Workbook, filename: str, sheetname: str, must_calculate_gr
     endpoint_hyp_upper_ys, endpoint_hyp_lower_ys = None, None
     if show_ci:
         upper_ys, lower_ys = get_mean_line_ci(df=df, confidence_value=confidence_value)
-        cumulative_hyp_upper_ys, cumulative_hyp_lower_ys = get_cumulative_hypothesis_ci(xs=xs, upper_ys=upper_ys,
-                                                                                        lower_ys=lower_ys)
-        endpoint_hyp_upper_ys, endpoint_hyp_lower_ys = get_endpoint_hypothesis_ci(xs=xs, upper_ys=upper_ys,
-                                                                                  lower_ys=lower_ys)
+        cumulative_hyp_upper_ys = get_cumulative_hypothesis_values(xs=xs, ys=upper_ys)
+        cumulative_hyp_lower_ys = get_cumulative_hypothesis_values(xs=xs, ys=lower_ys)
+        endpoint_hyp_upper_ys = get_endpoint_hypothesis_values(xs=xs, ys=upper_ys)
+        endpoint_hyp_lower_ys = get_endpoint_hypothesis_values(xs=xs, ys=lower_ys)
 
     # Store parameters used for DynaFit analysis
     original_parameters = {
@@ -157,14 +157,14 @@ def add_bins(df: pd.DataFrame, individual_colonies: int, bins: int) -> pd.DataFr
     return df.assign(bins=pd.concat([single_bins, multiple_bins]))
 
 
-def sample_size_warning_info(df: pd.DataFrame, warning_level: int) -> Optional[Dict[int, int]]:
+def sample_size_warning_info(df: pd.DataFrame, warning_level: int) -> Optional[Dict[int, Tuple[int, float]]]:
     """Checks whether any group resulting from the binning process has a low number of instances (based on the
     global value os WARNING_LEVEL."""
     warning_info = {}
     for bin_number, bin_values in df.groupby('bins'):
         n = len(bin_values)
         if n < warning_level:
-            warning_info[int(bin_number)] = n
+            warning_info[int(bin_number)] = (n, bin_values['CS'].mean())
     return warning_info if warning_info else None
 
 
@@ -246,38 +246,17 @@ def get_element_color(element: float, cutoff: float):
 
 def get_cumulative_hypothesis_values(xs: np.ndarray, ys: np.ndarray) -> np.ndarray:
     """Calculates cumulative hypothesis values for all points in the mean line arrays."""
-    # hypothesis_ys = np.array([calculate_cumulative_hypothesis_distance(xs=xs, ys=ys, x_cutoff=x) for x in xs])
-    xs_h0 = np.array([xs[0] for _ in xs])
-    xs_h1 = np.array([get_missing_coordinate(x1=xs[0], y1=ys[0], x2=x, angular_coefficient=-1.0) for x in xs])
-    hypothesis_ys = (xs_h0 - xs) / (xs_h0 - xs_h1)
-    return hypothesis_ys
-
-
-def calculate_cumulative_hypothesis_distance(xs: np.ndarray, ys: np.ndarray, x_cutoff: Optional[int]) -> float:
-    """Returns the area above the curve (mean green line) up to the X coordinate equivalent to the "x_cutoff" parameter.
-    If that parameter is a None value, uses the entire range of X values instead."""
-    if x_cutoff is not None:
-        # Truncate arrays so that a hypothesis distance up to a certain X coordinate is calculated
-        xs, ys = truncate_arrays(xs=xs, ys=ys, x_cutoff=x_cutoff)
-    triangle_area = calculate_triangle_area_with_missing_coordinate(xs=xs, ys=ys)
-    area_above_curve = trapezium_integration(xs=xs, ys=ys)
-    return area_above_curve / triangle_area if triangle_area != 0 else 0.0
+    ys_h1 = np.array([get_missing_coordinate(x1=xs[0], y1=ys[0], x2=x, angular_coefficient=-1.0) for x in xs])
+    area_array = np.array([np.trapz(y=ys[:i] - ys[0], x=xs[:i]) for i, _ in enumerate(xs, 1)])
+    triangle_array = (xs - xs[0]) * (ys_h1 - ys[0]) * 0.5
+    return np.nan_to_num((area_array / triangle_array), posinf=0.0, neginf=0.0)
 
 
 def get_endpoint_hypothesis_values(xs: np.ndarray, ys: np.ndarray) -> np.ndarray:
     """Calculates endpoint hypothesis values for all points in the mean line arrays."""
-    hypothesis_ys = np.array([calculate_endpoint_hypothesis_distance(xs=xs, ys=ys, x_cutoff=x) for x in xs])
-    return hypothesis_ys
-
-
-def calculate_endpoint_hypothesis_distance(xs: np.ndarray, ys: np.ndarray, x_cutoff: Optional[int]) -> float:
-    """Returns the normed triangular area defined by (xs[0], ys[0]), (xs[-1], ys[0]) and (xs[-1], ys[-1])"""
-    if x_cutoff is not None:
-        # Truncate arrays so that a hypothesis distance up to a certain X coordinate is calculated
-        xs, ys = truncate_arrays(xs=xs, ys=ys, x_cutoff=x_cutoff)
-    triangle_area = calculate_triangle_area_with_missing_coordinate(xs=xs, ys=ys)
-    hypothesis_triangle_area = calculate_triangle_area(xs=xs, ys=ys)
-    return hypothesis_triangle_area / triangle_area if triangle_area != 0 else 0.0
+    ys_h0 = np.array([ys[0] for _ in ys])
+    ys_h1 = np.array([get_missing_coordinate(x1=xs[0], y1=ys[0], x2=x, angular_coefficient=-1.0) for x in xs])
+    return np.nan_to_num((ys_h0 - ys) / (ys_h0 - ys_h1), posinf=0.0, neginf=0.0)
 
 
 def get_mean_line_ci(df: pd.DataFrame, confidence_value: float) -> Tuple[np.ndarray, np.ndarray]:
@@ -304,30 +283,12 @@ def calculate_bootstrap_ci_from_t_distribution(data_series: pd.Series, alpha: fl
     return mean + h, mean - h
 
 
-def get_cumulative_hypothesis_ci(xs: np.ndarray, upper_ys: np.ndarray,
-                                 lower_ys: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-    """Calculates the confidence interval values for the cumulative hypothesis plot."""
-    hypothesis_upper_ys = np.array([calculate_cumulative_hypothesis_distance(xs=xs, ys=upper_ys, x_cutoff=x)
-                                    for x in xs])
-    hypothesis_lower_ys = np.array([calculate_cumulative_hypothesis_distance(xs=xs, ys=lower_ys, x_cutoff=x)
-                                    for x in xs])
-    return hypothesis_upper_ys, hypothesis_lower_ys
-
-
-def get_endpoint_hypothesis_ci(xs: np.ndarray, upper_ys: np.ndarray,
-                               lower_ys: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-    """Calculates the confidence interval values for the endpoint hypothesis plot."""
-    hypothesis_upper_ys = np.array([calculate_endpoint_hypothesis_distance(xs=xs, ys=upper_ys, x_cutoff=x) for x in xs])
-    hypothesis_lower_ys = np.array([calculate_endpoint_hypothesis_distance(xs=xs, ys=lower_ys, x_cutoff=x) for x in xs])
-    return hypothesis_upper_ys, hypothesis_lower_ys
-
-
 def results_to_dataframe(original_parameters: Dict[str, Any], xs: np.ndarray, ys: np.ndarray,
                          cumulative_hyp_ys: np.ndarray, endpoint_hyp_ys: np.ndarray, show_ci: bool,
                          upper_ys: Optional[np.ndarray], lower_ys: Optional[np.ndarray],
                          cumulative_hyp_upper_ys: Optional[np.ndarray], cumulative_hyp_lower_ys: Optional[np.ndarray],
-                         endpoint_hyp_lower_ys: Optional[np.ndarray],
-                         endpoint_hyp_upper_ys: Optional[np.ndarray]) -> pd.DataFrame:
+                         endpoint_hyp_upper_ys: Optional[np.ndarray],
+                         endpoint_hyp_lower_ys: Optional[np.ndarray]) -> pd.DataFrame:
     """Saves DynaFit dataframe_results as a pandas DataFrame (used for Excel/csv export)."""
     largest_seq_size = max(len(original_parameters), len(xs))
     params_padding = largest_seq_size - len(original_parameters)
@@ -341,37 +302,37 @@ def results_to_dataframe(original_parameters: Dict[str, Any], xs: np.ndarray, ys
         if show_ci else None,
         'Log2(Variance) lower CI': np.concatenate([lower_ys, np.full(array_padding, np.nan)]).round(2)
         if show_ci else None,
-        'Closeness to H0 (cumulative)': np.concatenate([np.abs(cumulative_hyp_ys),
-                                                        np.full(array_padding, np.nan)]).round(2),
-        'Closeness to H0 (cumulative) upper CI': np.concatenate([np.abs(cumulative_hyp_upper_ys),
-                                                                 np.full(array_padding, np.nan)]).round(2)
+        'Distance to H0 (cumulative)': np.concatenate([np.abs(cumulative_hyp_ys),
+                                                       np.full(array_padding, np.nan)]).round(2),
+        'Distance to H0 (cumulative) upper CI': np.concatenate([np.abs(cumulative_hyp_upper_ys),
+                                                                np.full(array_padding, np.nan)]).round(2)
         if show_ci else None,
-        'Closeness to H0 (cumulative) lower CI': np.concatenate([np.abs(cumulative_hyp_lower_ys),
-                                                                 np.full(array_padding, np.nan)]).round(2)
+        'Distance to H0 (cumulative) lower CI': np.concatenate([np.abs(cumulative_hyp_lower_ys),
+                                                                np.full(array_padding, np.nan)]).round(2)
         if show_ci else None,
-        'Closeness to H1 (cumulative)': np.concatenate([np.abs(cumulative_hyp_ys - 1),
-                                                        np.full(array_padding, np.nan)]).round(2),
-        'Closeness to H1 (cumulative) upper CI': np.concatenate([np.abs(cumulative_hyp_upper_ys - 1),
-                                                                 np.full(array_padding, np.nan)]).round(2)
+        'Distance to H1 (cumulative)': np.concatenate([np.abs(cumulative_hyp_ys - 1),
+                                                       np.full(array_padding, np.nan)]).round(2),
+        'Distance to H1 (cumulative) upper CI': np.concatenate([np.abs(cumulative_hyp_upper_ys - 1),
+                                                                np.full(array_padding, np.nan)]).round(2)
         if show_ci else None,
-        'Closeness to H1 (cumulative) lower CI': np.concatenate([np.abs(cumulative_hyp_lower_ys - 1),
-                                                                 np.full(array_padding, np.nan)]).round(2)
+        'Distance to H1 (cumulative) lower CI': np.concatenate([np.abs(cumulative_hyp_lower_ys - 1),
+                                                                np.full(array_padding, np.nan)]).round(2)
         if show_ci else None,
-        'Closeness to H0 (endpoint)': np.concatenate([np.abs(endpoint_hyp_ys),
-                                                      np.full(array_padding, np.nan)]).round(2),
-        'Closeness to H0 (endpoint) upper CI': np.concatenate([np.abs(endpoint_hyp_upper_ys),
-                                                               np.full(array_padding, np.nan)]).round(2)
+        'Distance to H0 (endpoint)': np.concatenate([np.abs(endpoint_hyp_ys),
+                                                     np.full(array_padding, np.nan)]).round(2),
+        'Distance to H0 (endpoint) upper CI': np.concatenate([np.abs(endpoint_hyp_upper_ys),
+                                                              np.full(array_padding, np.nan)]).round(2)
         if show_ci else None,
-        'Closeness to H0 (endpoint) lower CI': np.concatenate([np.abs(endpoint_hyp_lower_ys),
-                                                               np.full(array_padding, np.nan)]).round(2)
+        'Distance to H0 (endpoint) lower CI': np.concatenate([np.abs(endpoint_hyp_lower_ys),
+                                                              np.full(array_padding, np.nan)]).round(2)
         if show_ci else None,
-        'Closeness to H1 (endpoint)': np.concatenate([np.abs(endpoint_hyp_ys - 1),
-                                                      np.full(array_padding, np.nan)]).round(2),
-        'Closeness to H1 (endpoint) upper CI': np.concatenate([np.abs(endpoint_hyp_upper_ys - 1),
-                                                               np.full(array_padding, np.nan)]).round(2)
+        'Distance to H1 (endpoint)': np.concatenate([np.abs(endpoint_hyp_ys - 1),
+                                                     np.full(array_padding, np.nan)]).round(2),
+        'Distance to H1 (endpoint) upper CI': np.concatenate([np.abs(endpoint_hyp_upper_ys - 1),
+                                                              np.full(array_padding, np.nan)]).round(2)
         if show_ci else None,
-        'Closeness to H1 (endpoint) lower CI': np.concatenate([np.abs(endpoint_hyp_lower_ys - 1),
-                                                               np.full(array_padding, np.nan)]).round(2)
+        'Distance to H1 (endpoint) lower CI': np.concatenate([np.abs(endpoint_hyp_lower_ys - 1),
+                                                              np.full(array_padding, np.nan)]).round(2)
         if show_ci else None,
     }
     filtered_data = {k: v for k, v in data.items() if v is not None}

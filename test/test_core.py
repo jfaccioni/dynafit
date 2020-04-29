@@ -15,14 +15,19 @@ class TestCoreModule(unittest.TestCase):
     """Tests the core.py module."""
     test_case_path = 'test/test_cases/core_test_case.xlsx'
 
-    def setUp(self) -> None:
-        """Sets up the each unit test by loading the test case DataFrames."""
-        workbook = openpyxl.load_workbook(self.test_case_path, data_only=True)
-        self.cs_gr_df = ExcelValidator(workbook=workbook, sheetname='CS_GR', cs_start_cell='A1', cs_end_cell='',
-                                       gr_start_cell='B1', gr_end_cell='').get_data()
-        self.df = self.cs_gr_df  # default DataFrame
-        self.cs1_cs2_df = ExcelValidator(workbook=workbook, sheetname='CS1_CS2', cs_start_cell='A1', cs_end_cell='',
-                                         gr_start_cell='B1', gr_end_cell='').get_data()
+    @classmethod
+    def setUpClass(cls) -> None:
+        """Sets up the the whole test suite by loading the test case Excel spreadsheet into memory."""
+        cls.workbook = openpyxl.load_workbook(cls.test_case_path, data_only=True)
+        cls.cs_gr_df = ExcelValidator(workbook=cls.workbook, sheetname='CS_GR', cs_start_cell='A1', cs_end_cell='',
+                                      gr_start_cell='B1', gr_end_cell='').get_data()
+        cls.cs1_cs2_df = ExcelValidator(workbook=cls.workbook, sheetname='CS1_CS2', cs_start_cell='A1', cs_end_cell='',
+                                        gr_start_cell='B1', gr_end_cell='').get_data()
+
+    @property
+    def df(self) -> pd.DataFrame:
+        """Alias for self.cs_gr_df, used in almost all tests involving the input data."""
+        return self.cs_gr_df
 
     def get_test_case_calculated_gr(self) -> pd.Series:
         """Returns the GR calculated in the test case Excel."""
@@ -30,31 +35,27 @@ class TestCoreModule(unittest.TestCase):
         values = [c[0].value for c in ws[f'A2:A{ws.max_row}']]
         return pd.Series(values)
 
-    @property
-    def binned_df(self) -> pd.DataFrame:
-        """Returns a simple version of a binned DataFrame."""
-        return pd.DataFrame({
-            'CS': [1, 2, 3, 4, 5, 10, 11, 20, 21, 30, 31],
-            'GR': [1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1],
-            'bins': [1, 2, 3, 4, 5, 6, 6, 7, 7, 8, 8]
-        })
-
-    @property
-    def bootstrapped_df(self) -> pd.DataFrame:
-        """Returns a simpler version of a bootstrapped DataFrame."""
-        return pd.DataFrame({
-            'CS_mean': [1, 2, 3, 15, 25] + [1, 2, 3, 14, 26],
-            'GR_var': [1, 0.8, 0.7, 0.4, 0.1] + [1, 0.8, 0.7, 0.4, 0.1],
-            'bins': [1, 2, 3, 4, 5] + [1, 2, 3, 4, 5]
-        })
-
-    @property
-    def bootstrapped_log_df(self) -> pd.DataFrame:
-        """Returns a simpler version of a bootstrapped DataFrame with log columns added."""
-        return add_log_columns(df=self.bootstrapped_df)
+    @staticmethod
+    def get_values_for_results_dataframe() -> Dict:
+        """Convenience function to return a collection of elements used to mock a call to get_results_dataframe."""
+        return {
+            'original_parameters': {'parameter': 'value'},
+            'xs': np.array([0]),
+            'ys': np.array([0]),
+            'cumulative_hyp_ys': np.array([0]),
+            'endpoint_hyp_ys': np.array([0]),
+            'show_ci': True,
+            'upper_ys': np.array([0]),
+            'lower_ys': np.array([0]),
+            'cumulative_hyp_upper_ys': np.array([0]),
+            'cumulative_hyp_lower_ys': np.array([0]),
+            'endpoint_hyp_upper_ys': np.array([0]),
+            'endpoint_hyp_lower_ys': np.array([0]),
+        }
 
     def test_dynafit(self) -> None:
         """This code should test the dynafit function, but it is pretty large. I'll leave it for later."""
+        # TODO: missing test
 
     @patch('src.core.filter_colony_sizes_less_than_one')
     @patch('src.core.calculate_growth_rate')
@@ -62,10 +63,11 @@ class TestCoreModule(unittest.TestCase):
     def test_preprocess_data_calls_filter_colony_size_less_than_one(self, mock_filter_outliers,
                                                                     mock_calculate_growth_rate,
                                                                     mock_filter_colony_sizes_less_than_one) -> None:
-        preprocess_data(df=self.df, must_calculate_growth_rate=False, time_delta=24, must_remove_outliers=False)
+        df = self.df.copy()
+        preprocess_data(df=df, must_calculate_growth_rate=False, time_delta=24, must_remove_outliers=False)
         mock_filter_outliers.assert_not_called()
         mock_calculate_growth_rate.assert_not_called()
-        mock_filter_colony_sizes_less_than_one.assert_called_with(df=self.df)
+        mock_filter_colony_sizes_less_than_one.assert_called_with(df=df)
 
     @patch('src.core.filter_colony_sizes_less_than_one')
     @patch('src.core.calculate_growth_rate')
@@ -73,48 +75,53 @@ class TestCoreModule(unittest.TestCase):
     def test_preprocess_data_calls_calculate_growth_rate_conditionally(self, mock_filter_outliers,
                                                                        mock_calculate_growth_rate,
                                                                        mock_filter_colony_sizes_less_than_one) -> None:
-        preprocess_data(df=self.df, must_calculate_growth_rate=True, time_delta=24, must_remove_outliers=False)
+        df = self.df.copy()
+        preprocess_data(df=df, must_calculate_growth_rate=True, time_delta=24, must_remove_outliers=False)
         mock_filter_outliers.assert_not_called()
         mock_calculate_growth_rate.assert_called_with(df=mock_filter_colony_sizes_less_than_one.return_value,
                                                       time_delta=24)
-        mock_filter_colony_sizes_less_than_one.assert_called_with(df=self.df)
+        mock_filter_colony_sizes_less_than_one.assert_called_with(df=df)
 
     @patch('src.core.filter_colony_sizes_less_than_one')
     @patch('src.core.calculate_growth_rate')
     @patch('src.core.filter_outliers')
     def test_preprocess_data_calls_filter_outliers_conditionally(self, mock_filter_outliers, mock_calculate_growth_rate,
                                                                  mock_filter_colony_sizes_less_than_one) -> None:
-        preprocess_data(df=self.df, must_calculate_growth_rate=False, time_delta=24, must_remove_outliers=True)
+        df = self.df.copy()
+        preprocess_data(df=df, must_calculate_growth_rate=False, time_delta=24, must_remove_outliers=True)
         mock_filter_outliers.assert_called_with(df=mock_filter_colony_sizes_less_than_one.return_value)
         mock_calculate_growth_rate.assert_not_called()
-        mock_filter_colony_sizes_less_than_one.assert_called_with(df=self.df)
+        mock_filter_colony_sizes_less_than_one.assert_called_with(df=df)
 
     @patch('src.core.filter_colony_sizes_less_than_one')
     @patch('src.core.calculate_growth_rate')
     @patch('src.core.filter_outliers')
     def test_preprocess_data_calls_full_call_chain(self, mock_filter_outliers, mock_calculate_growth_rate,
                                                    mock_filter_colony_sizes_less_than_one) -> None:
-        preprocess_data(df=self.df, must_calculate_growth_rate=True, time_delta=24, must_remove_outliers=True)
+        df = self.df.copy()
+        preprocess_data(df=df, must_calculate_growth_rate=True, time_delta=24, must_remove_outliers=True)
         mock_filter_outliers.assert_called_with(df=mock_calculate_growth_rate.return_value)
         mock_calculate_growth_rate.assert_called_with(df=mock_filter_colony_sizes_less_than_one.return_value,
                                                       time_delta=24)
-        mock_filter_colony_sizes_less_than_one.assert_called_with(df=self.df)
+        mock_filter_colony_sizes_less_than_one.assert_called_with(df=df)
 
     def test_filter_colony_sizes_less_than_one_removes_colonies_with_less_than_one_cell(self) -> None:
-        self.df.CS -= 1
-        length_before = len(self.df)
-        self.assertTrue(any(cs < 1 for cs in self.df.CS))
-        self.df = filter_colony_sizes_less_than_one(df=self.df)
-        length_after = len(self.df)
-        self.assertFalse(any(cs < 1 for cs in self.df.CS))
+        df = self.df.copy()
+        df.CS -= 1
+        length_before = len(df)
+        self.assertTrue(any(cs < 1 for cs in df.CS))
+        df = filter_colony_sizes_less_than_one(df=df)
+        length_after = len(df)
+        self.assertFalse(any(cs < 1 for cs in df.CS))
         self.assertGreater(length_before, length_after)
 
     def test_filter_colony_sizes_less_than_one_preserves_dataframe_with_colonies_with_at_least_one_cell(self) -> None:
-        length_before = len(self.df)
-        self.assertFalse(any(cs < 1 for cs in self.df.CS))
-        self.df = filter_colony_sizes_less_than_one(df=self.df)
-        length_after = len(self.df)
-        self.assertFalse(any(cs < 1 for cs in self.df.CS))
+        df = self.df.copy()
+        length_before = len(df)
+        self.assertFalse(any(cs < 1 for cs in df.CS))
+        df = filter_colony_sizes_less_than_one(df=df)
+        length_after = len(df)
+        self.assertFalse(any(cs < 1 for cs in df.CS))
         self.assertEqual(length_before, length_after)
 
     def test_calculate_growth_rate_calculates_growth_rate_properly(self) -> None:
@@ -179,8 +186,9 @@ class TestCoreModule(unittest.TestCase):
             'CS': [1, 1, 1, 2, 2, 2, 3],
             'bins': [1, 1, 1, 2, 2, 2, 3]
         })
-        return_value = sample_size_warning_info(df=data, warning_level=2)
-        self.assertEqual(return_value, {3: 1})
+        expected_warning_dictionary = {3: (1, 3.0)}  # bin number: (number of instances, CS mean)
+        actual_warning_dictionary = sample_size_warning_info(df=data, warning_level=2)
+        self.assertEqual(expected_warning_dictionary, actual_warning_dictionary)
 
     def test_sample_size_warning_info_returns_none_when_dictionary_is_empty(self) -> None:
         data = pd.DataFrame({
@@ -219,6 +227,7 @@ class TestCoreModule(unittest.TestCase):
 
     def test_bootstrap_data(self) -> None:
         """This code should test the bootstrap_data function, but it is pretty large. I'll leave it for later."""
+        # TODO: missing test
 
     def test_emit_bootstrap_progress_emits_progress_as_percentage(self) -> None:
         callback = MagicMock()
@@ -296,6 +305,27 @@ class TestCoreModule(unittest.TestCase):
         self.assertEqual(get_element_color(element=5, cutoff=cutoff), 'red')
         self.assertEqual(get_element_color(element=10, cutoff=cutoff), 'gray')
 
+    def test_get_cumulative_hypothesis_values_calculates_areas_properly(self) -> None:
+        # test case is a trapezium (area = 2) above the X axis, and a triangle below the X axis (area = -0.5)
+        test_case_xs = np.array([0, 1, 2, 3, 4])
+        test_case_ys = np.array([0, 1, 1, 0, -1])
+        # partials for integrated area of trapezium above
+        expected_area_array = np.array([0, 0.5, 1.5, 2, 1.5])
+        # expected triangular area for line with angular coefficient = -1
+        expected_triangle_array = np.array([0, -0.5, -2, -4.5, -8])
+        expected_result_array = np.nan_to_num(expected_area_array / expected_triangle_array, posinf=0.0, neginf=0.0)
+        actual_result_array = get_cumulative_hypothesis_values(xs=test_case_xs, ys=test_case_ys)
+        np.testing.assert_allclose(expected_result_array, actual_result_array)
+
+    def test_get_endpoint_hypothesis_values_calculates_distances_properly(self) -> None:
+        # test case is a trapezium (area = 2) above the X axis, and a triangle below the X axis (area = -0.5)
+        test_case_xs = np.array([0, 1, 2, 3, 4])
+        test_case_ys = np.array([0, 1, 1, 0, -1])
+        # expected result is divided by (-test_case_xs), since test_case_xs is a line with angular coefficient = 1
+        expected_result_array = np.nan_to_num(test_case_ys / (-test_case_xs), posinf=0.0, neginf=0.0)
+        actual_result_array = get_endpoint_hypothesis_values(xs=test_case_xs, ys=test_case_ys)
+        np.testing.assert_allclose(expected_result_array, actual_result_array)
+
     def test_get_mean_line_ci_returns_two_numpy_arrays_with_one_element_for_each_bin(self) -> None:
         test_case_df = pd.DataFrame({
             'log2_GR_var': [10, 20, 30, 40, 50, 60],
@@ -318,16 +348,31 @@ class TestCoreModule(unittest.TestCase):
         self.assertAlmostEqual(expected_lower, actual_lower, 1)
         np.random.seed()  # noqa
 
-    def test_get_cumulative_hypothesis_value_calls_calculate_cumulative_hypothesis_distance(self) -> None:
-        xs = np.array([1, 2, 3])
-        ys = np.array([4, 5, 6])
-        with patch('src.core.calculate_cumulative_hypothesis_distance') as func:
-            return_value = get_cumulative_hypothesis_values(xs=xs, ys=ys)
-        func.assert_called()
-        self.assertIsInstance(return_value, np.ndarray)
+    def test_results_to_dataframe_returns_pandas_dataframe_of_data_passed_in(self) -> None:
+        kwargs = self.get_values_for_results_dataframe()
+        result = results_to_dataframe(**kwargs)
+        self.assertIsInstance(result, pd.DataFrame)
 
-    def test_calculate_cumulative_hypothesis_distance_calculates_distance_properly(self) -> None:
-        xs = np.array([])
+    def test_results_to_dataframe_pads_dataframe_with_nans_when_data_has_different_sizes(self) -> None:
+        kwargs = self.get_values_for_results_dataframe()
+        initial_result = results_to_dataframe(**kwargs)
+        self.assertEqual(len(initial_result), 1)
+        kwargs['original_parameters'] = {'parameter1': 'value1', 'parameter2': 'value2', 'parameter3': 'value3'}
+        new_result = results_to_dataframe(**kwargs)
+        self.assertEqual(len(new_result), 3)
+
+    def test_results_to_dataframe_returns_dataframe_with_ci_data_when_show_ci_is_true(self) -> None:
+        kwargs = self.get_values_for_results_dataframe()
+        kwargs['show_ci'] = True
+        result = results_to_dataframe(**kwargs)
+        self.assertTrue(any('upper' in column_name for column_name in result.columns))
+
+    def test_results_to_dataframe_returns_dataframe_without_ci_data_when_show_ci_is_false(self) -> None:
+        kwargs = self.get_values_for_results_dataframe()
+        kwargs['show_ci'] = False
+        result = results_to_dataframe(**kwargs)
+        self.assertTrue(any('upper' not in column_name for column_name in result.columns))
+
 
 if __name__ == '__main__':
     unittest.main()

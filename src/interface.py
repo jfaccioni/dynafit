@@ -357,13 +357,13 @@ class DynaFitGUI(QMainWindow):
         self.progress_bar.setValue(number)
 
     @Slot(object)  # noqa
-    def dynafit_worker_small_sample_size_warning(self, warning: Tuple[Queue, Dict[int, int]]) -> None:
+    def dynafit_worker_small_sample_size_warning(self, warning: Tuple[Queue, Dict[int, Tuple[int, int]]]) -> None:
         """Creates a sample size warning message box. Thread is halted while user selects the answer, which is
         sent back to the thread through a Queue object."""
         answer_queue, warning_info = warning
         message = ('Warning: small sample sizes found for some groups. DynaFit analysis may be unreliable or '
                    'impossible to compute.\nDo you want to continue anyway?')
-        groups = '\n'.join(f'Group {k}: sample size = {v}' for k, v in warning_info.items())
+        groups = '\n'.join(f'Group {k}, mean CS {cs}: sample size of {n}' for k, (n, cs) in warning_info.items())
         box = QMessageBox(self, windowTitle='Warning: low sample sizes', text=message, detailedText=groups,
                           standardButtons=QMessageBox.Yes | QMessageBox.No)  # noqa
         box.setDefaultButton(QMessageBox.No)
