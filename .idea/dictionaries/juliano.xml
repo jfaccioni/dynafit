@@ -9,8 +9,10 @@
       <w>cumcody</w>
       <w>dataframe</w>
       <w>dfgui</w>
+      <w>distplot</w>
       <w>dtype</w>
       <w>dynafit</w>
+      <w>edgecolor</w>
       <w>endcody</w>
       <w>faccioni</w>
       <w>facecolor</w>
@@ -32,6 +34,7 @@
       <w>nrepeats</w>
       <w>nruns</w>
       <w>openpyxl</w>
+      <w>polycollection</w>
       <w>preprocessing</w>
       <w>qstandarditemmodel</w>
       <w>qtableview</w>
@@ -53,6 +56,8 @@
       <w>xlsx</w>
       <w>xmax</w>
       <w>xvals</w>
+      <w>ylim</w>
+      <w>ylims</w>
       <w>yvals</w>
     </words>
   </dictionary>

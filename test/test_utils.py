@@ -44,6 +44,21 @@ class TestUtilsModule(unittest.TestCase):
         actual_y2 = get_missing_coordinate(x1=x1, y1=y1, x2=x2, angular_coefficient=-2.0)
         self.assertEqual(expected_y2, actual_y2)
 
+    def test_array_in_sequence_for_array_in_sequence(self) -> None:
+        array_01 = np.array([1, 2, 3])
+        array_02 = np.array([4, 5, 6])
+        sequence = (array_01, 'a', True, array_01, array_02, 2)
+        self.assertTrue(array_in_sequence(array_01, sequence))
+        self.assertTrue(array_in_sequence(array_02, sequence))
+
+    def test_array_in_sequence_for_array_not_sequence(self) -> None:
+        array_01 = np.array([1, 2, 3])
+        array_02 = np.array([4, 5, 6])
+        sequence = ('a', array_02, True, array_02, 2)
+        self.assertFalse(array_in_sequence(array_01, sequence))
+        self.assertFalse(array_in_sequence(array_01, (True, False, 'Sun', 'Moon', 10)))
+        self.assertFalse(array_in_sequence(array_01, 'This string is also a Python sequence.'))
+
 
 if __name__ == '__main__':
     unittest.main()

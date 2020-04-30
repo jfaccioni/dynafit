@@ -4,6 +4,7 @@ from typing import List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.collections import PolyCollection
 from seaborn import distplot
 
 from src.utils import get_missing_coordinate, get_start_end_values
@@ -11,6 +12,9 @@ from src.utils import get_missing_coordinate, get_start_end_values
 
 class Plotter:
     """Class that contains all information necessary to plot the DynaFit results"""
+    hypothesis_plot_lower_ylim = -0.5
+    hypothesis_plot_upper_ylim = 1.5
+
     def __init__(self, xs: np.ndarray, ys: np.ndarray, scatter_xs: np.ndarray, scatter_ys: np.ndarray,
                  scatter_colors: np.ndarray, show_violin: bool, violin_ys: Optional[List[np.ndarray]],
                  violin_colors: Optional[np.ndarray], cumulative_hyp_ys: np.ndarray, endpoint_hyp_ys: np.ndarray,
@@ -46,7 +50,8 @@ class Plotter:
         self.plot_mean_line(ax=ax)
         self.plot_bootstrap_scatter(ax=ax)
         if self.show_violin:
-            self.plot_bootstrap_violins(ax=ax)
+            violins = self.plot_bootstrap_violins(ax=ax)
+            self.paint_bootstrap_violins(violins=violins)
         if self.show_ci:
             self.plot_supporting_lines_ci(ax=ax)
             self.plot_mean_line_ci(ax=ax)
@@ -85,14 +90,18 @@ class Plotter:
         ax.scatter(self.scatter_xs, self.scatter_ys, marker='.', edgecolor='k', facecolor=self.scatter_colors,
                    alpha=0.3)
 
-    def plot_bootstrap_violins(self, ax: plt.Axes) -> None:
+    def plot_bootstrap_violins(self, ax: plt.Axes) -> List[PolyCollection]:
         """Plots the bootstrap populations for each bin as violin plots."""
         parts = ax.violinplot(positions=self.xs, dataset=self.violin_ys, showmeans=False, showmedians=False,
                               showextrema=False)
-        for body, color in zip(parts['bodies'], self.violin_colors):
-            body.set_facecolor(color)
-            body.set_edgecolor('black')
-            body.set_alpha(0.3)
+        return parts['bodies']
+
+    def paint_bootstrap_violins(self, violins: List[PolyCollection]) -> None:
+        """Paints and formats the violins returned by the plot_bootstrap_violins method."""
+        for violin_body, violin_color in zip(violins, self.violin_colors):
+            violin_body.set_facecolor(violin_color)
+            violin_body.set_edgecolor('black')
+            violin_body.set_alpha(0.3)
 
     def plot_supporting_lines_ci(self, ax: plt.Axes) -> None:
         """Plots the CI for the supporting lines of the CVP."""
@@ -149,15 +158,14 @@ class Plotter:
         """Plots the endpoint hypothesis values as a line plot."""
         ax.plot(self.xs, self.endpoint_hyp_ys, color='darkgreen', label='Endpoint')
 
-    @staticmethod
-    def set_hypothesis_plot_limits(ax: plt.Axes, xlims: Tuple[float, float]) -> None:
+    def set_hypothesis_plot_limits(self, ax: plt.Axes, xlims: Tuple[float, float]) -> None:
         """Calculates appropriate limits for the XY axes in the hypothesis plot."""
         ax.set_xlim(*xlims)
         current_limits = ax.get_ylim()
-        if current_limits[0] >= -0.5:
-            ax.set_ylim(bottom=-0.5)
-        if current_limits[1] <= 1.5:
-            ax.set_ylim(top=1.5)
+        if current_limits[0] >= self.hypothesis_plot_lower_ylim:
+            ax.set_ylim(bottom=self.hypothesis_plot_lower_ylim)
+        if current_limits[1] <= self.hypothesis_plot_upper_ylim:
+            ax.set_ylim(top=self.hypothesis_plot_upper_ylim)
 
     def plot_cumulative_hypothesis_ci(self, ax: plt.Axes) -> None:
         """Plots the CI around the cumulative hypothesis values as a line plot."""

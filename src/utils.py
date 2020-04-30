@@ -16,3 +16,8 @@ def get_missing_coordinate(x1: float, y1: float, x2: float, angular_coefficient:
     linear_coefficient = y1 - (angular_coefficient * x1)
     y2 = linear_coefficient + (x2 * angular_coefficient)
     return y2
+
+
+def array_in_sequence(array: np.ndarray, sequence) -> bool:
+    """Returns whether the input numpy array is inside the input Python sequence."""
+    return any(isinstance(element, type(array)) and np.array_equal(element, array) for element in sequence)
