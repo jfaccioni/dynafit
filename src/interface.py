@@ -329,6 +329,7 @@ class DynaFitGUI(QMainWindow):
     def dynafit_worker_run(self, dynafit_settings: Dict[str, Any]) -> None:
         """Runs Worker thread through QThreadPool after instantiating and connecting it."""
         worker = Worker(func=dynafit, **dynafit_settings)
+        worker.add_callbacks()
         self.connect_worker(worker=worker)
         self.threadpool.start(worker)
 

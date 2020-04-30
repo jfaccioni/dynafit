@@ -14,9 +14,8 @@ class Worker(QRunnable):
         self.args = args
         self.kwargs = kwargs
         self.signals = WorkerSignals()  # noqa
-        self.add_callbacks_to_kwargs()
 
-    def add_callbacks_to_kwargs(self):
+    def add_callbacks(self):
         """Adds keyword arguments related signaling between main thread and worker thread."""
         self.kwargs['progress_callback'] = self.signals.progress
         self.kwargs['warning_callback'] = self.signals.warning
