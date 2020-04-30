@@ -13,7 +13,7 @@ class Plotter:
     """Class that contains all information necessary to plot the DynaFit results"""
     def __init__(self, xs: np.ndarray, ys: np.ndarray, scatter_xs: np.ndarray, scatter_ys: np.ndarray,
                  scatter_colors: np.ndarray, show_violin: bool, violin_ys: Optional[List[np.ndarray]],
-                 violin_colors: Optional[List[str]], cumulative_hyp_ys: np.ndarray, endpoint_hyp_ys: np.ndarray,
+                 violin_colors: Optional[np.ndarray], cumulative_hyp_ys: np.ndarray, endpoint_hyp_ys: np.ndarray,
                  show_ci: bool, upper_ys: Optional[np.ndarray], lower_ys: Optional[np.ndarray],
                  cumulative_hyp_upper_ys: Optional[np.ndarray], cumulative_hyp_lower_ys: Optional[np.ndarray],
                  endpoint_hyp_upper_ys: Optional[np.ndarray], endpoint_hyp_lower_ys: Optional[np.ndarray],
@@ -40,7 +40,7 @@ class Plotter:
         self.hist_breakpoints = hist_breakpoints
         self.hist_instances = hist_instances
 
-    def plot_cvp_ax(self, ax: plt.Axes):
+    def plot_cvp_ax(self, ax: plt.Axes) -> None:
         """Calls all the functions related to plotting the CVP."""
         self.plot_supporting_lines(ax=ax)
         self.plot_mean_line(ax=ax)

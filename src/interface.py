@@ -353,7 +353,7 @@ class DynaFitGUI(QMainWindow):
         self.to_csv_button.setDisabled(True)
 
     @Slot(int)  # noqa
-    def dynafit_worker_progress_updated(self, number: int):
+    def dynafit_worker_progress_updated(self, number: int) -> None:
         """Updates DynaFit progress"""
         self.progress_bar.setValue(number)
 
@@ -400,7 +400,7 @@ class DynaFitGUI(QMainWindow):
         self.set_results_table(df=df)
         self.results_dataframe = self.remove_nan_strings(df=df)
 
-    def set_figure_title(self, filename: str, sheetname: str):
+    def set_figure_title(self, filename: str, sheetname: str) -> None:
         """Sets the figure title based on the parameters used in the DynaFit analysis."""
         self.fig.suptitle(f'CVP - Exp: {filename}, Sheet: {sheetname}')
 
@@ -488,7 +488,7 @@ class DynaFitGUI(QMainWindow):
         self.cs_gr_button.setChecked(True)
         self.cs_gr_button_clicked()
 
-    def resizeEvent(self, e):  # noqa
+    def resizeEvent(self, e) -> None:  # noqa
         """Overloaded method that resizes the QScrollArea properly."""
         self.canvas.resize(self.scroll_area.width(), self.canvas.height())
         super().resizeEvent(e)

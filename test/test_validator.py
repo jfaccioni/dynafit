@@ -32,7 +32,7 @@ class TestValidatorModule(unittest.TestCase):
         self.ev = ExcelValidator(workbook=openpyxl.Workbook(), sheetname='sheetname', cs_start_cell='A1',
                                  cs_end_cell='A10', gr_start_cell='B1', gr_end_cell='B10')
 
-    def load_test_case(self, sheetname: str):
+    def load_test_case(self, sheetname: str) -> None:
         """Loads the test case file as if it were passed in the ExcelValidator's __init__ method."""
         self.ev.wb = openpyxl.load_workbook(self.test_case_path)
         self.ev.sheetname = sheetname

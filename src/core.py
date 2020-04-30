@@ -204,7 +204,7 @@ def bootstrap_data(df: pd.DataFrame, repeats: int, progress_callback: Signal) ->
     return output_df
 
 
-def emit_bootstrap_progress(current: int, total: int, callback: Signal):
+def emit_bootstrap_progress(current: int, total: int, callback: Signal) -> None:
     """Emits a integer back to the GUI thread, in order to update the progress bar."""
     progress = int(round(100 * current / total))
     callback.emit(progress)  # noqa
@@ -239,7 +239,7 @@ def get_violin_values(df: pd.DataFrame, individual_colonies: int) -> Tuple[List[
     return violin_ys, violin_colors
 
 
-def get_element_color(element: float, cutoff: float):
+def get_element_color(element: float, cutoff: float) -> str:
     """Returns whether a given plot element should be red or gray, based on it being above or below a cutoff."""
     return 'red' if element <= cutoff else 'gray'
 
