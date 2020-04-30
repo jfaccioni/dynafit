@@ -3,9 +3,10 @@
 import unittest
 from typing import Sequence
 from unittest.mock import MagicMock, patch
+
 import matplotlib.pyplot as plt
-from matplotlib.collections import PolyCollection
 import numpy as np
+from matplotlib.collections import PolyCollection
 
 from src.plotter import Plotter
 from src.utils import array_in_sequence
@@ -338,8 +339,6 @@ class TestPlotterModule(unittest.TestCase):
         self.assertTrue(self.ax.get_title())
         self.assertTrue(self.ax.get_xlabel())
         self.assertTrue(self.ax.get_ylabel())
-
-
 
 
 if __name__ == '__main__':

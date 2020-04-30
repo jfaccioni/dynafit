@@ -2,7 +2,7 @@
 
 from itertools import count
 from queue import Queue
-from typing import Any, Dict, Optional, Tuple, List
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
