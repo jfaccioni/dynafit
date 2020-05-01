@@ -1,3 +1,9 @@
+# 0.3.0
+- Fixed bugs in CI calculations
+- Simplified code for calculating H0/H1 closeness
+- Wrote full test suites for all modules
+- Numerous small bug fixes & refactoring
+
 # 0.2.0
 - Added new hypothesis plot - closeness to H0/H1
 - Added scrollbar to plot figure

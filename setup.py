@@ -7,7 +7,7 @@ with open("README.md", "r") as readme:
 
 setup(
     name="dynafit",
-    version="0.2.0",
+    version="0.3.0",
     author="Juliano Luiz Faccioni",
     author_email="julianofaccioni@gmail.com",
     description="A package to perform DynaFit analysis through a GUI.",
