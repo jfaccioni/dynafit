@@ -8,7 +8,6 @@ import numpy as np
 import pandas as pd
 from PySide2.QtCore import Signal
 from openpyxl import Workbook
-from scipy.stats import t
 
 from src.exceptions import AbortedByUser, TooManyGroupsError
 from src.plotter import Plotter
@@ -47,18 +46,24 @@ def dynafit(workbook: Workbook, filename: str, sheetname: str, must_calculate_gr
     # Get histogram values
     hist_x, hist_breakpoints, hist_instances = get_histogram_values(df=df)
 
+    # Get original sample parameters
+    xs = np.log2(df.groupby('bins').mean()['CS']).values
+    ys = np.log2(df.groupby('bins').var()['GR']).values
+    original_var = df.groupby('bins').var()['GR'].values
+    original_var_se = np.array([group.var()['GR'] * np.sqrt(2 / (len(group) - 1)) for _, group in df.groupby('bins')])
+
     # Perform DynaFit bootstrap
-    df = bootstrap_data(df=df, repeats=bootstrap_repeats, progress_callback=progress_callback)
+    df = bootstrap_data(df=df, repeats=bootstrap_repeats, progress_callback=progress_callback, show_ci=show_ci)
     df = add_log_columns(df=df)
 
     # Get mean line values
-    xs, ys = get_mean_line_arrays(df=df)
+    boot_xs, boot_ys = get_bootstrap_xy_values(df=df)
 
     # Get scatter values
     scatter_xs, scatter_ys, scatter_colors = get_scatter_values(df=df, individual_colonies=individual_colonies)
 
     # Get violin values (if user wants to do so)
-    violin_ys, violin_colors = None, None
+    violin_ys, violin_colors, violin_data = None, None, None
     if show_violin:
         violin_ys, violin_colors = get_violin_values(df=df, individual_colonies=individual_colonies)
 
@@ -71,7 +76,8 @@ def dynafit(workbook: Workbook, filename: str, sheetname: str, must_calculate_gr
     cumulative_hyp_upper_ys, cumulative_hyp_lower_ys = None, None
     endpoint_hyp_upper_ys, endpoint_hyp_lower_ys = None, None
     if show_ci:
-        upper_ys, lower_ys = get_mean_line_ci(df=df, confidence_value=confidence_value)
+        upper_ys, lower_ys = get_mean_line_ci(df=df, confidence_value=confidence_value,
+                                              original_variance=original_var, original_variance_se=original_var_se)
         cumulative_hyp_upper_ys = get_cumulative_hypothesis_values(xs=xs, ys=upper_ys)
         cumulative_hyp_lower_ys = get_cumulative_hypothesis_values(xs=xs, ys=lower_ys)
         endpoint_hyp_upper_ys = get_endpoint_hypothesis_values(xs=xs, ys=upper_ys)
@@ -92,11 +98,10 @@ def dynafit(workbook: Workbook, filename: str, sheetname: str, must_calculate_gr
                                              cumulative_hyp_lower_ys=cumulative_hyp_lower_ys,
                                              endpoint_hyp_upper_ys=endpoint_hyp_upper_ys,
                                              endpoint_hyp_lower_ys=endpoint_hyp_lower_ys)
-    # Encapsulates data for plots
-    plot_results = Plotter(xs=xs, ys=ys, scatter_xs=scatter_xs, scatter_ys=scatter_ys, scatter_colors=scatter_colors,
-                           show_violin=show_violin, violin_ys=violin_ys, violin_colors=violin_colors,
-                           cumulative_hyp_ys=cumulative_hyp_ys, endpoint_hyp_ys=endpoint_hyp_ys, show_ci=show_ci,
-                           upper_ys=upper_ys, lower_ys=lower_ys, cumulative_hyp_upper_ys=cumulative_hyp_upper_ys,
+    plot_results = Plotter(xs=xs, ys=ys, boot_xs=boot_xs, boot_ys=boot_ys, scatter_xs=scatter_xs, scatter_ys=scatter_ys,
+                           show_violin=show_violin, violin_ys=violin_ys, cumulative_hyp_ys=cumulative_hyp_ys,
+                           endpoint_hyp_ys=endpoint_hyp_ys, show_ci=show_ci, upper_ys=upper_ys, lower_ys=lower_ys,
+                           cumulative_hyp_upper_ys=cumulative_hyp_upper_ys,
                            cumulative_hyp_lower_ys=cumulative_hyp_lower_ys, endpoint_hyp_upper_ys=endpoint_hyp_upper_ys,
                            endpoint_hyp_lower_ys=endpoint_hyp_lower_ys, hist_x=hist_x,
                            hist_breakpoints=hist_breakpoints, hist_instances=hist_instances)
@@ -188,20 +193,38 @@ def get_histogram_values(df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray, np.n
     return hist_xs, hist_breakpoints, hist_instances
 
 
-def bootstrap_data(df: pd.DataFrame, repeats: int, progress_callback: Signal) -> pd.DataFrame:
+def bootstrap_data(df: pd.DataFrame, repeats: int, progress_callback: Signal, show_ci: bool) -> pd.DataFrame:
     """Performs bootstrapping. Each bin is sampled N times (N="repeats" parameter)."""
+    counter = count(start=0)
     total_progress = repeats * len(df['bins'].unique())
-    progress_counter = count(start=1)
-    columns = ['CS_mean', 'GR_var', 'bins']
-    output_df = pd.DataFrame(columns=columns)
-    for bin_number, bin_values in df.groupby('bins'):
-        sample_size = len(bin_values)
+    output_df = pd.DataFrame(columns=['CS_mean', 'GR_var', 'bins', 't_star'], index=range(total_progress), dtype=float)
+    for group, group_values in df.groupby('bins'):
+        sample_size = len(group_values)
         for repeat in range(repeats):
-            emit_bootstrap_progress(current=next(progress_counter), total=total_progress, callback=progress_callback)
-            sample = bin_values.sample(n=sample_size, replace=True)
-            row = pd.Series([sample['CS'].mean(), sample['GR'].var(), bin_number], index=columns)
-            output_df = output_df.append(row, ignore_index=True)
-    return output_df
+            i = next(counter)
+            output_df.loc[i] = get_bootstrap_params(data=group_values, n=sample_size, group=group, show_ci=show_ci)
+            emit_bootstrap_progress(current=i+1, total=total_progress, callback=progress_callback)
+    return output_df.replace([np.inf, -np.inf], np.nan).dropna()
+
+
+def get_bootstrap_params(data: pd.DataFrame, n: int, group: float, show_ci: bool) -> Tuple:
+    """Gets bootstrap parameters: mean colony size of bootstrap sample, variance in growth rate of bootstrap sample,
+    group number of bootstrap sample, corresponding t statistic of bootstrap sample (if needed for CI)."""
+    bootstrap_sample = data.sample(n=n, replace=True)
+    mean_colony_size = bootstrap_sample['CS'].mean()
+    growth_rate_variance = bootstrap_sample['GR'].var()
+    data_var = data['GR'].var()
+    t = np.nan if not show_ci else get_t_star(bootstrap_sample=bootstrap_sample, data_var=data_var)
+    return mean_colony_size, growth_rate_variance, group, t
+
+
+def get_t_star(bootstrap_sample: pd.DataFrame, data_var: float) -> float:
+    """Calculates the t statistic (t-star) for the bootstrap distribution, relative to the total distribution.
+    Source: https://arxiv.org/pdf/1411.5279.pdf"""
+    bootstrap_var = bootstrap_sample['GR'].var()
+    # The line below calculates variance SE, source: https://web.eecs.umich.edu/~fessler/papers/files/tr/stderr.pdf
+    bootstrap_var_se = bootstrap_var * np.sqrt(2 / (len(bootstrap_sample) - 1))
+    return (bootstrap_var - data_var) / bootstrap_var_se
 
 
 def emit_bootstrap_progress(current: int, total: int, callback: Signal) -> None:
@@ -215,7 +238,7 @@ def add_log_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df.assign(log2_CS_mean=np.log2(df['CS_mean']), log2_GR_var=np.log2(df['GR_var']))
 
 
-def get_mean_line_arrays(df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
+def get_bootstrap_xy_values(df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
     """Returns a tuple of numpy arrays representing the X and Y values of the mean line in the CVP, respectively."""
     xs = df.groupby('bins').mean()['log2_CS_mean'].values
     ys = df.groupby('bins').mean()['log2_GR_var'].values
@@ -259,28 +282,28 @@ def get_endpoint_hypothesis_values(xs: np.ndarray, ys: np.ndarray) -> np.ndarray
     return np.nan_to_num((ys_h0 - ys) / (ys_h0 - ys_h1), posinf=0.0, neginf=0.0)
 
 
-def get_mean_line_ci(df: pd.DataFrame, confidence_value: float) -> Tuple[np.ndarray, np.ndarray]:
+def get_mean_line_ci(df: pd.DataFrame, confidence_value: float, original_variance: np.ndarray,
+                     original_variance_se: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """Calculates and returns the a tuple of arrays representing the Y values of the upper and lower confidence
     interval for the bootstrapped population."""
     upper_ys = []
     lower_ys = []
     alpha = 1 - confidence_value
-    for bin_number, bin_values in df.groupby('bins'):
-        upper, lower = calculate_bootstrap_ci_from_t_distribution(data_series=bin_values['log2_GR_var'], alpha=alpha)
+    for (_, bin_values), var, var_se in zip(df.groupby('bins'), original_variance, original_variance_se):
+        t_distribution = bin_values['t_star']
+        upper, lower = calculate_bootstrap_ci_from_t_distribution(t_distribution=t_distribution, sample_stat=var,
+                                                                  sample_stat_se=var_se, alpha=alpha)
         upper_ys.append(upper)
         lower_ys.append(lower)
     return np.array(upper_ys), np.array(lower_ys)
 
 
-def calculate_bootstrap_ci_from_t_distribution(data_series: pd.Series, alpha: float) -> Tuple[float, float]:
+def calculate_bootstrap_ci_from_t_distribution(t_distribution: pd.Series, sample_stat: float, sample_stat_se: float,
+                                               alpha: float) -> Tuple[float, float]:
     """Returns the CI upper and lower bounds from a series of data, using a t distribution."""
-    degrees_of_freedom = len(data_series) - 1
-    mean = data_series.mean()
-    # IMPORTANT: the bootstrap distribution's SD is already an estimation of the sample's SEM.
-    # This is why we use SD here.
-    standard_error = data_series.std()
-    h = standard_error * t.ppf(1 - (alpha / 2), degrees_of_freedom)
-    return mean + h, mean - h
+    upper = sample_stat - (t_distribution.quantile(alpha/2) * sample_stat_se)
+    lower = sample_stat - (t_distribution.quantile(1 - alpha/2) * sample_stat_se)
+    return np.log2(upper), np.log2(lower)
 
 
 def results_to_dataframe(original_parameters: Dict[str, Any], xs: np.ndarray, ys: np.ndarray,

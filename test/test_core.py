@@ -268,7 +268,7 @@ class TestCoreModule(unittest.TestCase):
         })
         expected_xs = np.array([1.5, 3.5, 5.5])  # mean GR_var value for each bin
         expected_ys = np.array([15, 35, 55])  # mean CS_mean value for each bin
-        actual_xs, actual_ys = get_mean_line_arrays(df=test_case_df)
+        actual_xs, actual_ys = get_bootstrap_xy_values(df=test_case_df)
         for expected_array, actual_array in zip([expected_xs, expected_ys], [actual_xs, actual_ys]):
             with self.subTest(expected_array=expected_array, actual_array=actual_array):
                 np.testing.assert_allclose(expected_array, actual_array)

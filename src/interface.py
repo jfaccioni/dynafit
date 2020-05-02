@@ -480,14 +480,6 @@ class DynaFitGUI(QMainWindow):
         box = QMessageBox(self, windowTitle='An error occurred!', text=name, detailedText=trace)  # noqa
         box.exec_()
 
-    def debug(self) -> None:
-        """Implemented for easier debugging."""
-        self.load_data(query='./test/test_cases/interface_test_case.xlsx')
-        self.CS_start_textbox.setText('A2')
-        self.GR_start_textbox.setText('B2')
-        self.cs_gr_button.setChecked(True)
-        self.cs_gr_button_clicked()
-
     def resizeEvent(self, e) -> None:  # noqa
         """Overloaded method that resizes the QScrollArea properly."""
         self.canvas.resize(self.scroll_area.width(), self.canvas.height())
@@ -529,14 +521,5 @@ def main() -> None:
     sys.exit(app.exec_())
 
 
-def main_debug() -> None:
-    """Executes GUI in debug mode."""
-    app = QApplication()
-    dfgui = DynaFitGUI()
-    dfgui.debug()
-    dfgui.show()
-    sys.exit(app.exec_())
-
-
 if __name__ == '__main__':
-    main() if not DEBUG else main_debug()
+    main()
