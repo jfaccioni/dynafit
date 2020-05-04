@@ -103,7 +103,7 @@ class Plotter:
 
     def plot_bootstrap_violins(self, ax: plt.Axes) -> None:
         """Plots the bootstrap populations for each bin as violin plots."""
-        parts = ax.violinplot(positions=self.violin_xs, dataset=self.violin_ys, bw_method=0.4, showextrema=False)
+        parts = ax.violinplot(positions=self.violin_xs, dataset=self.violin_ys, showextrema=False)
         for violin in parts['bodies']:
             violin.set_alpha(0.3)
             violin.set_facecolor(self.violin_body_color)
