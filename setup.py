@@ -25,8 +25,7 @@ setup(
                       'matplotlib >= 3.2',
                       'numpy >= 1.18',
                       'openpyxl >= 3.0',
-                      'seaborn >= 0.10',
-                      'scipy >= 1.4'],
+                      'seaborn >= 0.10'],
     python_requires='>=3.8',
     entry_points={
         'console_scripts': [
