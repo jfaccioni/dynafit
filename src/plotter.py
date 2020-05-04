@@ -25,7 +25,7 @@ class Plotter:
     violin_edge_color = 'black'
     violin_median_color = 'white'
     violin_whisker_color = 'black'
-    hist_div_color = 'black'
+    hist_interval_color = 'black'
 
     def __init__(self, xs: np.ndarray, ys: np.ndarray, scatter_xs: np.ndarray, scatter_ys: np.ndarray,
                  show_violin: bool, violin_xs: Optional[np.ndarray], violin_ys: Optional[List[np.ndarray]],
@@ -204,7 +204,7 @@ class Plotter:
 
     def plot_group_divisions(self, ax: plt.Axes) -> None:
         """Plots the group divisions in the histogram as vertical lines."""
-        ax.vlines(self.hist_intervals, *ax.get_ylim(), color=self.hist_div_color, linestyle='dotted', alpha=0.8)
+        ax.vlines(self.hist_intervals, *ax.get_ylim(), color=self.hist_interval_color, linestyle='dotted', alpha=0.8)
 
     @staticmethod
     def format_histogram(ax: plt.Axes) -> None:
