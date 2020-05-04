@@ -151,7 +151,7 @@ class TestCoreModule(unittest.TestCase):
         data = pd.DataFrame({
             'CS': [1, 1, 2, 2, 3, 3]
         })
-        binned_data = add_bins(data, individual_colonies=3, bins=0)
+        binned_data = divide_sample_into_groups(data, individual_colonies=3, bins=0)
         expected_bins = np.array([1, 1, 2, 2, 3, 3])
         actual_bins = binned_data.bins.values
         np.testing.assert_allclose(expected_bins, actual_bins)
@@ -160,7 +160,7 @@ class TestCoreModule(unittest.TestCase):
         data = pd.DataFrame({
             'CS': [10, 12, 24, 25, 31, 32]
         })
-        binned_data = add_bins(data, individual_colonies=0, bins=3)
+        binned_data = divide_sample_into_groups(data, individual_colonies=0, bins=3)
         expected_bins = np.array([1, 1, 2, 2, 3, 3])
         actual_bins = binned_data.bins.values
         np.testing.assert_allclose(expected_bins, actual_bins)
@@ -169,7 +169,7 @@ class TestCoreModule(unittest.TestCase):
         data = pd.DataFrame({
             'CS': [1, 1, 2, 2, 3, 3, 10, 12, 24, 25, 31, 32]
         })
-        binned_data = add_bins(data, individual_colonies=3, bins=3)
+        binned_data = divide_sample_into_groups(data, individual_colonies=3, bins=3)
         expected_bins = np.array([1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6])
         actual_bins = binned_data.bins.values
         np.testing.assert_allclose(expected_bins, actual_bins)
@@ -179,7 +179,7 @@ class TestCoreModule(unittest.TestCase):
             'CS': [10, 11, 10, 12, 15, 15]
         })
         with self.assertRaises(TooManyGroupsError):
-            add_bins(data, individual_colonies=0, bins=6)
+            divide_sample_into_groups(data, individual_colonies=0, bins=6)
 
     def test_sample_size_warning_info_returns_dictionary_of_warnings(self) -> None:
         data = pd.DataFrame({
@@ -240,7 +240,7 @@ class TestCoreModule(unittest.TestCase):
             'CS_mean': [1, 2, 4, 8, 16],
             'GR_var': [32, 64, 128, 256, 512]
         })
-        df_with_log_columns = add_log_columns(df=test_case_df)
+        df_with_log_columns = add_log2_columns(df=test_case_df)
         for column_name in test_case_df.columns:
             new_column_name = 'log2_' + column_name
             with self.subTest(new_column_name=new_column_name):
@@ -251,7 +251,7 @@ class TestCoreModule(unittest.TestCase):
             'log2_CS_mean': [0, 1, 2, 3, 4],
             'log2_GR_var': [5, 6, 7, 8, 9]
         })
-        actual_df = add_log_columns(df=pd.DataFrame({
+        actual_df = add_log2_columns(df=pd.DataFrame({
             'CS_mean': [1, 2, 4, 8, 16],
             'GR_var': [32, 64, 128, 256, 512]
         }))
@@ -282,7 +282,7 @@ class TestCoreModule(unittest.TestCase):
         expected_xs = test_case_df['log2_CS_mean'].values
         expected_ys = test_case_df['log2_GR_var'].values
         expected_colors = np.array((['red'] * 4) + (['gray'] * 2))
-        actual_values = get_scatter_values(df=test_case_df, individual_colonies=2)
+        actual_values = get_bootstrap_scatter_values(df=test_case_df, individual_colonies=2)
         for expected, actual in zip([expected_xs, expected_ys, expected_colors], actual_values):
             with self.subTest(expected=expected, actual=actual):
                 np.testing.assert_array_equal(expected, actual)
@@ -294,7 +294,7 @@ class TestCoreModule(unittest.TestCase):
         })
         expected_ys = [np.array([10, 20]), np.array([30, 40]), np.array([50, 60])]
         expected_colors = np.array((['red'] * 2) + (['gray'] * 1))
-        actual_values = get_violin_values(df=test_case_df, individual_colonies=2)
+        actual_values = get_bootstrap_violin_values(df=test_case_df, individual_colonies=2)
         for expected, actual in zip([expected_ys, expected_colors], actual_values):
             with self.subTest(expected=expected, actual=actual):
                 np.testing.assert_array_equal(expected, actual)
@@ -331,7 +331,7 @@ class TestCoreModule(unittest.TestCase):
             'log2_GR_var': [10, 20, 30, 40, 50, 60],
             'bins': [1, 1, 2, 2, 3, 3]
         })
-        upp, low = get_mean_line_ci(df=test_case_df, confidence_value=0.95)
+        upp, low = get_bootstrap_ci(df=test_case_df, confidence_value=0.95)
         number_of_bins = len(test_case_df.bins.unique())
         for array in (upp, low):
             with self.subTest(array=array):

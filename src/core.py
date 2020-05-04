@@ -2,7 +2,7 @@
 
 from itertools import count
 from queue import Queue
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, KeysView, ValuesView, Union
 
 import numpy as np
 import pandas as pd
@@ -18,10 +18,10 @@ from src.validator import ExcelValidator
 WARNING_LEVEL = 20
 
 
-def dynafit(workbook: Workbook, filename: str, sheetname: str, must_calculate_growth_rate: bool, time_delta: float,
+def dynafit(workbook: Workbook, filename: str, sheetname: str, calculate_growth_rate: bool, time_delta: float,
             cs_start_cell: str, cs_end_cell: str, gr_start_cell: str, gr_end_cell: str, individual_colonies: int,
-            large_colony_groups: int, bootstrap_repeats: int, show_ci: bool, confidence_value: float,
-            must_remove_outliers: bool, show_violin: bool, **kwargs) -> Tuple[Dict[str, Any], Plotter, pd.DataFrame]:
+            large_groups: int, bootstrap_repeats: int, show_ci: bool, confidence_value: float,
+            remove_outliers: bool, show_violin: bool, **kwargs) -> Tuple[Dict[str, Any], Plotter, pd.DataFrame]:
     """Main DynaFit function"""
     # Extract values to be emitted by thread from kwargs
     progress_callback = kwargs.get('progress_callback')
@@ -32,39 +32,37 @@ def dynafit(workbook: Workbook, filename: str, sheetname: str, must_calculate_gr
                         gr_start_cell=gr_start_cell, gr_end_cell=gr_end_cell).get_data()
 
     # Preprocess data
-    df = preprocess_data(df=df, must_calculate_growth_rate=must_calculate_growth_rate, time_delta=time_delta,
-                         must_remove_outliers=must_remove_outliers)
+    df = preprocess_data(df=df, calculate_growth_rate=calculate_growth_rate, time_delta=time_delta,
+                         remove_outliers=remove_outliers)
 
     # Bin samples into groups
-    df = add_bins(df=df, individual_colonies=individual_colonies, bins=large_colony_groups)
+    df = divide_sample_into_groups(df=df, individual_colonies=individual_colonies, large_groups=large_groups)
 
     # Check for sample size warning
     warning_info = sample_size_warning_info(df=df, warning_level=WARNING_LEVEL)
     if sample_size_warning_answer(warning_info=warning_info, callback=warning_callback) is True:
         raise AbortedByUser("User decided to stop DynaFit analysis.")
 
+    # Get original sample parameters
+    xs, ys = get_original_sample_parameters(df=df)
+    original_var, original_var_se = get_original_sample_statistics(df=df)
+
     # Get histogram values
     hist_xs, hist_intervals = get_histogram_values(df=df)
 
-    # Get original sample parameters
-    xs = np.log2(df.groupby('bins').mean()['CS']).values
-    ys = np.log2(df.groupby('bins').var()['GR']).values
-    original_var = df.groupby('bins').var()['GR'].values
-    original_var_se = np.array([group.var()['GR'] * np.sqrt(2 / (len(group) - 1)) for _, group in df.groupby('bins')])
-
     # Perform DynaFit bootstrap
     df = bootstrap_data(df=df, repeats=bootstrap_repeats, progress_callback=progress_callback, show_ci=show_ci)
-    df = add_log_columns(df=df)
+    df = add_log2_columns(df=df, column_names=['bootstrap_CS_mean', 'bootstrap_GR_var'])
 
     # Get scatter values
-    scatter_xs, scatter_ys, scatter_colors = get_scatter_values(df=df, individual_colonies=individual_colonies)
+    scatter_xs, scatter_ys = get_bootstrap_scatter_values(df=df)
 
     # Get violin values (if user wants to do so)
     violin_ys, violin_xs = None, None
     violin_q1, violin_medians, violin_q3 = None, None, None
     if show_violin:
-        violin_xs, violin_ys = get_violin_values(df=df)
-        violin_q1, violin_medians, violin_q3 = get_violin_statistics(violins=violin_ys)
+        violin_xs, violin_ys = get_bootstrap_violin_values(df=df)
+        violin_q1, violin_medians, violin_q3 = get_bootstrap_violin_statistics(violins=violin_ys)
 
     # Get hypothesis values for hypothesis plot
     cumulative_hyp_ys = get_cumulative_hypothesis_values(xs=xs, ys=ys)
@@ -75,8 +73,8 @@ def dynafit(workbook: Workbook, filename: str, sheetname: str, must_calculate_gr
     cumulative_hyp_upper_ys, cumulative_hyp_lower_ys = None, None
     endpoint_hyp_upper_ys, endpoint_hyp_lower_ys = None, None
     if show_ci:
-        upper_ys, lower_ys = get_mean_line_ci(df=df, confidence_value=confidence_value,
-                                              original_variance=original_var, original_variance_se=original_var_se)
+        upper_ys, lower_ys = get_bootstrap_ci(df=df, confidence_value=confidence_value, original_var=original_var,
+                                              original_var_se=original_var_se)
         cumulative_hyp_upper_ys = get_cumulative_hypothesis_values(xs=xs, ys=upper_ys)
         cumulative_hyp_lower_ys = get_cumulative_hypothesis_values(xs=xs, ys=lower_ys)
         endpoint_hyp_upper_ys = get_endpoint_hypothesis_values(xs=xs, ys=upper_ys)
@@ -87,7 +85,7 @@ def dynafit(workbook: Workbook, filename: str, sheetname: str, must_calculate_gr
         'filename': filename,
         'sheetname': sheetname,
         'max individual colony size': individual_colonies,
-        'number of large colony groups': large_colony_groups,
+        'number of large colony groups': large_groups,
         'bootstrapping repeats': bootstrap_repeats
     }
     dataframe_results = results_to_dataframe(original_parameters=original_parameters, xs=xs, ys=ys,
@@ -109,18 +107,18 @@ def dynafit(workbook: Workbook, filename: str, sheetname: str, must_calculate_gr
     return original_parameters, plot_results, dataframe_results
 
 
-def preprocess_data(df: pd.DataFrame, must_calculate_growth_rate: bool, time_delta: float,
-                    must_remove_outliers: bool) -> pd.DataFrame:
+def preprocess_data(df: pd.DataFrame, calculate_growth_rate: bool, time_delta: float,
+                    remove_outliers: bool) -> pd.DataFrame:
     """Calls downstream methods related to data preprocessing, based on boolean flags."""
     df = filter_colony_sizes_less_than_one(df=df)
-    if must_calculate_growth_rate:
-        df = calculate_growth_rate(df=df, time_delta=time_delta)
-    if must_remove_outliers:
+    if calculate_growth_rate:
+        df = add_growth_rate_column(df=df, time_delta=time_delta)
+    if remove_outliers:
         df = filter_outliers(df=df)
     return df
 
 
-def calculate_growth_rate(df: pd.DataFrame, time_delta: float) -> pd.DataFrame:
+def add_growth_rate_column(df: pd.DataFrame, time_delta: float) -> pd.DataFrame:
     """Calculates GR values from CS1 and CS2 and a time delta. These values are place on the "GR" column (which
     initially contained the CS2 values)."""
     growth_rate = (np.log2(df['GR']) - np.log2(df['CS'])) / (time_delta / 24)
@@ -146,26 +144,26 @@ def filter_outliers(df: pd.DataFrame) -> pd.DataFrame:
     return df.loc[df['GR'].between(lower_cutoff, upper_cutoff)]
 
 
-def add_bins(df: pd.DataFrame, individual_colonies: int, bins: int) -> pd.DataFrame:
-    """Returns the data DataFrame with a "bins" column, which divides the population into groups (bins) of cells.
+def divide_sample_into_groups(df: pd.DataFrame, individual_colonies: int, large_groups: int) -> pd.DataFrame:
+    """Returns the data DataFrame with a "group" column, which divides the population into groups of cells.
     Colonies with size <= the "individual_colonies" parameters are grouped with colonies with the same number of cells,
     while larger colonies are split into N groups (N=bins) with a close number of instances in each one of them."""
-    bin_condition = df['CS'] > individual_colonies
-    single_bins = df.loc[~bin_condition]['CS']
+    group_condition = df['CS'] > individual_colonies
+    single_groups = df.loc[~group_condition]['CS']
     try:
-        multiple_bins = pd.qcut(df.loc[bin_condition]['CS'], bins, labels=False) + (individual_colonies + 1)
+        multiple_groups = pd.qcut(df.loc[group_condition]['CS'], large_groups, labels=False) + (individual_colonies + 1)
     except ValueError:
-        mes = (f'Could not divide the population of large colonies into {bins} unique groups. ' 
+        mes = (f'Could not divide the population of large colonies into {large_groups} unique groups. ' 
                'Please reduce the number of large colony groups and try again.')
         raise TooManyGroupsError(mes)
-    return df.assign(bins=pd.concat([single_bins, multiple_bins]))
+    return df.assign(groups=pd.concat([single_groups, multiple_groups]))
 
 
 def sample_size_warning_info(df: pd.DataFrame, warning_level: int) -> Optional[Dict[int, Tuple[int, float]]]:
     """Checks whether any group resulting from the binning process has a low number of instances (based on the
     global value os WARNING_LEVEL."""
     warning_info = {}
-    for bin_number, bin_values in df.groupby('bins'):
+    for bin_number, bin_values in df.groupby('groups'):
         n = len(bin_values)
         if n < warning_level:
             warning_info[int(bin_number)] = (n, bin_values['CS'].mean())
@@ -183,19 +181,35 @@ def sample_size_warning_answer(warning_info: Optional[Dict[int, int]], callback:
     return answer.get(block=True)
 
 
+def get_original_sample_parameters(df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
+    """Returns a tuple of arrays representing the X and Y coordinates of the sample's original CS and GR."""
+    xs = np.log2(df.groupby('groups').mean()['CS']).values
+    ys = np.log2(df.groupby('groups').var()['GR']).values
+    return xs, ys
+
+
+def get_original_sample_statistics(df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
+    """Returns a tuple of arrays representing the variance and its standard error of the sample's original GR."""
+    original_var = df.groupby('groups').var()['GR'].values
+    degrees_of_freedom = df.groupby('groups').count()['GR'].values - 1
+    original_var_se = original_var * np.sqrt(2 / degrees_of_freedom)
+    return original_var, original_var_se
+
+
 def get_histogram_values(df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
     """Returns values for the histogram of the colony size, indicating the group sizes made by the binning process."""
     hist_xs = df['CS']
-    hist_intervals = df.groupby('bins').max()['CS'].values
+    hist_intervals = df.groupby('groups').max()['CS'].values
     return hist_xs, hist_intervals
 
 
 def bootstrap_data(df: pd.DataFrame, repeats: int, progress_callback: Signal, show_ci: bool) -> pd.DataFrame:
     """Performs bootstrapping. Each bin is sampled N times (N="repeats" parameter)."""
     counter = count(start=0)
-    total_progress = repeats * len(df['bins'].unique())
-    output_df = pd.DataFrame(columns=['CS_mean', 'GR_var', 'bins', 't_star'], index=range(total_progress), dtype=float)
-    for group, group_values in df.groupby('bins'):
+    total_progress = repeats * len(df['groups'].unique())
+    output_df = pd.DataFrame(columns=['bootstrap_CS_mean', 'bootstrap_GR_var', 'groups', 't_star'],
+                             index=range(total_progress), dtype=float)  # noqa
+    for group, group_values in df.groupby('groups'):
         sample_size = len(group_values)
         for repeat in range(repeats):
             i = next(counter)
@@ -219,7 +233,8 @@ def get_t_star(bootstrap_sample: pd.DataFrame, data_var: float) -> float:
     """Calculates the t statistic (t-star) for the bootstrap distribution, relative to the total distribution.
     Source: https://arxiv.org/pdf/1411.5279.pdf"""
     bootstrap_var = bootstrap_sample['GR'].var()
-    # The line below calculates variance SE, source: https://web.eecs.umich.edu/~fessler/papers/files/tr/stderr.pdf
+    # The line below calculates the standard error of the bootstrap sample's variance (not its mean!).
+    # Source: https://web.eecs.umich.edu/~fessler/papers/files/tr/stderr.pdf
     bootstrap_var_se = bootstrap_var * np.sqrt(2 / (len(bootstrap_sample) - 1))
     return (bootstrap_var - data_var) / bootstrap_var_se
 
@@ -230,27 +245,27 @@ def emit_bootstrap_progress(current: int, total: int, callback: Signal) -> None:
     callback.emit(progress)  # noqa
 
 
-def add_log_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """Adds columns with the log2-transformed values of colony size means and growth rate variances."""
-    return df.assign(log2_CS_mean=np.log2(df['CS_mean']), log2_GR_var=np.log2(df['GR_var']))
+def add_log2_columns(df: pd.DataFrame, column_names: List[str]) -> pd.DataFrame:
+    """Adds columns with the log2-transformed values the input column name list."""
+    log_columns = {f'log2_{column_name}': np.log2(df[column_name]) for column_name in column_names}
+    return df.assign(**log_columns)
 
 
-def get_scatter_values(df: pd.DataFrame, individual_colonies: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+def get_bootstrap_scatter_values(df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
     """Returns a tuple of numpy arrays representing the X, Y and color values of the bootstrap scatter."""
-    scatter_xs = df['log2_CS_mean'].values
-    scatter_ys = df['log2_GR_var'].values
-    scatter_colors = df['bins'].apply(get_element_color, cutoff=individual_colonies).values
-    return scatter_xs, scatter_ys, scatter_colors
+    scatter_xs = df['log2_bootstrap_CS_mean'].values
+    scatter_ys = df['log2_bootstrap_GR_var'].values
+    return scatter_xs, scatter_ys
 
 
-def get_violin_values(df: pd.DataFrame) -> Tuple[np.ndarray, List[np.ndarray]]:
+def get_bootstrap_violin_values(df: pd.DataFrame) -> Tuple[np.ndarray, List[np.ndarray]]:
     """Returns a List of numpy arrays representing the values that serve as the base for a violin."""
-    violin_xs = df.groupby('bins').mean()['log2_CS_mean'].values
-    violin_ys = [group.values for _, group in df.groupby('bins')['log2_GR_var']]
+    violin_xs = df.groupby('groups').mean()['log2_bootstrap_CS_mean'].values
+    violin_ys = [group.values for _, group in df.groupby('groups')['log2_bootstrap_GR_var']]
     return violin_xs, violin_ys
 
 
-def get_violin_statistics(violins: List[np.array]) -> Tuple[np.array, np.array, np.array]:
+def get_bootstrap_violin_statistics(violins: List[np.array]) -> Tuple[np.array, np.array, np.array]:
     """Returns a three numpy arrays for the q1, median and q3 values of each violin, respectively."""
     violin_q1 = [np.percentile(violin, 25) for violin in violins]
     violin_medians = [np.percentile(violin, 50) for violin in violins]
@@ -278,14 +293,14 @@ def get_endpoint_hypothesis_values(xs: np.ndarray, ys: np.ndarray) -> np.ndarray
     return np.nan_to_num((ys_h0 - ys) / (ys_h0 - ys_h1), posinf=0.0, neginf=0.0)
 
 
-def get_mean_line_ci(df: pd.DataFrame, confidence_value: float, original_variance: np.ndarray,
-                     original_variance_se: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+def get_bootstrap_ci(df: pd.DataFrame, confidence_value: float, original_var: np.ndarray,
+                     original_var_se: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """Calculates and returns the a tuple of arrays representing the Y values of the upper and lower confidence
     interval for the bootstrapped population."""
     upper_ys = []
     lower_ys = []
     alpha = 1 - confidence_value
-    for (_, bin_values), var, var_se in zip(df.groupby('bins'), original_variance, original_variance_se):
+    for (_, bin_values), var, var_se in zip(df.groupby('groups'), original_var, original_var_se):
         t_distribution = bin_values['t_star']
         upper, lower = calculate_bootstrap_ci_from_t_distribution(t_distribution=t_distribution, sample_stat=var,
                                                                   sample_stat_se=var_se, alpha=alpha)
@@ -309,50 +324,39 @@ def results_to_dataframe(original_parameters: Dict[str, Any], xs: np.ndarray, ys
                          endpoint_hyp_upper_ys: Optional[np.ndarray],
                          endpoint_hyp_lower_ys: Optional[np.ndarray]) -> pd.DataFrame:
     """Saves DynaFit dataframe_results as a pandas DataFrame (used for Excel/csv export)."""
-    largest_seq_size = max(len(original_parameters), len(xs))
-    params_padding = largest_seq_size - len(original_parameters)
-    array_padding = largest_seq_size - len(xs)
     data = {
-        'Parameter': np.concatenate([list(original_parameters.keys()), np.full(params_padding, np.nan)]),
-        'Value': np.concatenate([list(original_parameters.values()), np.full(params_padding, np.nan)]),
-        'Log2(Colony Size)': np.concatenate([xs, np.full(array_padding, np.nan)]).round(2),
-        'Log2(Variance)': np.concatenate([ys, np.full(array_padding, np.nan)]).round(2),
-        'Log2(Variance) upper CI': np.concatenate([upper_ys, np.full(array_padding, np.nan)]).round(2)
-        if show_ci else None,
-        'Log2(Variance) lower CI': np.concatenate([lower_ys, np.full(array_padding, np.nan)]).round(2)
-        if show_ci else None,
-        'Distance to H0 (cumulative)': np.concatenate([np.abs(cumulative_hyp_ys),
-                                                       np.full(array_padding, np.nan)]).round(2),
-        'Distance to H0 (cumulative) upper CI': np.concatenate([np.abs(cumulative_hyp_upper_ys),
-                                                                np.full(array_padding, np.nan)]).round(2)
-        if show_ci else None,
-        'Distance to H0 (cumulative) lower CI': np.concatenate([np.abs(cumulative_hyp_lower_ys),
-                                                                np.full(array_padding, np.nan)]).round(2)
-        if show_ci else None,
-        'Distance to H1 (cumulative)': np.concatenate([np.abs(cumulative_hyp_ys - 1),
-                                                       np.full(array_padding, np.nan)]).round(2),
-        'Distance to H1 (cumulative) upper CI': np.concatenate([np.abs(cumulative_hyp_upper_ys - 1),
-                                                                np.full(array_padding, np.nan)]).round(2)
-        if show_ci else None,
-        'Distance to H1 (cumulative) lower CI': np.concatenate([np.abs(cumulative_hyp_lower_ys - 1),
-                                                                np.full(array_padding, np.nan)]).round(2)
-        if show_ci else None,
-        'Distance to H0 (endpoint)': np.concatenate([np.abs(endpoint_hyp_ys),
-                                                     np.full(array_padding, np.nan)]).round(2),
-        'Distance to H0 (endpoint) upper CI': np.concatenate([np.abs(endpoint_hyp_upper_ys),
-                                                              np.full(array_padding, np.nan)]).round(2)
-        if show_ci else None,
-        'Distance to H0 (endpoint) lower CI': np.concatenate([np.abs(endpoint_hyp_lower_ys),
-                                                              np.full(array_padding, np.nan)]).round(2)
-        if show_ci else None,
-        'Distance to H1 (endpoint)': np.concatenate([np.abs(endpoint_hyp_ys - 1),
-                                                     np.full(array_padding, np.nan)]).round(2),
-        'Distance to H1 (endpoint) upper CI': np.concatenate([np.abs(endpoint_hyp_upper_ys - 1),
-                                                              np.full(array_padding, np.nan)]).round(2)
-        if show_ci else None,
-        'Distance to H1 (endpoint) lower CI': np.concatenate([np.abs(endpoint_hyp_lower_ys - 1),
-                                                              np.full(array_padding, np.nan)]).round(2)
-        if show_ci else None,
+        'Parameter': to_column_text_format(original_parameters.keys()),
+        'Value': to_column_text_format(original_parameters.values()),
+        'Log2(Colony Size)': to_column_float_format(xs),
+        'Log2(Variance)': to_column_float_format(ys),
+        'Log2(Variance) upper CI': to_column_ci_format(upper_ys) if show_ci else None,
+        'Log2(Variance) lower CI': to_column_ci_format(lower_ys) if show_ci else None,
+        'Distance to H0 (cumulative)': to_column_ci_format(cumulative_hyp_ys),
+        'Distance to H0 (cumulative) upper CI': to_column_ci_format(cumulative_hyp_upper_ys) if show_ci else None,
+        'Distance to H0 (cumulative) lower CI': to_column_ci_format(cumulative_hyp_lower_ys) if show_ci else None,
+        'Distance to H1 (cumulative)': to_column_ci_format(cumulative_hyp_ys - 1),
+        'Distance to H1 (cumulative) upper CI': to_column_ci_format(cumulative_hyp_upper_ys - 1) if show_ci else None,
+        'Distance to H1 (cumulative) lower CI': to_column_ci_format(cumulative_hyp_lower_ys - 1) if show_ci else None,
+        'Distance to H0 (endpoint)': to_column_ci_format(endpoint_hyp_ys),
+        'Distance to H0 (endpoint) upper CI': to_column_ci_format(endpoint_hyp_upper_ys) if show_ci else None,
+        'Distance to H0 (endpoint) lower CI': to_column_ci_format(endpoint_hyp_lower_ys) if show_ci else None,
+        'Distance to H1 (endpoint)': to_column_ci_format(endpoint_hyp_ys - 1),
+        'Distance to H1 (endpoint) upper CI': to_column_ci_format(endpoint_hyp_upper_ys - 1) if show_ci else None,
+        'Distance to H1 (endpoint) lower CI': to_column_ci_format(endpoint_hyp_lower_ys - 1) if show_ci else None
     }
-    filtered_data = {k: v for k, v in data.items() if v is not None}
-    return pd.DataFrame(filtered_data)
+    return pd.DataFrame({k: v for k, v in data.items() if v is not None})
+
+
+def to_column_text_format(a: Union[KeysView, ValuesView]) -> pd.Series:
+    """Formats text arrays to the expected format of the results dataframe."""
+    return pd.Series(list(a))
+
+
+def to_column_float_format(a: np.array) -> pd.Series:
+    """Formats numerical arrays to the expected format of the results dataframe."""
+    return pd.Series(a.round(2))
+
+
+def to_column_ci_format(a: np.array) -> pd.Series:
+    """Formats numerical arrays confidence intervals to the expected format of the results dataframe."""
+    return pd.Series(np.abs(a.round(4)))
