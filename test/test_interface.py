@@ -555,23 +555,17 @@ class TestInterfaceModule(unittest.TestCase):
                                             detailedText='trace')
         mock_message_box.return_value.exec_.assert_called()
 
-    def test_debug(self) -> None:
-        """No need to test debug method."""
-
     def test_resizeEvent(self) -> None:
-        """No need to test resizeEvent method."""
+        pass  # TODO: missing test
 
     def test_eventFilter(self) -> None:
-        """eventFilter method from SO (see source code for link)."""
+        pass  # TODO: missing test
 
     def test_copy_selection(self) -> None:
-        """copy_selection method from SO (see source code for link)."""
+        pass  # TODO: missing test
 
     def test_main(self) -> None:
         """No need to test interface.main."""
-
-    def test_main_debug(self) -> None:
-        """No need to test interface.main_debug."""
 
 
 if __name__ == '__main__':

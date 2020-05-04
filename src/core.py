@@ -104,8 +104,8 @@ def dynafit(workbook: Workbook, filename: str, sheetname: str, calculate_growth_
     
     # Store results as a pandas DataFrame
     dataframe_results = results_to_dataframe(original_parameters=original_parameters, xs=xs, ys=ys,
-                                             cumulative_hyp_ys=cumulative_ys, endpoint_hyp_ys=endpoint_ys,
-                                             show_ci=show_ci, upper_ys=upper_ys, lower_ys=lower_ys,
+                                             cumulative_ys=cumulative_ys, endpoint_ys=endpoint_ys, show_ci=show_ci,
+                                             upper_ys=upper_ys, lower_ys=lower_ys,
                                              cumulative_upper_ys=cumulative_upper_ys,
                                              cumulative_lower_ys=cumulative_lower_ys,
                                              endpoint_upper_ys=endpoint_upper_ys,
@@ -214,7 +214,7 @@ def bootstrap_data(df: pd.DataFrame, repeats: int, progress_callback: Signal, sh
     """Performs bootstrapping. Each bin is sampled N times (N="repeats" parameter)."""
     counter = count(start=0)
     total_progress = repeats * len(df['groups'].unique())
-    output_df = pd.DataFrame(columns=['bootstrap_CS_mean', 'bootstrap_GR_var', 'groups', 't_star'],
+    output_df = pd.DataFrame(columns=['bootstrap_CS_mean', 'bootstrap_GR_var', 'groups', 't_stat'],
                              index=range(total_progress), dtype=float)  # noqa
     for group, group_values in df.groupby('groups'):
         sample_size = len(group_values)
@@ -292,11 +292,6 @@ def get_bootstrap_violin_statistics(violins: List[np.array]) -> Tuple[np.array, 
     return violin_q1, violin_medians, violin_q3
 
 
-def get_element_color(element: float, cutoff: float) -> str:
-    """Returns whether a given plot element should be red or gray, based on it being above or below a cutoff."""
-    return 'red' if element <= cutoff else 'gray'
-
-
 def get_cumulative_hypothesis_values(xs: np.ndarray, ys: np.ndarray) -> np.ndarray:
     """Calculates cumulative hypothesis values for all points in the mean line arrays."""
     ys_h1 = np.array([get_missing_coordinate(x1=xs[0], y1=ys[0], x2=x, angular_coefficient=-1.0) for x in xs])
@@ -320,7 +315,7 @@ def get_bootstrap_ci(df: pd.DataFrame, confidence_value: float, original_var: np
     lower_ys = []
     alpha = 1 - confidence_value
     for (_, bin_values), var, var_se in zip(df.groupby('groups'), original_var, original_var_se):
-        t_distribution = bin_values['t_star']
+        t_distribution = bin_values['t_stat']
         upper, lower = calculate_bootstrap_ci_from_t_distribution(t_distribution=t_distribution, sample_stat=var,
                                                                   sample_stat_se=var_se, alpha=alpha)
         upper_ys.append(upper)
@@ -337,7 +332,7 @@ def calculate_bootstrap_ci_from_t_distribution(t_distribution: pd.Series, sample
 
 
 def results_to_dataframe(original_parameters: Dict[str, Any], xs: np.ndarray, ys: np.ndarray,
-                         cumulative_hyp_ys: np.ndarray, endpoint_hyp_ys: np.ndarray, show_ci: bool,
+                         cumulative_ys: np.ndarray, endpoint_ys: np.ndarray, show_ci: bool,
                          upper_ys: Optional[np.ndarray], lower_ys: Optional[np.ndarray],
                          cumulative_upper_ys: Optional[np.ndarray], cumulative_lower_ys: Optional[np.ndarray],
                          endpoint_upper_ys: Optional[np.ndarray],
@@ -350,16 +345,16 @@ def results_to_dataframe(original_parameters: Dict[str, Any], xs: np.ndarray, ys
         'Log2(Variance)': to_column_float_format(ys),
         'Log2(Variance) upper CI': to_column_ci_format(upper_ys) if show_ci else None,
         'Log2(Variance) lower CI': to_column_ci_format(lower_ys) if show_ci else None,
-        'Distance to H0 (cumulative)': to_column_ci_format(cumulative_hyp_ys),
+        'Distance to H0 (cumulative)': to_column_ci_format(cumulative_ys),
         'Distance to H0 (cumulative) upper CI': to_column_ci_format(cumulative_upper_ys) if show_ci else None,
         'Distance to H0 (cumulative) lower CI': to_column_ci_format(cumulative_lower_ys) if show_ci else None,
-        'Distance to H1 (cumulative)': to_column_ci_format(cumulative_hyp_ys - 1),
+        'Distance to H1 (cumulative)': to_column_ci_format(cumulative_ys - 1),
         'Distance to H1 (cumulative) upper CI': to_column_ci_format(cumulative_upper_ys - 1) if show_ci else None,
         'Distance to H1 (cumulative) lower CI': to_column_ci_format(cumulative_lower_ys - 1) if show_ci else None,
-        'Distance to H0 (endpoint)': to_column_ci_format(endpoint_hyp_ys),
+        'Distance to H0 (endpoint)': to_column_ci_format(endpoint_ys),
         'Distance to H0 (endpoint) upper CI': to_column_ci_format(endpoint_upper_ys) if show_ci else None,
         'Distance to H0 (endpoint) lower CI': to_column_ci_format(endpoint_lower_ys) if show_ci else None,
-        'Distance to H1 (endpoint)': to_column_ci_format(endpoint_hyp_ys - 1),
+        'Distance to H1 (endpoint)': to_column_ci_format(endpoint_ys - 1),
         'Distance to H1 (endpoint) upper CI': to_column_ci_format(endpoint_upper_ys - 1) if show_ci else None,
         'Distance to H1 (endpoint) lower CI': to_column_ci_format(endpoint_lower_ys - 1) if show_ci else None
     }

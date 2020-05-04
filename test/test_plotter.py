@@ -44,19 +44,15 @@ class TestPlotterModule(unittest.TestCase):
         self.mock_ax = MagicMock()
         self.fig, self.ax = plt.subplots()
 
-    def assertArrayIn(self, array: np.ndarray, sequence: Sequence) -> None:
-        """Asserts whether a numpy array is inside a regular Python sequence."""
-        self.assertTrue(array_in_sequence(array, sequence))
-
-    def assertArrayNotIn(self, array: np.ndarray, sequence: Sequence) -> None:
-        """Asserts whether a numpy array is not inside a regular Python sequence."""
-        self.assertFalse(array_in_sequence(array, sequence))
-
     def tearDown(self) -> None:
         """Tears down each unit test by deleting the Figure and Axes instances."""
         self.ax.clear()
         del self.ax
         del self.fig
+
+    def assertArrayIn(self, array: np.ndarray, sequence: Sequence) -> None:
+        """Asserts whether a numpy array is inside a regular Python sequence."""
+        self.assertTrue(array_in_sequence(array, sequence))
 
     def disable_violins(self) -> None:
         """Changes Plotter instance attributes to reflect a DynaFit analysis without violin plots enabled."""
@@ -163,6 +159,9 @@ class TestPlotterModule(unittest.TestCase):
         for expected_violin_array, actual_violin_array in zip(self.plotter.violin_ys, actual_kwargs.get('dataset')):
             with self.subTest(expected_violin_array=expected_violin_array, actual_violin_array=actual_violin_array):
                 np.testing.assert_allclose(expected_violin_array, actual_violin_array)
+
+    def test_plot_bootstrap_violins_colors(self) -> None:
+        pass  # TODO: missing test
 
     def test_plot_supporting_lines_ci_plots_h0_ci_and_h1_ci_as_filled_areas(self) -> None:
         self.plotter.plot_supporting_lines_ci(ax=self.mock_ax)
@@ -320,6 +319,9 @@ class TestPlotterModule(unittest.TestCase):
             with self.subTest(expected_label=expected_label, actual_label=actual_label):
                 self.assertEqual(expected_label, actual_label)
 
+    def test_plot_histogram_ax(self) -> None:
+        pass  # TODO: missing test
+
     @patch('src.plotter.distplot')
     def test_plot_distributions_calls_seaborn_distplot(self, mock_seaborn_distplot) -> None:
         self.plotter.plot_distributions(ax=self.mock_ax)
@@ -332,7 +334,7 @@ class TestPlotterModule(unittest.TestCase):
         self.plotter.plot_group_divisions(ax=self.mock_ax)
         for interval, args in zip(self.plotter.hist_intervals, self.mock_ax.axvline.call_args_list):
             actual_args, actual_kwargs = args
-            with self.subTest(bp=interval, actual_args=actual_args, actual_kwargs=actual_kwargs):
+            with self.subTest(interval=interval, actual_args=actual_args, actual_kwargs=actual_kwargs):
                 self.assertIn(interval, actual_args)
                 self.assertIn(self.plotter.hist_interval_color, actual_kwargs.values())
 
