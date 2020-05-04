@@ -44,7 +44,7 @@ def dynafit(workbook: Workbook, filename: str, sheetname: str, must_calculate_gr
         raise AbortedByUser("User decided to stop DynaFit analysis.")
 
     # Get histogram values
-    hist_x, hist_breakpoints, hist_instances = get_histogram_values(df=df)
+    hist_xs, hist_intervals = get_histogram_values(df=df)
 
     # Get original sample parameters
     xs = np.log2(df.groupby('bins').mean()['CS']).values
@@ -56,16 +56,15 @@ def dynafit(workbook: Workbook, filename: str, sheetname: str, must_calculate_gr
     df = bootstrap_data(df=df, repeats=bootstrap_repeats, progress_callback=progress_callback, show_ci=show_ci)
     df = add_log_columns(df=df)
 
-    # Get mean line values
-    boot_xs, boot_ys = get_bootstrap_xy_values(df=df)
-
     # Get scatter values
     scatter_xs, scatter_ys, scatter_colors = get_scatter_values(df=df, individual_colonies=individual_colonies)
 
     # Get violin values (if user wants to do so)
-    violin_ys, violin_colors, violin_data = None, None, None
+    violin_ys, violin_xs = None, None
+    violin_q1, violin_medians, violin_q3 = None, None, None
     if show_violin:
-        violin_ys, violin_colors = get_violin_values(df=df, individual_colonies=individual_colonies)
+        violin_xs, violin_ys = get_violin_values(df=df)
+        violin_q1, violin_medians, violin_q3 = get_violin_statistics(violins=violin_ys)
 
     # Get hypothesis values for hypothesis plot
     cumulative_hyp_ys = get_cumulative_hypothesis_values(xs=xs, ys=ys)
@@ -98,13 +97,13 @@ def dynafit(workbook: Workbook, filename: str, sheetname: str, must_calculate_gr
                                              cumulative_hyp_lower_ys=cumulative_hyp_lower_ys,
                                              endpoint_hyp_upper_ys=endpoint_hyp_upper_ys,
                                              endpoint_hyp_lower_ys=endpoint_hyp_lower_ys)
-    plot_results = Plotter(xs=xs, ys=ys, boot_xs=boot_xs, boot_ys=boot_ys, scatter_xs=scatter_xs, scatter_ys=scatter_ys,
-                           show_violin=show_violin, violin_ys=violin_ys, cumulative_hyp_ys=cumulative_hyp_ys,
-                           endpoint_hyp_ys=endpoint_hyp_ys, show_ci=show_ci, upper_ys=upper_ys, lower_ys=lower_ys,
+    plot_results = Plotter(xs=xs, ys=ys, scatter_xs=scatter_xs, scatter_ys=scatter_ys, show_violin=show_violin,
+                           violin_xs=violin_xs, violin_ys=violin_ys, violin_q1=violin_q1, violin_medians=violin_medians,
+                           violin_q3=violin_q3, cumulative_hyp_ys=cumulative_hyp_ys, endpoint_hyp_ys=endpoint_hyp_ys,
+                           show_ci=show_ci, upper_ys=upper_ys, lower_ys=lower_ys,
                            cumulative_hyp_upper_ys=cumulative_hyp_upper_ys,
                            cumulative_hyp_lower_ys=cumulative_hyp_lower_ys, endpoint_hyp_upper_ys=endpoint_hyp_upper_ys,
-                           endpoint_hyp_lower_ys=endpoint_hyp_lower_ys, hist_x=hist_x,
-                           hist_breakpoints=hist_breakpoints, hist_instances=hist_instances)
+                           endpoint_hyp_lower_ys=endpoint_hyp_lower_ys, hist_xs=hist_xs, hist_intervals=hist_intervals)
 
     # Return results
     return original_parameters, plot_results, dataframe_results
@@ -184,13 +183,11 @@ def sample_size_warning_answer(warning_info: Optional[Dict[int, int]], callback:
     return answer.get(block=True)
 
 
-def get_histogram_values(df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+def get_histogram_values(df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
     """Returns values for the histogram of the colony size, indicating the group sizes made by the binning process."""
     hist_xs = df['CS']
-    grouped_data = df.groupby('bins')
-    hist_breakpoints = grouped_data.max()['CS'].values
-    hist_instances = grouped_data.count()['CS'].values
-    return hist_xs, hist_breakpoints, hist_instances
+    hist_intervals = df.groupby('bins').max()['CS'].values
+    return hist_xs, hist_intervals
 
 
 def bootstrap_data(df: pd.DataFrame, repeats: int, progress_callback: Signal, show_ci: bool) -> pd.DataFrame:
@@ -238,13 +235,6 @@ def add_log_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df.assign(log2_CS_mean=np.log2(df['CS_mean']), log2_GR_var=np.log2(df['GR_var']))
 
 
-def get_bootstrap_xy_values(df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
-    """Returns a tuple of numpy arrays representing the X and Y values of the mean line in the CVP, respectively."""
-    xs = df.groupby('bins').mean()['log2_CS_mean'].values
-    ys = df.groupby('bins').mean()['log2_GR_var'].values
-    return xs, ys
-
-
 def get_scatter_values(df: pd.DataFrame, individual_colonies: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Returns a tuple of numpy arrays representing the X, Y and color values of the bootstrap scatter."""
     scatter_xs = df['log2_CS_mean'].values
@@ -253,13 +243,19 @@ def get_scatter_values(df: pd.DataFrame, individual_colonies: int) -> Tuple[np.n
     return scatter_xs, scatter_ys, scatter_colors
 
 
-def get_violin_values(df: pd.DataFrame, individual_colonies: int) -> Tuple[List[np.ndarray], np.ndarray]:
-    """Returns a List of numpy arrays representing the values that serve as the base for a violin, and a secondary
-    numpy array of violin colors."""
-    unique_bins = df['bins'].unique()
-    violin_ys = [df.loc[df['bins'] == b]['log2_GR_var'].values for b in unique_bins]
-    violin_colors = np.array([get_element_color(b, cutoff=individual_colonies) for b in unique_bins])
-    return violin_ys, violin_colors
+def get_violin_values(df: pd.DataFrame) -> Tuple[np.ndarray, List[np.ndarray]]:
+    """Returns a List of numpy arrays representing the values that serve as the base for a violin."""
+    violin_xs = df.groupby('bins').mean()['log2_CS_mean'].values
+    violin_ys = [group.values for _, group in df.groupby('bins')['log2_GR_var']]
+    return violin_xs, violin_ys
+
+
+def get_violin_statistics(violins: List[np.array]) -> Tuple[np.array, np.array, np.array]:
+    """Returns a three numpy arrays for the q1, median and q3 values of each violin, respectively."""
+    violin_q1 = [np.percentile(violin, 25) for violin in violins]
+    violin_medians = [np.percentile(violin, 50) for violin in violins]
+    violin_q3 = [np.percentile(violin, 75) for violin in violins]
+    return violin_q1, violin_medians, violin_q3
 
 
 def get_element_color(element: float, cutoff: float) -> str:

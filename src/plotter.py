@@ -27,22 +27,25 @@ class Plotter:
     violin_whisker_color = 'black'
     hist_div_color = 'black'
 
-    def __init__(self, xs: np.ndarray, ys: np.ndarray, boot_xs: np.ndarray, boot_ys: np.ndarray,
-                 scatter_xs: np.ndarray, scatter_ys: np.ndarray, show_violin: bool,
-                 violin_ys: Optional[List[np.ndarray]], cumulative_hyp_ys: np.ndarray, endpoint_hyp_ys: np.ndarray,
-                 show_ci: bool, upper_ys: Optional[np.ndarray], lower_ys: Optional[np.ndarray],
+    def __init__(self, xs: np.ndarray, ys: np.ndarray, scatter_xs: np.ndarray, scatter_ys: np.ndarray,
+                 show_violin: bool, violin_xs: Optional[np.ndarray], violin_ys: Optional[List[np.ndarray]],
+                 violin_q1: Optional[np.ndarray], violin_medians: Optional[np.ndarray], violin_q3: Optional[np.ndarray],
+                 cumulative_hyp_ys: np.ndarray, endpoint_hyp_ys: np.ndarray, show_ci: bool,
+                 upper_ys: Optional[np.ndarray], lower_ys: Optional[np.ndarray],
                  cumulative_hyp_upper_ys: Optional[np.ndarray], cumulative_hyp_lower_ys: Optional[np.ndarray],
                  endpoint_hyp_upper_ys: Optional[np.ndarray], endpoint_hyp_lower_ys: Optional[np.ndarray],
-                 hist_x: np.ndarray, hist_breakpoints: np.ndarray, hist_instances: np.ndarray) -> None:
+                 hist_xs: np.ndarray, hist_intervals: np.ndarray) -> None:
         """Init method of Plotter class."""
         self.xs = xs
         self.ys = ys
-        self.boot_xs = boot_xs
-        self.boot_ys = boot_ys
         self.scatter_xs = scatter_xs
         self.scatter_ys = scatter_ys
         self.show_violin = show_violin
+        self.violin_xs = violin_xs
         self.violin_ys = violin_ys
+        self.violin_q1 = violin_q1
+        self.violin_medians = violin_medians
+        self.violin_q3 = violin_q3
         self.cumulative_hyp_ys = cumulative_hyp_ys
         self.endpoint_hyp_ys = endpoint_hyp_ys
         self.show_ci = show_ci
@@ -52,9 +55,8 @@ class Plotter:
         self.cumulative_hyp_lower_ys = cumulative_hyp_lower_ys
         self.endpoint_hyp_upper_ys = endpoint_hyp_upper_ys
         self.endpoint_hyp_lower_ys = endpoint_hyp_lower_ys
-        self.hist_x = hist_x
-        self.hist_breakpoints = hist_breakpoints
-        self.hist_instances = hist_instances
+        self.hist_xs = np.log2(hist_xs)
+        self.hist_intervals = np.log2(hist_intervals)
 
     def plot_cvp_ax(self, ax: plt.Axes) -> None:
         """Calls all the functions related to plotting the CVP."""
@@ -65,6 +67,7 @@ class Plotter:
         self.plot_mean_line(ax=ax)
         if self.show_violin:
             self.plot_bootstrap_violins(ax=ax)
+            self.plot_bootstrap_violin_statistics(ax=ax)
         self.plot_bootstrap_scatter(ax=ax)
         self.format_cvp(ax=ax)
 
@@ -100,15 +103,16 @@ class Plotter:
 
     def plot_bootstrap_violins(self, ax: plt.Axes) -> None:
         """Plots the bootstrap populations for each bin as violin plots."""
-        parts = ax.violinplot(positions=self.boot_xs, dataset=self.violin_ys, bw_method=0.4, showextrema=False)
-        q1s = [np.percentile(violin, 25) for violin in self.violin_ys]
-        q3s = [np.percentile(violin, 75) for violin in self.violin_ys]
-        ax.scatter(self.boot_xs, self.boot_ys, color=self.violin_median_color, s=10, zorder=100, alpha=0.8)
-        ax.vlines(self.boot_xs, q1s, q3s, color=self.violin_whisker_color, lw=5, alpha=0.8)
+        parts = ax.violinplot(positions=self.violin_xs, dataset=self.violin_ys, bw_method=0.4, showextrema=False)
         for violin in parts['bodies']:
             violin.set_alpha(0.3)
             violin.set_facecolor(self.violin_body_color)
             violin.set_edgecolor(self.violin_edge_color)
+
+    def plot_bootstrap_violin_statistics(self, ax: plt.Axes) -> None:
+        """Plots the median and quantile statistics for the violins."""
+        ax.scatter(self.violin_xs, self.violin_medians, color=self.violin_median_color, s=10, zorder=100, alpha=0.8)
+        ax.vlines(self.violin_xs, self.violin_q1, self.violin_q3, color=self.violin_whisker_color, lw=5, alpha=0.8)
 
     def plot_supporting_lines_ci(self, ax: plt.Axes) -> None:
         """Plots the CI for the supporting lines of the CVP."""
@@ -199,12 +203,11 @@ class Plotter:
 
     def plot_distributions(self, ax: plt.Axes) -> None:
         """Plots the histogram."""
-        distplot(np.log2(self.hist_x), bins=np.log2(self.hist_breakpoints), ax=ax, color=self.data_color)
+        distplot(self.hist_xs, bins=self.hist_intervals, ax=ax, color=self.data_color)
 
     def plot_group_divisions(self, ax: plt.Axes) -> None:
         """Plots the group divisions in the histogram as vertical lines."""
-        for bp in self.hist_breakpoints:
-            ax.axvline(np.log2(bp), color=self.hist_div_color, linestyle='dotted', alpha=0.8)
+        ax.vlines(self.hist_intervals, *ax.get_ylim(), color=self.hist_div_color, linestyle='dotted', alpha=0.8)
 
     @staticmethod
     def format_histogram(ax: plt.Axes) -> None:
