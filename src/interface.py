@@ -25,10 +25,6 @@ from src.exceptions import AbortedByUser, CorruptedExcelFile
 from src.plotter import Plotter
 from src.worker import Worker
 
-# ## GLOBALS ##
-# Set debugging flag
-DEBUG = True
-
 
 class DynaFitGUI(QMainWindow):
     """Class representing the DynaFit GUI as a whole."""
@@ -153,7 +149,7 @@ class DynaFitGUI(QMainWindow):
         self.max_individual_cs_spinbox = QSpinBox(self, minimum=0, value=5, maximum=100, singleStep=1)
         self.max_individual_cs_spinbox.setToolTip(tooltip)
         self.options_frame.layout().addWidget(self.max_individual_cs_spinbox, 0, 1, 1, 1)
-        # Number of bins parameter
+        # Number of large colony groups
         tooltip = 'Remaining colonies are equally distributed in these many groups'
         self.large_colony_groups_label = QLabel(self, text='Large colony groups')
         self.large_colony_groups_label.setToolTip(tooltip)

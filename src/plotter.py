@@ -30,11 +30,10 @@ class Plotter:
     def __init__(self, xs: np.ndarray, ys: np.ndarray, scatter_xs: np.ndarray, scatter_ys: np.ndarray,
                  show_violin: bool, violin_xs: Optional[np.ndarray], violin_ys: Optional[List[np.ndarray]],
                  violin_q1: Optional[np.ndarray], violin_medians: Optional[np.ndarray], violin_q3: Optional[np.ndarray],
-                 cumulative_hyp_ys: np.ndarray, endpoint_hyp_ys: np.ndarray, show_ci: bool,
-                 upper_ys: Optional[np.ndarray], lower_ys: Optional[np.ndarray],
-                 cumulative_hyp_upper_ys: Optional[np.ndarray], cumulative_hyp_lower_ys: Optional[np.ndarray],
-                 endpoint_hyp_upper_ys: Optional[np.ndarray], endpoint_hyp_lower_ys: Optional[np.ndarray],
-                 hist_xs: np.ndarray, hist_intervals: np.ndarray) -> None:
+                 cumulative_ys: np.ndarray, endpoint_ys: np.ndarray, show_ci: bool, upper_ys: Optional[np.ndarray],
+                 lower_ys: Optional[np.ndarray], cumulative_upper_ys: Optional[np.ndarray],
+                 cumulative_lower_ys: Optional[np.ndarray], endpoint_upper_ys: Optional[np.ndarray],
+                 endpoint_lower_ys: Optional[np.ndarray], hist_xs: np.ndarray, hist_intervals: np.ndarray) -> None:
         """Init method of Plotter class."""
         self.xs = xs
         self.ys = ys
@@ -46,15 +45,15 @@ class Plotter:
         self.violin_q1 = violin_q1
         self.violin_medians = violin_medians
         self.violin_q3 = violin_q3
-        self.cumulative_hyp_ys = cumulative_hyp_ys
-        self.endpoint_hyp_ys = endpoint_hyp_ys
+        self.cumulative_ys = cumulative_ys
+        self.endpoint_ys = endpoint_ys
         self.show_ci = show_ci
         self.upper_ys = upper_ys
         self.lower_ys = lower_ys
-        self.cumulative_hyp_upper_ys = cumulative_hyp_upper_ys
-        self.cumulative_hyp_lower_ys = cumulative_hyp_lower_ys
-        self.endpoint_hyp_upper_ys = endpoint_hyp_upper_ys
-        self.endpoint_hyp_lower_ys = endpoint_hyp_lower_ys
+        self.cumulative_upper_ys = cumulative_upper_ys
+        self.cumulative_lower_ys = cumulative_lower_ys
+        self.endpoint_upper_ys = endpoint_upper_ys
+        self.endpoint_lower_ys = endpoint_lower_ys
         self.hist_xs = np.log2(hist_xs)
         self.hist_intervals = np.log2(hist_intervals)
 
@@ -160,11 +159,11 @@ class Plotter:
 
     def plot_cumulative_hypothesis_distance(self, ax: plt.Axes) -> None:
         """Plots the cumulative hypothesis values as a line plot."""
-        ax.plot(self.xs, self.cumulative_hyp_ys, color=self.cumul_color, label='Cumulative')
+        ax.plot(self.xs, self.cumulative_ys, color=self.cumul_color, label='Cumulative')
 
     def plot_endpoint_hypothesis_distance(self, ax: plt.Axes) -> None:
         """Plots the endpoint hypothesis values as a line plot."""
-        ax.plot(self.xs, self.endpoint_hyp_ys, color=self.endp_color, label='Endpoint')
+        ax.plot(self.xs, self.endpoint_ys, color=self.endp_color, label='Endpoint')
 
     def set_hypothesis_plot_limits(self, ax: plt.Axes, xlims: Tuple[float, float]) -> None:
         """Calculates appropriate limits for the XY axes in the hypothesis plot."""
@@ -177,13 +176,11 @@ class Plotter:
 
     def plot_cumulative_hypothesis_ci(self, ax: plt.Axes) -> None:
         """Plots the CI around the cumulative hypothesis values as a line plot."""
-        ax.fill_between(self.xs, self.cumulative_hyp_upper_ys, self.cumulative_hyp_lower_ys, alpha=0.2,
-                        color=self.cumul_color)
+        ax.fill_between(self.xs, self.cumulative_upper_ys, self.cumulative_lower_ys, alpha=0.2, color=self.cumul_color)
 
     def plot_endpoint_hypothesis_ci(self, ax: plt.Axes) -> None:
         """Plots the CI around the endpoint hypothesis values as a line plot."""
-        ax.fill_between(self.xs, self.endpoint_hyp_upper_ys, self.endpoint_hyp_lower_ys, alpha=0.2,
-                        color=self.endp_color)
+        ax.fill_between(self.xs, self.endpoint_upper_ys, self.endpoint_lower_ys, alpha=0.2, color=self.endp_color)
 
     @staticmethod
     def format_hypothesis_plot(ax: plt.Axes) -> None:

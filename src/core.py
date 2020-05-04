@@ -2,7 +2,7 @@
 
 from itertools import count
 from queue import Queue
-from typing import Any, Dict, List, Optional, Tuple, KeysView, ValuesView, Union
+from typing import Any, Dict, KeysView, List, Optional, Tuple, Union, ValuesView
 
 import numpy as np
 import pandas as pd
@@ -20,8 +20,8 @@ WARNING_LEVEL = 20
 
 def dynafit(workbook: Workbook, filename: str, sheetname: str, calculate_growth_rate: bool, time_delta: float,
             cs_start_cell: str, cs_end_cell: str, gr_start_cell: str, gr_end_cell: str, individual_colonies: int,
-            large_groups: int, bootstrap_repeats: int, show_ci: bool, confidence_value: float,
-            remove_outliers: bool, show_violin: bool, **kwargs) -> Tuple[Dict[str, Any], Plotter, pd.DataFrame]:
+            large_groups: int, bootstrap_repeats: int, show_ci: bool, confidence_value: float, remove_outliers: bool,
+            show_violin: bool, **kwargs) -> Tuple[Dict[str, Any], Plotter, pd.DataFrame]:
     """Main DynaFit function"""
     # Extract values to be emitted by thread from kwargs
     progress_callback = kwargs.get('progress_callback')
@@ -31,7 +31,7 @@ def dynafit(workbook: Workbook, filename: str, sheetname: str, calculate_growth_
     df = ExcelValidator(workbook=workbook, sheetname=sheetname, cs_start_cell=cs_start_cell, cs_end_cell=cs_end_cell,
                         gr_start_cell=gr_start_cell, gr_end_cell=gr_end_cell).get_data()
 
-    # Preprocess data
+    # Preprocess input data
     df = preprocess_data(df=df, calculate_growth_rate=calculate_growth_rate, time_delta=time_delta,
                          remove_outliers=remove_outliers)
 
@@ -52,35 +52,39 @@ def dynafit(workbook: Workbook, filename: str, sheetname: str, calculate_growth_
 
     # Perform DynaFit bootstrap
     df = bootstrap_data(df=df, repeats=bootstrap_repeats, progress_callback=progress_callback, show_ci=show_ci)
-    df = add_log2_columns(df=df, column_names=['bootstrap_CS_mean', 'bootstrap_GR_var'])
-
-    # Get scatter values
+    
+    # Postprocess bootstrap data
+    df = postprocess_data(df=df)
+    
+    # Get bootstrap scatter values
     scatter_xs, scatter_ys = get_bootstrap_scatter_values(df=df)
 
-    # Get violin values (if user wants to do so)
+    # Get bootstrap violin values (if user wants to do so)
     violin_ys, violin_xs = None, None
     violin_q1, violin_medians, violin_q3 = None, None, None
     if show_violin:
         violin_xs, violin_ys = get_bootstrap_violin_values(df=df)
         violin_q1, violin_medians, violin_q3 = get_bootstrap_violin_statistics(violins=violin_ys)
 
-    # Get hypothesis values for hypothesis plot
-    cumulative_hyp_ys = get_cumulative_hypothesis_values(xs=xs, ys=ys)
-    endpoint_hyp_ys = get_endpoint_hypothesis_values(xs=xs, ys=ys)
+    # Get hypothesis values
+    cumulative_ys = get_cumulative_hypothesis_values(xs=xs, ys=ys)
+    endpoint_ys = get_endpoint_hypothesis_values(xs=xs, ys=ys)
 
-    # Get CI values (if user wants to do so)
+    # Get CI values for bootstrap scatter (if user wants to do so)
     upper_ys, lower_ys = None, None
-    cumulative_hyp_upper_ys, cumulative_hyp_lower_ys = None, None
-    endpoint_hyp_upper_ys, endpoint_hyp_lower_ys = None, None
     if show_ci:
         upper_ys, lower_ys = get_bootstrap_ci(df=df, confidence_value=confidence_value, original_var=original_var,
                                               original_var_se=original_var_se)
-        cumulative_hyp_upper_ys = get_cumulative_hypothesis_values(xs=xs, ys=upper_ys)
-        cumulative_hyp_lower_ys = get_cumulative_hypothesis_values(xs=xs, ys=lower_ys)
-        endpoint_hyp_upper_ys = get_endpoint_hypothesis_values(xs=xs, ys=upper_ys)
-        endpoint_hyp_lower_ys = get_endpoint_hypothesis_values(xs=xs, ys=lower_ys)
+    # Get CI values for hypothesis
+    cumulative_upper_ys, cumulative_lower_ys = None, None
+    endpoint_upper_ys, endpoint_lower_ys = None, None
+    if show_ci:
+        cumulative_upper_ys = get_cumulative_hypothesis_values(xs=xs, ys=upper_ys)
+        cumulative_lower_ys = get_cumulative_hypothesis_values(xs=xs, ys=lower_ys)
+        endpoint_upper_ys = get_endpoint_hypothesis_values(xs=xs, ys=upper_ys)
+        endpoint_lower_ys = get_endpoint_hypothesis_values(xs=xs, ys=lower_ys)
 
-    # Store parameters used for DynaFit analysis
+    # Store parameters used
     original_parameters = {
         'filename': filename,
         'sheetname': sheetname,
@@ -88,22 +92,25 @@ def dynafit(workbook: Workbook, filename: str, sheetname: str, calculate_growth_
         'number of large colony groups': large_groups,
         'bootstrapping repeats': bootstrap_repeats
     }
-    dataframe_results = results_to_dataframe(original_parameters=original_parameters, xs=xs, ys=ys,
-                                             cumulative_hyp_ys=cumulative_hyp_ys, endpoint_hyp_ys=endpoint_hyp_ys,
-                                             show_ci=show_ci, upper_ys=upper_ys, lower_ys=lower_ys,
-                                             cumulative_hyp_upper_ys=cumulative_hyp_upper_ys,
-                                             cumulative_hyp_lower_ys=cumulative_hyp_lower_ys,
-                                             endpoint_hyp_upper_ys=endpoint_hyp_upper_ys,
-                                             endpoint_hyp_lower_ys=endpoint_hyp_lower_ys)
+    
+    # Create Plotter instance
     plot_results = Plotter(xs=xs, ys=ys, scatter_xs=scatter_xs, scatter_ys=scatter_ys, show_violin=show_violin,
                            violin_xs=violin_xs, violin_ys=violin_ys, violin_q1=violin_q1, violin_medians=violin_medians,
-                           violin_q3=violin_q3, cumulative_hyp_ys=cumulative_hyp_ys, endpoint_hyp_ys=endpoint_hyp_ys,
+                           violin_q3=violin_q3, cumulative_ys=cumulative_ys, endpoint_ys=endpoint_ys,
                            show_ci=show_ci, upper_ys=upper_ys, lower_ys=lower_ys,
-                           cumulative_hyp_upper_ys=cumulative_hyp_upper_ys,
-                           cumulative_hyp_lower_ys=cumulative_hyp_lower_ys, endpoint_hyp_upper_ys=endpoint_hyp_upper_ys,
-                           endpoint_hyp_lower_ys=endpoint_hyp_lower_ys, hist_xs=hist_xs, hist_intervals=hist_intervals)
-
-    # Return results
+                           cumulative_upper_ys=cumulative_upper_ys, cumulative_lower_ys=cumulative_lower_ys,
+                           endpoint_upper_ys=endpoint_upper_ys, endpoint_lower_ys=endpoint_lower_ys,
+                           hist_xs=hist_xs, hist_intervals=hist_intervals)
+    
+    # Store results as a pandas DataFrame
+    dataframe_results = results_to_dataframe(original_parameters=original_parameters, xs=xs, ys=ys,
+                                             cumulative_hyp_ys=cumulative_ys, endpoint_hyp_ys=endpoint_ys,
+                                             show_ci=show_ci, upper_ys=upper_ys, lower_ys=lower_ys,
+                                             cumulative_upper_ys=cumulative_upper_ys,
+                                             cumulative_lower_ys=cumulative_lower_ys,
+                                             endpoint_upper_ys=endpoint_upper_ys,
+                                             endpoint_lower_ys=endpoint_lower_ys)
+    
     return original_parameters, plot_results, dataframe_results
 
 
@@ -147,7 +154,7 @@ def filter_outliers(df: pd.DataFrame) -> pd.DataFrame:
 def divide_sample_into_groups(df: pd.DataFrame, individual_colonies: int, large_groups: int) -> pd.DataFrame:
     """Returns the data DataFrame with a "group" column, which divides the population into groups of cells.
     Colonies with size <= the "individual_colonies" parameters are grouped with colonies with the same number of cells,
-    while larger colonies are split into N groups (N=bins) with a close number of instances in each one of them."""
+    while larger colonies are split into N groups with a close number of instances in each one of them."""
     group_condition = df['CS'] > individual_colonies
     single_groups = df.loc[~group_condition]['CS']
     try:
@@ -215,7 +222,7 @@ def bootstrap_data(df: pd.DataFrame, repeats: int, progress_callback: Signal, sh
             i = next(counter)
             output_df.loc[i] = get_bootstrap_params(data=group_values, n=sample_size, group=group, show_ci=show_ci)
             emit_bootstrap_progress(current=i+1, total=total_progress, callback=progress_callback)
-    return output_df.replace([np.inf, -np.inf], np.nan).dropna()
+    return output_df
 
 
 def get_bootstrap_params(data: pd.DataFrame, n: int, group: float, show_ci: bool) -> Tuple:
@@ -225,11 +232,11 @@ def get_bootstrap_params(data: pd.DataFrame, n: int, group: float, show_ci: bool
     mean_colony_size = bootstrap_sample['CS'].mean()
     growth_rate_variance = bootstrap_sample['GR'].var()
     data_var = data['GR'].var()
-    t = np.nan if not show_ci else get_t_star(bootstrap_sample=bootstrap_sample, data_var=data_var)
+    t = np.nan if not show_ci else get_t_stat(bootstrap_sample=bootstrap_sample, data_var=data_var)
     return mean_colony_size, growth_rate_variance, group, t
 
 
-def get_t_star(bootstrap_sample: pd.DataFrame, data_var: float) -> float:
+def get_t_stat(bootstrap_sample: pd.DataFrame, data_var: float) -> float:
     """Calculates the t statistic (t-star) for the bootstrap distribution, relative to the total distribution.
     Source: https://arxiv.org/pdf/1411.5279.pdf"""
     bootstrap_var = bootstrap_sample['GR'].var()
@@ -243,6 +250,18 @@ def emit_bootstrap_progress(current: int, total: int, callback: Signal) -> None:
     """Emits a integer back to the GUI thread, in order to update the progress bar."""
     progress = int(round(100 * current / total))
     callback.emit(progress)  # noqa
+
+
+def postprocess_data(df: pd.DataFrame) -> pd.DataFrame:
+    """Calls routines related to postprocessing the data obtained after bootstrap."""
+    df = drop_inf_nan_values(df=df)
+    df = add_log2_columns(df=df, column_names=['bootstrap_CS_mean', 'bootstrap_GR_var'])
+    return df
+
+
+def drop_inf_nan_values(df: pd.DataFrame) -> pd.DataFrame:
+    """Removes rows containing np.inf, -np.inf or np.nan from the input dataframe."""
+    return df.replace([np.inf, -np.inf], np.nan).dropna()
 
 
 def add_log2_columns(df: pd.DataFrame, column_names: List[str]) -> pd.DataFrame:
@@ -320,9 +339,9 @@ def calculate_bootstrap_ci_from_t_distribution(t_distribution: pd.Series, sample
 def results_to_dataframe(original_parameters: Dict[str, Any], xs: np.ndarray, ys: np.ndarray,
                          cumulative_hyp_ys: np.ndarray, endpoint_hyp_ys: np.ndarray, show_ci: bool,
                          upper_ys: Optional[np.ndarray], lower_ys: Optional[np.ndarray],
-                         cumulative_hyp_upper_ys: Optional[np.ndarray], cumulative_hyp_lower_ys: Optional[np.ndarray],
-                         endpoint_hyp_upper_ys: Optional[np.ndarray],
-                         endpoint_hyp_lower_ys: Optional[np.ndarray]) -> pd.DataFrame:
+                         cumulative_upper_ys: Optional[np.ndarray], cumulative_lower_ys: Optional[np.ndarray],
+                         endpoint_upper_ys: Optional[np.ndarray],
+                         endpoint_lower_ys: Optional[np.ndarray]) -> pd.DataFrame:
     """Saves DynaFit dataframe_results as a pandas DataFrame (used for Excel/csv export)."""
     data = {
         'Parameter': to_column_text_format(original_parameters.keys()),
@@ -332,17 +351,17 @@ def results_to_dataframe(original_parameters: Dict[str, Any], xs: np.ndarray, ys
         'Log2(Variance) upper CI': to_column_ci_format(upper_ys) if show_ci else None,
         'Log2(Variance) lower CI': to_column_ci_format(lower_ys) if show_ci else None,
         'Distance to H0 (cumulative)': to_column_ci_format(cumulative_hyp_ys),
-        'Distance to H0 (cumulative) upper CI': to_column_ci_format(cumulative_hyp_upper_ys) if show_ci else None,
-        'Distance to H0 (cumulative) lower CI': to_column_ci_format(cumulative_hyp_lower_ys) if show_ci else None,
+        'Distance to H0 (cumulative) upper CI': to_column_ci_format(cumulative_upper_ys) if show_ci else None,
+        'Distance to H0 (cumulative) lower CI': to_column_ci_format(cumulative_lower_ys) if show_ci else None,
         'Distance to H1 (cumulative)': to_column_ci_format(cumulative_hyp_ys - 1),
-        'Distance to H1 (cumulative) upper CI': to_column_ci_format(cumulative_hyp_upper_ys - 1) if show_ci else None,
-        'Distance to H1 (cumulative) lower CI': to_column_ci_format(cumulative_hyp_lower_ys - 1) if show_ci else None,
+        'Distance to H1 (cumulative) upper CI': to_column_ci_format(cumulative_upper_ys - 1) if show_ci else None,
+        'Distance to H1 (cumulative) lower CI': to_column_ci_format(cumulative_lower_ys - 1) if show_ci else None,
         'Distance to H0 (endpoint)': to_column_ci_format(endpoint_hyp_ys),
-        'Distance to H0 (endpoint) upper CI': to_column_ci_format(endpoint_hyp_upper_ys) if show_ci else None,
-        'Distance to H0 (endpoint) lower CI': to_column_ci_format(endpoint_hyp_lower_ys) if show_ci else None,
+        'Distance to H0 (endpoint) upper CI': to_column_ci_format(endpoint_upper_ys) if show_ci else None,
+        'Distance to H0 (endpoint) lower CI': to_column_ci_format(endpoint_lower_ys) if show_ci else None,
         'Distance to H1 (endpoint)': to_column_ci_format(endpoint_hyp_ys - 1),
-        'Distance to H1 (endpoint) upper CI': to_column_ci_format(endpoint_hyp_upper_ys - 1) if show_ci else None,
-        'Distance to H1 (endpoint) lower CI': to_column_ci_format(endpoint_hyp_lower_ys - 1) if show_ci else None
+        'Distance to H1 (endpoint) upper CI': to_column_ci_format(endpoint_upper_ys - 1) if show_ci else None,
+        'Distance to H1 (endpoint) lower CI': to_column_ci_format(endpoint_lower_ys - 1) if show_ci else None
     }
     return pd.DataFrame({k: v for k, v in data.items() if v is not None})
 

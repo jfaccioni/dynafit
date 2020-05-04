@@ -69,10 +69,10 @@ class TestPlotterModule(unittest.TestCase):
         self.plotter.show_ci = False
         self.plotter.upper_ys = None
         self.plotter.lower_ys = None
-        self.plotter.cumulative_hyp_upper_ys = None
-        self.plotter.cumulative_hyp_lower_ys = None
-        self.plotter.endpoint_hyp_upper_ys = None
-        self.plotter.endpoint_hyp_lower_ys = None
+        self.plotter.cumulative_upper_ys = None
+        self.plotter.cumulative_lower_ys = None
+        self.plotter.endpoint_upper_ys = None
+        self.plotter.endpoint_lower_ys = None
 
     @patch('test_plotter.Plotter.plot_bootstrap_violins')
     @patch('test_plotter.Plotter.plot_supporting_lines_ci')
@@ -255,7 +255,7 @@ class TestPlotterModule(unittest.TestCase):
         actual_args, actual_kwargs = self.mock_ax.plot.call_args
         self.assertIn('lightgreen', actual_kwargs.values())
         self.assertArrayIn(self.plotter.boot_xs, actual_args)
-        self.assertArrayIn(self.plotter.cumulative_hyp_ys, actual_args)
+        self.assertArrayIn(self.plotter.cumulative_ys, actual_args)
 
     def test_plot_endpoint_hypothesis_distance_plots_a_darkgreen_line_of_endpoint_distance_values(self) -> None:
         self.plotter.plot_endpoint_hypothesis_distance(ax=self.mock_ax)
@@ -263,7 +263,7 @@ class TestPlotterModule(unittest.TestCase):
         actual_args, actual_kwargs = self.mock_ax.plot.call_args
         self.assertIn('darkgreen', actual_kwargs.values())
         self.assertArrayIn(self.plotter.boot_xs, actual_args)
-        self.assertArrayIn(self.plotter.endpoint_hyp_ys, actual_args)
+        self.assertArrayIn(self.plotter.endpoint_ys, actual_args)
 
     def test_set_hypothesis_plot_limits_sets_x_limits_to_argument_passed_in(self) -> None:
         xlims = (-50, 50)
@@ -289,8 +289,8 @@ class TestPlotterModule(unittest.TestCase):
         actual_args, actual_kwargs = self.mock_ax.fill_between.call_args
         self.assertIn('gray', actual_kwargs.values())
         self.assertArrayIn(self.plotter.boot_xs, actual_args)
-        self.assertArrayIn(self.plotter.cumulative_hyp_upper_ys, actual_args)
-        self.assertArrayIn(self.plotter.cumulative_hyp_lower_ys, actual_args)
+        self.assertArrayIn(self.plotter.cumulative_upper_ys, actual_args)
+        self.assertArrayIn(self.plotter.cumulative_lower_ys, actual_args)
 
     def test_plot_endpoint_hypothesis_ci_fills_a_gray_area_of_endpoint_distance_ci(self) -> None:
         self.plotter.plot_endpoint_hypothesis_ci(ax=self.mock_ax)
@@ -298,8 +298,8 @@ class TestPlotterModule(unittest.TestCase):
         actual_args, actual_kwargs = self.mock_ax.fill_between.call_args
         self.assertIn('gray', actual_kwargs.values())
         self.assertArrayIn(self.plotter.boot_xs, actual_args)
-        self.assertArrayIn(self.plotter.endpoint_hyp_upper_ys, actual_args)
-        self.assertArrayIn(self.plotter.endpoint_hyp_lower_ys, actual_args)
+        self.assertArrayIn(self.plotter.endpoint_upper_ys, actual_args)
+        self.assertArrayIn(self.plotter.endpoint_lower_ys, actual_args)
 
     def test_format_hypothesis_plot_adds_title_labels_ticks_and_set_plot_legends(self) -> None:
         self.assertFalse(self.ax.get_title())

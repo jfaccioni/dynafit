@@ -8,7 +8,7 @@ class CorruptedExcelFile(Exception):
 
 # Called on core.py
 class TooManyGroupsError(Exception):
-    """Exception raised when too many bins are used."""
+    """Exception raised when too many groups are present."""
 
 
 class AbortedByUser(Exception):
