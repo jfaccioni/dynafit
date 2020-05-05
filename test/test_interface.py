@@ -8,14 +8,15 @@ from unittest.mock import MagicMock, call, patch
 import numpy as np
 import openpyxl
 import pandas as pd
-from PySide2.QtCore import Qt, SIGNAL
+from PySide2.QtCore import Qt, SIGNAL, QEvent
 from PySide2.QtTest import QTest
-from PySide2.QtWidgets import QApplication, QFileDialog, QMessageBox, QTableWidgetItem
+from PySide2.QtGui import QKeyEvent, QKeySequence
+from PySide2.QtWidgets import QApplication, QFileDialog, QMessageBox, QTableWidgetItem, qApp, QTableWidgetSelectionRange
 from matplotlib.pyplot import Axes
 
 from src.core import dynafit
 from src.exceptions import AbortedByUser
-from src.interface import DynaFitGUI
+from src.interface import DynaFitGUI, main
 from src.worker import Worker
 from test.resources import SETTINGS_SCHEMA
 
@@ -555,17 +556,63 @@ class TestInterfaceModule(unittest.TestCase):
                                             detailedText='trace')
         mock_message_box.return_value.exec_.assert_called()
 
-    def test_resizeEvent(self) -> None:
-        pass  # TODO: missing test
+    def test_eventFilter_returns_true_if_event_is_copy_key_sequence(self) -> None:
+        event = QKeyEvent(QEvent.KeyPress, QKeySequence.Copy, Qt.NoModifier)  # noqa
+        event.matches = MagicMock(return_value=True)
+        return_value = self.ui.eventFilter(source=self.ui.results_table, event=event)
+        self.assertTrue(return_value)
 
-    def test_eventFilter(self) -> None:
-        pass  # TODO: missing test
+    def test_eventFilter_calls_copy_selection_if_event_is_copy_key_sequence(self) -> None:
+        event = QKeyEvent(QEvent.KeyPress, QKeySequence.Copy, Qt.NoModifier)  # noqa
+        event.matches = MagicMock(return_value=True)
+        copy_selection_mock = MagicMock()
+        self.ui.copy_selection = copy_selection_mock
+        self.ui.eventFilter(source=self.ui.results_table, event=event)
+        copy_selection_mock.assert_called()
 
-    def test_copy_selection(self) -> None:
-        pass  # TODO: missing test
+    @patch('src.interface.QMainWindow.eventFilter')
+    def test_eventFilter_does_not_call_ui_parent_eventFilter_if_event_is_copy_key_sequence(self,
+                                                                                           mock_event_filter) -> None:
+        event = QKeyEvent(QEvent.KeyPress, QKeySequence.Copy, Qt.ControlModifier)  # noqa
+        event.matches = MagicMock(return_value=True)
+        self.ui.eventFilter(source=self.ui.results_table, event=event)
+        mock_event_filter.assert_not_called()
 
-    def test_main(self) -> None:
-        """No need to test interface.main."""
+    @patch('src.interface.QMainWindow.eventFilter')
+    def test_eventFilter_calls_ui_parent_eventFilter_if_event_is_not_copy_key_sequence(self, mock_event_filter) -> None:
+        event = QKeyEvent(QEvent.KeyPress, QKeySequence.Paste, Qt.ControlModifier)  # noqa
+        event.matches = MagicMock(return_value=False)
+        self.ui.eventFilter(source=self.ui.results_table, event=event)
+        mock_event_filter.assert_called_with(self.ui.results_table, event)
+
+    def test_copy_selection_copies_results_table_selection_to_clipboard(self) -> None:
+        self.set_results_table_names()
+        self.ui.results_table.setItem(0, 0, QTableWidgetItem('F'))  # noqa
+        self.ui.results_table.setItem(1, 0, QTableWidgetItem('S'))  # noqa
+        # table is now:
+        # ---------------
+        # |F | filename |
+        # |--|----------|
+        # |S | sheetname|
+        # ---------------
+        self.ui.results_table.setRangeSelected(QTableWidgetSelectionRange(0, 0, 1, 1), True)  # noqa
+        self.ui.copy_selection()
+        expected_copy = 'F,filename\nS,sheetname\n'
+        actual_copy = qApp.clipboard().text().replace('\r', '')  # Remove CRLF line endings
+        self.assertEqual(expected_copy, actual_copy)
+
+    @patch('src.interface.QApplication')
+    def test_main_function_sets_up_a_QApplication(self, mock_qapp) -> None:
+        with patch('src.interface.DynaFitGUI'), patch('src.interface.sys'):
+            main()
+        mock_qapp.assert_called()
+
+    @patch('src.interface.DynaFitGUI')
+    def test_main_function_loads_and_shows_gui(self, mock_gui) -> None:
+        with patch('src.interface.QApplication'), patch('src.interface.sys'):
+            main()
+        mock_gui.assert_called()
+        mock_gui.return_value.show.assert_called()
 
 
 if __name__ == '__main__':

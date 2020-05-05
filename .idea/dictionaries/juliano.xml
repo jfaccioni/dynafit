@@ -38,6 +38,7 @@
       <w>openpyxl</w>
       <w>polycollection</w>
       <w>preprocessing</w>
+      <w>qapp</w>
       <w>qstandarditemmodel</w>
       <w>qtableview</w>
       <w>quantile</w>

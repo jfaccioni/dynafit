@@ -481,8 +481,8 @@ class DynaFitGUI(QMainWindow):
         self.canvas.resize(self.scroll_area.width(), self.canvas.height())
         super().resizeEvent(e)
 
-    # The following methods allows the result table to be copied to the clipboard. Source:
-    # https://stackoverflow.com/questions/40469607/
+    # The following methods "eventFilter" and "copy_selection" allows the result table to be copied to the clipboard.
+    # Source: https://stackoverflow.com/questions/40469607/
 
     def eventFilter(self, source: QWidget, event: QEvent) -> bool:  # noqa
         """Event filter for dataframe_results table."""
