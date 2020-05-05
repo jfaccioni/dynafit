@@ -4,6 +4,7 @@ from typing import List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.collections import PolyCollection
 from seaborn import distplot
 
 from src.utils import get_missing_coordinate, get_start_end_values
@@ -21,8 +22,8 @@ class Plotter:
     v_axis_color = 'black'
     scatter_edgecolor = 'black'
     scatter_facecolor = cumul_color
-    violin_body_color = data_color
-    violin_edge_color = 'black'
+    violin_facecolor = data_color
+    violin_edgecolor = 'black'
     violin_median_color = 'white'
     violin_whisker_color = 'black'
     hist_interval_color = 'black'
@@ -65,7 +66,8 @@ class Plotter:
             self.plot_mean_line_ci(ax=ax)
         self.plot_mean_line(ax=ax)
         if self.show_violin:
-            self.plot_bootstrap_violins(ax=ax)
+            violins = self.plot_bootstrap_violins(ax=ax)
+            self.format_violins(violins=violins)
             self.plot_bootstrap_violin_statistics(ax=ax)
         self.plot_bootstrap_scatter(ax=ax)
         self.format_cvp(ax=ax)
@@ -100,13 +102,17 @@ class Plotter:
         ax.scatter(self.scatter_xs, self.scatter_ys, marker='.', alpha=0.6, edgecolor=self.scatter_edgecolor,
                    facecolor=self.scatter_facecolor)
 
-    def plot_bootstrap_violins(self, ax: plt.Axes) -> None:
+    def plot_bootstrap_violins(self, ax: plt.Axes) -> List[PolyCollection]:
         """Plots the bootstrap populations for each bin as violin plots."""
-        parts = ax.violinplot(positions=self.violin_xs, dataset=self.violin_ys, showextrema=False)
-        for violin in parts['bodies']:
+        violins = ax.violinplot(positions=self.violin_xs, dataset=self.violin_ys, showextrema=False)
+        return violins['bodies']
+
+    def format_violins(self, violins: List[PolyCollection]):
+        """Adds formatting to the violins plotted."""
+        for violin in violins:
             violin.set_alpha(0.3)
-            violin.set_facecolor(self.violin_body_color)
-            violin.set_edgecolor(self.violin_edge_color)
+            violin.set_facecolor(self.violin_facecolor)
+            violin.set_edgecolor(self.violin_edgecolor)
 
     def plot_bootstrap_violin_statistics(self, ax: plt.Axes) -> None:
         """Plots the median and quantile statistics for the violins."""

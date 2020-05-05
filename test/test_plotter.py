@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.collections import PolyCollection
 
 from src.plotter import Plotter
 from src.utils import array_in_sequence
@@ -69,6 +70,22 @@ class TestPlotterModule(unittest.TestCase):
         self.plotter.cumulative_lower_ys = None
         self.plotter.endpoint_upper_ys = None
         self.plotter.endpoint_lower_ys = None
+
+    @patch('test_plotter.Plotter.plot_supporting_lines')
+    @patch('test_plotter.Plotter.plot_supporting_lines_ci')
+    @patch('test_plotter.Plotter.plot_mean_line_ci')
+    @patch('test_plotter.Plotter.plot_mean_line')
+    @patch('test_plotter.Plotter.plot_bootstrap_violin_statistics')
+    @patch('test_plotter.Plotter.plot_bootstrap_scatter')
+    @patch('test_plotter.Plotter.format_cvp')
+    @patch('test_plotter.Plotter.plot_bootstrap_violins')
+    @patch('test_plotter.Plotter.format_violins')
+    def test_plot_cvp_ax_calls_all_cvp_related_plot_functions(self, mock_format_violins, mock_plot_bootstrap_violins,
+                                                              *cvp_functions) -> None:
+        self.plotter.plot_cvp_ax(ax=self.mock_ax)
+        mock_format_violins.assert_called_with(violins=mock_plot_bootstrap_violins.return_value)
+        for cvp_function in cvp_functions:
+            cvp_function.assert_called_with(ax=self.mock_ax)
 
     @patch('test_plotter.Plotter.plot_bootstrap_violins')
     @patch('test_plotter.Plotter.plot_supporting_lines_ci')
@@ -160,8 +177,16 @@ class TestPlotterModule(unittest.TestCase):
             with self.subTest(expected_violin_array=expected_violin_array, actual_violin_array=actual_violin_array):
                 np.testing.assert_allclose(expected_violin_array, actual_violin_array)
 
-    def test_plot_bootstrap_violins_colors(self) -> None:
-        pass  # TODO: missing test
+    def test_plot_bootstrap_violins_returns_violins_as_a_list_of_polycollection_objects(self) -> None:
+        return_value = self.plotter.plot_bootstrap_violins(ax=self.mock_ax)
+        for expected_violin in return_value:
+            self.assertIsInstance(expected_violin, PolyCollection)
+
+    def test_format_violins_sets_violin_attributes_with_proper_values(self) -> None:
+        mock_violin = MagicMock()
+        self.plotter.format_violins(violins=[mock_violin])
+        mock_violin.set_facecolor.assert_called_with(self.plotter.violin_facecolor)
+        mock_violin.set_edgecolor.assert_called_with(self.plotter.violin_edgecolor)
 
     def test_plot_supporting_lines_ci_plots_h0_ci_and_h1_ci_as_filled_areas(self) -> None:
         self.plotter.plot_supporting_lines_ci(ax=self.mock_ax)
@@ -202,6 +227,21 @@ class TestPlotterModule(unittest.TestCase):
         self.plotter.format_cvp(ax=self.ax)
         self.assertTrue(self.ax.get_xlabel())
         self.assertTrue(self.ax.get_ylabel())
+
+    @patch('test_plotter.Plotter.plot_hypothesis_lines')
+    @patch('test_plotter.Plotter.plot_cumulative_hypothesis_distance')
+    @patch('test_plotter.Plotter.plot_endpoint_hypothesis_distance')
+    @patch('test_plotter.Plotter.plot_cumulative_hypothesis_ci')
+    @patch('test_plotter.Plotter.plot_endpoint_hypothesis_ci')
+    @patch('test_plotter.Plotter.format_hypothesis_plot')
+    @patch('test_plotter.Plotter.set_hypothesis_plot_limits')
+    def test_plot_hypothesis_ax_calls_all_hypothesis_related_plot_functions(self, mock_set_hypothesis_plot_limits,
+                                                                            *hypothesis_functions) -> None:
+        xlims = (0, 5)
+        self.plotter.plot_hypothesis_ax(ax=self.mock_ax, xlims=xlims)
+        mock_set_hypothesis_plot_limits.assert_called_with(ax=self.mock_ax, xlims=xlims)
+        for hypothesis_function in hypothesis_functions:
+            hypothesis_function.assert_called_with(ax=self.mock_ax)
 
     @patch('test_plotter.Plotter.plot_endpoint_hypothesis_ci')
     @patch('test_plotter.Plotter.plot_cumulative_hypothesis_ci')
@@ -319,8 +359,13 @@ class TestPlotterModule(unittest.TestCase):
             with self.subTest(expected_label=expected_label, actual_label=actual_label):
                 self.assertEqual(expected_label, actual_label)
 
-    def test_plot_histogram_ax(self) -> None:
-        pass  # TODO: missing test
+    @patch('test_plotter.Plotter.plot_distributions')
+    @patch('test_plotter.Plotter.plot_group_divisions')
+    @patch('test_plotter.Plotter.format_histogram')
+    def test_plot_histogram_ax_calls_all_histogram_related_plot_functions(self, *histogram_functions) -> None:
+        self.plotter.plot_histogram_ax(ax=self.mock_ax)
+        for histogram_function in histogram_functions:
+            histogram_function.assert_called_with(ax=self.mock_ax)
 
     @patch('src.plotter.distplot')
     def test_plot_distributions_calls_seaborn_distplot(self, mock_seaborn_distplot) -> None:
@@ -330,12 +375,15 @@ class TestPlotterModule(unittest.TestCase):
         self.assertArrayIn(self.plotter.hist_intervals, actual_kwargs.values())
         self.assertIn(self.mock_ax, actual_kwargs.values())
 
-    def test_plot_group_divisions_adds_black_vertical_lines_based_on_breakpoints(self) -> None:
+    def test_plot_group_divisions_adds_vertical_lines_based_on_breakpoints(self) -> None:
         self.plotter.plot_group_divisions(ax=self.mock_ax)
-        for interval, args in zip(self.plotter.hist_intervals, self.mock_ax.axvline.call_args_list):
-            actual_args, actual_kwargs = args
-            with self.subTest(interval=interval, actual_args=actual_args, actual_kwargs=actual_kwargs):
-                self.assertIn(interval, actual_args)
+        actual_args, _ = self.mock_ax.vlines.call_args
+        np.testing.assert_allclose(self.plotter.hist_intervals, actual_args[0])
+
+    def test_plot_group_divisions_adds_vertical_lines_of_correct_colors(self) -> None:
+        self.plotter.plot_group_divisions(ax=self.mock_ax)
+        for interval, (_, actual_kwargs) in zip(self.plotter.hist_intervals, self.mock_ax.vlines.call_args_list):
+            with self.subTest(interval=interval, actual_kwargs=actual_kwargs):
                 self.assertIn(self.plotter.hist_interval_color, actual_kwargs.values())
 
     def test_format_histogram_modifies_title_and_xy_labels(self) -> None:
