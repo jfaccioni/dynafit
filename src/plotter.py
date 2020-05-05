@@ -157,6 +157,7 @@ class Plotter:
             self.plot_cumulative_hypothesis_ci(ax=ax)
             self.plot_endpoint_hypothesis_ci(ax=ax)
         self.format_hypothesis_plot(ax=ax)
+        self.invert_hypothesis_plot_y_axis(ax=ax)
 
     def plot_hypothesis_lines(self, ax: plt.Axes) -> None:
         """Plots the hypothesis in the hypothesis plot as horizontal lines."""
@@ -197,6 +198,12 @@ class Plotter:
         ax.set_yticks([0, 1])
         ax.set_yticklabels(['H0', 'H1'])
         ax.legend()
+
+    @staticmethod
+    def invert_hypothesis_plot_y_axis(ax: plt.Axes) -> None:
+        """Inverts Y axis of hypothesis plot, so that it matches the structure of the CVP
+        (easier than redoing plot calculations)."""
+        ax.invert_yaxis()
 
     def plot_histogram_ax(self, ax: plt.Axes) -> None:
         """Calls all the functions related to plotting the histogram."""

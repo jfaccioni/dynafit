@@ -234,6 +234,7 @@ class TestPlotterModule(unittest.TestCase):
     @patch('test_plotter.Plotter.plot_cumulative_hypothesis_ci')
     @patch('test_plotter.Plotter.plot_endpoint_hypothesis_ci')
     @patch('test_plotter.Plotter.format_hypothesis_plot')
+    @patch('test_plotter.Plotter.invert_hypothesis_plot_y_axis')
     @patch('test_plotter.Plotter.set_hypothesis_plot_limits')
     def test_plot_hypothesis_ax_calls_all_hypothesis_related_plot_functions(self, mock_set_hypothesis_plot_limits,
                                                                             *hypothesis_functions) -> None:
@@ -358,6 +359,11 @@ class TestPlotterModule(unittest.TestCase):
             actual_label = text_object.get_text()
             with self.subTest(expected_label=expected_label, actual_label=actual_label):
                 self.assertEqual(expected_label, actual_label)
+
+    def test_invert_hypothesis_plot_y_axis_calls_ax_invert_yaxis(self) -> None:
+        self.mock_ax.invert_yaxis.assert_not_called()
+        self.plotter.invert_hypothesis_plot_y_axis(ax=self.mock_ax)
+        self.mock_ax.invert_yaxis.assert_called()
 
     @patch('test_plotter.Plotter.plot_distributions')
     @patch('test_plotter.Plotter.plot_group_divisions')
