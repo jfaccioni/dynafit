@@ -232,7 +232,7 @@ def get_bootstrap_params(data: pd.DataFrame, n: int, group: float, show_ci: bool
     mean_colony_size = bootstrap_sample['CS'].mean()
     growth_rate_variance = bootstrap_sample['GR'].var()
     data_var = data['GR'].var()
-    t = np.nan if not show_ci else get_t_stat(bootstrap_sample=bootstrap_sample, data_var=data_var)
+    t = 'no ci' if not show_ci else get_t_stat(bootstrap_sample=bootstrap_sample, data_var=data_var)
     return mean_colony_size, growth_rate_variance, group, t
 
 
