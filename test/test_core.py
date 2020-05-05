@@ -53,8 +53,23 @@ class TestCoreModule(unittest.TestCase):
             'endpoint_lower_ys': np.array([0]),
         }
 
-    def test_dynafit(self) -> None:
-        pass  # TODO: missing test
+    def test_dynafit_returns_a_dictionary_a_plotter_instance_and_a_pandas_dataframe(self) -> None:
+        dictionary, plotter, df = dynafit(workbook=self.workbook, filename='filename', sheetname='CS_GR',
+                                          calculate_growth_rate=False, time_delta=72.0, cs_start_cell='A1',
+                                          cs_end_cell='', gr_start_cell='B1', gr_end_cell='', individual_colonies=5,
+                                          large_groups=5, bootstrap_repeats=10, show_ci=True, confidence_value=0.95,
+                                          remove_outliers=True, show_violin=True, progress_callback=MagicMock(),
+                                          warning_callback=MagicMock())
+        self.assertIsInstance(dictionary, dict)
+        self.assertIsInstance(plotter, Plotter)
+        self.assertIsInstance(df, pd.DataFrame)
+
+    def test_dynafit_raises_aborted_by_user_error_when_sample_size_warning_answer_is_true(self) -> None:
+        with patch('src.core.sample_size_warning_answer', return_value=True), self.assertRaises(AbortedByUser):
+            dynafit(workbook=self.workbook, filename='filename', sheetname='CS_GR', calculate_growth_rate=False,
+                    time_delta=72.0, cs_start_cell='A1', cs_end_cell='', gr_start_cell='B1', gr_end_cell='',
+                    individual_colonies=5, large_groups=5, bootstrap_repeats=10, show_ci=True, confidence_value=0.95,
+                    remove_outliers=True, show_violin=True, progress_callback=MagicMock(), warning_callback=MagicMock())
 
     @patch('src.core.filter_colony_sizes_less_than_one')
     @patch('src.core.add_growth_rate_column')
@@ -218,15 +233,25 @@ class TestCoreModule(unittest.TestCase):
             'GR': [10, 20, 30, 40, 50, 60],
             'groups': [1, 1, 2, 2, 3, 3]
         })
-        expected_xs = np.log2([1.5, 3.5, 5.5])  # CS mean for each group
-        expected_ys = np.log2([50, 50, 50])  # GR var for each group
+        expected_xs = np.log2([1.5, 3.5, 5.5])  # log2 of CS mean for each group
+        expected_ys = np.log2([50, 50, 50])  # log2 of GR var for each group
         actual_xs, actual_ys = get_original_sample_parameters(df=test_case_df)
         for expected_array, actual_array in zip([expected_xs, expected_ys], [actual_xs, actual_ys]):
             with self.subTest(expected_array=expected_array, actual_array=actual_array):
                 np.testing.assert_allclose(expected_array, actual_array)
 
     def test_get_original_sample_statistics_returns_variance_and_its_se_for_each_group(self) -> None:
-        pass  # TODO: missing test
+        test_case_df = pd.DataFrame({
+            'CS': [1, 2, 3, 4, 5, 6],
+            'GR': [10, 20, 30, 40, 50, 60],
+            'groups': [1, 1, 2, 2, 3, 3]
+        })
+        expected_var = np.array([50, 50, 50])  # GR var for each group
+        expected_var_se = expected_var * np.sqrt(2)  # GR var se for each group (degrees of freedom = 1 for all groups)
+        actual_var, actual_var_se = get_original_sample_statistics(df=test_case_df)
+        for expected_array, actual_array in zip([expected_var, expected_var_se], [actual_var, actual_var_se]):
+            with self.subTest(expected_array=expected_array, actual_array=actual_array):
+                np.testing.assert_allclose(expected_array, actual_array)
 
     def test_get_histogram_values_gets_expected_values_properly(self) -> None:
         test_case_df = pd.DataFrame({
@@ -240,14 +265,74 @@ class TestCoreModule(unittest.TestCase):
             with self.subTest(expected=expected, actual=actual):
                 np.testing.assert_allclose(expected, actual)
 
-    def test_bootstrap_data(self) -> None:
-        pass  # TODO: missing test
+    def test_bootstrap_data_returns_dataframe_with_correct_number_of_bootstrap_iterations(self) -> None:
+        test_case_df = pd.DataFrame({
+            'CS': [1, 2, 3, 4, 5, 6],
+            'GR': [7, 8, 9, 10, 11, 12],
+            'groups': [1, 1, 2, 2, 3, 3]
+        })
+        repeats = 5
+        expected_size = len(test_case_df['groups'].unique()) * repeats
+        actual_size = len(bootstrap_data(df=test_case_df, repeats=repeats, progress_callback=MagicMock(), show_ci=True))
+        self.assertEqual(expected_size, actual_size)
 
-    def test_get_bootstrap_params(self) -> None:
-        pass  # TODO: missing test
+    def test_bootstrap_data_performs_bootstrap_the_same_number_of_times_for_each_group(self) -> None:
+        test_case_df = pd.DataFrame({
+            'CS': [1, 2, 3, 4, 5, 6],
+            'GR': [7, 8, 9, 10, 11, 12],
+            'groups': [1, 1, 2, 2, 3, 3]
+        })
+        repeats = 5
+        resulting_df = bootstrap_data(df=test_case_df, repeats=repeats, progress_callback=MagicMock(), show_ci=True)
+        for _, actual_group_repetitions in resulting_df.groupby('groups'):
+            with self.subTest(expected_group_repetitions=repeats, actual_group_repetitions=actual_group_repetitions):
+                self.assertEqual(repeats, len(actual_group_repetitions))
+
+    def test_get_bootstrap_params_returns_appropriate_bootstrap_statistics(self) -> None:
+        test_case_bootstrap_sample = pd.DataFrame({
+            'CS': [10, 10, 10],
+            'GR': [50, 50, 50]
+        })
+        group = 1
+        expected_params = (
+            10,      # CS mean
+            0,       # GR var
+            group,   # same as input group
+            't return value'  # expected t value (mock)
+        )
+        with patch('src.core.get_t_stat', return_value='t return value'):
+            actual_params = get_bootstrap_params(data=test_case_bootstrap_sample, n=10, group=group, show_ci=True)
+        for expected, actual in zip(expected_params, actual_params):
+            with self.subTest(expected=expected, actual=actual):
+                self.assertEqual(expected, actual)
+
+    def test_get_bootstrap_params_returns_string_in_lieu_of_t_stat_if_show_ci_is_false(self) -> None:
+        test_case_bootstrap_sample = pd.DataFrame({
+            'CS': [50, 50, 50],
+            'GR': [10, 10, 10]
+        })
+        group = 1
+        expected_params = (
+            50,      # CS mean
+            0,       # GR var
+            group,   # same as input group
+            'no ci'  # replacement for t value when no CI is shown
+        )
+        actual_params = get_bootstrap_params(data=test_case_bootstrap_sample, n=10, group=group, show_ci=False)
+        for expected, actual in zip(expected_params, actual_params):
+            with self.subTest(expected=expected, actual=actual):
+                self.assertEqual(expected, actual)
 
     def test_get_t_stat(self) -> None:
-        pass  # TODO: missing test
+        test_case_bootstrap_sample = pd.DataFrame({
+            'GR': [10, 20]
+        })
+        mock_data_var = 2  # a given number
+        test_case_bootstrap_sample_var = 50  # variance of values [10, 20] (ddof = 1, pd.Series default)
+        test_case_bootstrap_sample_var_se = test_case_bootstrap_sample_var * np.sqrt(2)  # degrees of freedom = 1
+        expected_t_stat = (test_case_bootstrap_sample_var - mock_data_var) / test_case_bootstrap_sample_var_se
+        actual_t_stat = get_t_stat(bootstrap_sample=test_case_bootstrap_sample, data_var=mock_data_var)
+        self.assertEqual(expected_t_stat, actual_t_stat)
 
     def test_emit_bootstrap_progress_emits_progress_as_percentage(self) -> None:
         callback = MagicMock()
@@ -255,11 +340,26 @@ class TestCoreModule(unittest.TestCase):
         percentage = 1
         callback.emit.assert_called_with(percentage)
 
-    def test_postprocess_data(self) -> None:
-        pass  # TODO: missing test
+    @patch('src.core.add_log2_columns')
+    @patch('src.core.drop_inf_nan_values')
+    def test_postprocess_data_calls_proper_postprocessing_routines(self, mock_drop_inf_nan_values,
+                                                                   mock_add_log2_columns) -> None:
+        postprocess_data(df=self.df)
+        mock_drop_inf_nan_values.assert_called_with(df=self.df)
+        mock_add_log2_columns.assert_called_with(df=mock_drop_inf_nan_values.return_value,
+                                                 column_names=['bootstrap_CS_mean', 'bootstrap_GR_var'])
 
-    def test_drop_inf_nan_values(self) -> None:
-        pass  # TODO: missing test
+    def test_drop_inf_nan_values_drops_rows_with_inf_or_nan_values(self) -> None:
+        test_case_df = pd.DataFrame({
+            'CS_mean': [1, 2, 4, 8, np.inf],
+            'GR_var': [np.nan, 64, -np.inf, 256, 512]
+        })
+        expected_df = pd.DataFrame({
+            'CS_mean': [2, 8],
+            'GR_var': [64, 256]
+        })
+        actual_df = drop_inf_nan_values(df=test_case_df)
+        np.testing.assert_allclose(expected_df.values, actual_df.values)
 
     def test_add_log_columns_adds_log_columns_names_to_dataframe(self) -> None:
         test_case_df = pd.DataFrame({
@@ -313,8 +413,21 @@ class TestCoreModule(unittest.TestCase):
             with self.subTest(expected=expected, actual=actual):
                 np.testing.assert_array_equal(expected, actual)
 
-    def test_get_bootstrap_violin_statistics(self) -> None:
-        pass  # TODO: missing test
+    def test_get_bootstrap_violin_statistics_returns_appropriate_violin_statistics(self) -> None:
+        test_case_violins = [
+            np.array(range(0, 11,   1)),   # q1 = 2.5, median = 5,   q3 = 7.5
+            np.array(range(0, 101,  10)),  # q1 = 25,  median = 50,  q3 = 75
+            np.array(range(0, 1001, 100))  # q1 = 250, median = 500, q3 = 750
+        ]
+        expected_arrays = [
+            np.array([2.5, 25, 250]),
+            np.array([5,   50, 500]),
+            np.array([7.5, 75, 750])
+        ]
+        actual_arrays = get_bootstrap_violin_statistics(violins=test_case_violins)
+        for expected, actual in zip(expected_arrays, actual_arrays):
+            with self.subTest(expected=expected, actual=actual):
+                np.testing.assert_array_equal(expected, actual)
 
     def test_get_cumulative_hypothesis_values_calculates_areas_properly(self) -> None:
         # test case is a trapezium (area = 2) above the X axis, and a triangle below the X axis (area = -0.5)

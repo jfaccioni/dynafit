@@ -1,4 +1,6 @@
-"""core.py - bundles all computations of DynaFit."""
+"""core.py - bundles all computations of DynaFit.
+IMPORTANT: all variance calculations are performed with pd.Series.var(), which uses ddof = 1 by default.
+Numpy uses ddof = 0 by default, so take care when translating results from one package to the other."""
 
 from itertools import count
 from queue import Queue
