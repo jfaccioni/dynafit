@@ -66,6 +66,7 @@ class TestInterfaceModule(unittest.TestCase):
         params = MagicMock()
         plotter = MagicMock()
         plotter.plotting_methods = [plotter.plot_cvp_ax, plotter.plot_hypothesis_ax, plotter.plot_histogram_ax]
+        plotter.plot_hypothesis_ax.return_value = [(MagicMock(), MagicMock()), (MagicMock(), MagicMock())]
         df = MagicMock()
         return params, plotter, df
 
@@ -324,10 +325,22 @@ class TestInterfaceModule(unittest.TestCase):
         self.ui.results_table.clearContents.assert_called()
 
     def test_dynafit_worker_raised_exception_sets_result_dataframe_to_none(self) -> None:
-        self.ui.results_dataframe = 'results'
+        self.ui.results_dataframe = 'results dataframe'
         with patch('src.interface.DynaFitGUI.raise_worker_thread_error'):
             self.ui.dynafit_worker_raised_exception((Exception(), 'string'))
         self.assertIsNone(self.ui.results_dataframe)
+
+    def test_dynafit_worker_raised_exception_sets_cumulative_hypothesis_data_to_none(self) -> None:
+        self.ui.cumulative_hypothesis_data = 'cumulative hypothesis data'
+        with patch('src.interface.DynaFitGUI.raise_worker_thread_error'):
+            self.ui.dynafit_worker_raised_exception((Exception(), 'string'))
+        self.assertIsNone(self.ui.cumulative_hypothesis_data)
+
+    def test_dynafit_worker_raised_exception_sets_endpoint_hypothesis_data_to_none(self) -> None:
+        self.ui.endpoint_hypothesis_data = 'endpoint hypothesis data'
+        with patch('src.interface.DynaFitGUI.raise_worker_thread_error'):
+            self.ui.dynafit_worker_raised_exception((Exception(), 'string'))
+        self.assertIsNone(self.ui.endpoint_hypothesis_data)
 
     def test_dynafit_worker_raised_exception_passes_exception_to_handler_function(self) -> None:
         e = Exception()
@@ -359,11 +372,19 @@ class TestInterfaceModule(unittest.TestCase):
                 self.assertTrue(ax.get_visible())
 
     def test_dynafit_worker_raised_no_exception_sets_dataframe_results_attribute(self) -> None:
-        results = self.mock_results
-        *_, df = results
         self.assertIsNone(self.ui.results_dataframe)
-        self.ui.dynafit_worker_raised_no_exceptions(results=results)
+        self.ui.dynafit_worker_raised_no_exceptions(results=self.mock_results)
         self.assertIsNotNone(self.ui.results_dataframe)
+
+    def test_dynafit_worker_raised_no_exception_sets_cumulative_hypothesis_data_attribute(self) -> None:
+        self.assertIsNone(self.ui.cumulative_hypothesis_data)
+        self.ui.dynafit_worker_raised_no_exceptions(results=self.mock_results)
+        self.assertIsNotNone(self.ui.cumulative_hypothesis_data)
+
+    def test_dynafit_worker_raised_no_exception_sets_endpoint_hypothesis_data_attribute(self) -> None:
+        self.assertIsNone(self.ui.endpoint_hypothesis_data)
+        self.ui.dynafit_worker_raised_no_exceptions(results=self.mock_results)
+        self.assertIsNotNone(self.ui.endpoint_hypothesis_data)
 
     @patch('src.interface.DynaFitGUI.remove_nan_strings')
     def test_dynafit_worker_raised_no_exception_calls_remove_nan_strings(self, mock_remove_nan_strings) -> None:
@@ -529,8 +550,58 @@ class TestInterfaceModule(unittest.TestCase):
         self.ui.save_csv(path='path')
         mock_to_csv.assert_called_with('path.csv', index=False)
 
+    def test_toggle_cumulative_hypothesis_does_nothing_if_cumulative_hypothesis_data_has_not_been_set_yet(self):
+        self.ui.canvas = MagicMock()
+        self.ui.toggle_cumulative_hypothesis()
+        self.ui.canvas.draw.assert_not_called()
+
+    def test_toggle_cumulative_hypothesis_hides_cumulative_hypothesis_data_if_it_is_currently_visible(self):
+        self.ui.cumulative_hypothesis_data = [MagicMock(), MagicMock()]
+        self.ui.canvas = MagicMock()
+        for mock_data in self.ui.cumulative_hypothesis_data:
+            mock_data.get_visible.return_value = True
+        self.ui.toggle_cumulative_hypothesis()
+        for mock_data in self.ui.cumulative_hypothesis_data:
+            mock_data.set_visible.assert_called_with(False)
+        self.ui.canvas.draw.assert_called()
+
+    def test_toggle_cumulative_hypothesis_shows_cumulative_hypothesis_data_if_it_is_currently_invisible(self):
+        self.ui.cumulative_hypothesis_data = [MagicMock(), MagicMock()]
+        self.ui.canvas = MagicMock()
+        for mock_data in self.ui.cumulative_hypothesis_data:
+            mock_data.get_visible.return_value = False
+        self.ui.toggle_cumulative_hypothesis()
+        for mock_data in self.ui.cumulative_hypothesis_data:
+            mock_data.set_visible.assert_called_with(True)
+        self.ui.canvas.draw.assert_called()
+
+    def test_toggle_endpoint_hypothesis_does_nothing_if_cumulative_hypothesis_data_has_not_been_set_yet(self):
+        self.ui.canvas = MagicMock()
+        self.ui.toggle_endpoint_hypothesis()
+        self.ui.canvas.draw.assert_not_called()
+
+    def test_toggle_endpoint_hypothesis_hides_endpoint_hypothesis_data_if_it_is_currently_visible(self):
+        self.ui.endpoint_hypothesis_data = [MagicMock(), MagicMock()]
+        self.ui.canvas = MagicMock()
+        for mock_data in self.ui.endpoint_hypothesis_data:
+            mock_data.get_visible.return_value = True
+        self.ui.toggle_endpoint_hypothesis()
+        for mock_data in self.ui.endpoint_hypothesis_data:
+            mock_data.set_visible.assert_called_with(False)
+        self.ui.canvas.draw.assert_called()
+
+    def test_toggle_endpoint_hypothesis_shows_endpoint_hypothesis_data_if_it_is_currently_invisible(self):
+        self.ui.endpoint_hypothesis_data = [MagicMock(), MagicMock()]
+        self.ui.canvas = MagicMock()
+        for mock_data in self.ui.endpoint_hypothesis_data:
+            mock_data.get_visible.return_value = False
+        self.ui.toggle_endpoint_hypothesis()
+        for mock_data in self.ui.endpoint_hypothesis_data:
+            mock_data.set_visible.assert_called_with(True)
+        self.ui.canvas.draw.assert_called()
+
     @patch('src.interface.DynaFitGUI.show_error_message')
-    def test_main_thread_error_calls_show_error_message_with_traceback(self, mock_show_error_message) -> None:
+    def test_raise_main_thread_error_calls_show_error_message_with_traceback(self, mock_show_error_message) -> None:
         mock_show_error_message.assert_not_called()
         message = 'values not ok'
         error = ValueError(message)
@@ -540,7 +611,7 @@ class TestInterfaceModule(unittest.TestCase):
         mock_show_error_message.assert_called_with(name=name, trace=trace)
 
     @patch('src.interface.DynaFitGUI.show_error_message')
-    def test_worker_thread_error_calls_show_error_message_with_string(self, mock_show_error_message) -> None:
+    def test_raise_worker_thread_error_calls_show_error_message_with_string(self, mock_show_error_message) -> None:
         mock_show_error_message.assert_not_called()
         message = 'values not ok'
         error = ValueError(message)

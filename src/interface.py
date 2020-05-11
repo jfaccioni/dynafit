@@ -38,6 +38,8 @@ class DynaFitGUI(QMainWindow):
         self.threadpool = QThreadPool(self)
         self.workbook = None
         self.results_dataframe = None
+        self.cumulative_hypothesis_data = None
+        self.endpoint_hypothesis_data = None
 
         # --Central widget--
         self.frame = QWidget(self)
@@ -236,10 +238,21 @@ class DynaFitGUI(QMainWindow):
         self.histogram_ax.set_visible(False)
         # Add canvas above to right column
         right_column.addWidget(self.scroll_area)
-        # Add a navigation bar to right column
-        navbar_layout = QHBoxLayout()
-        navbar_layout.addWidget(Navbar(self.canvas, self.frame))
-        right_column.addLayout(navbar_layout)
+        # --Canvas footer--
+        # Region where canvas navigation bar and related buttons are displayed
+        canvas_footer_layout = QHBoxLayout()
+        # Button for toggling display of cumulative hypothesis
+        cumulative_hypothesis_button = QPushButton(self, text='Toggle cumulative hypothesis plot')  # noqa
+        cumulative_hypothesis_button.clicked.connect(self.toggle_cumulative_hypothesis)  # noqa
+        canvas_footer_layout.addWidget(cumulative_hypothesis_button)
+        # Button for toggling display of endpoint hypothesis
+        endpoint_hypothesis_button = QPushButton(self, text='Toggle endpoint hypothesis plot')  # noqa
+        endpoint_hypothesis_button.clicked.connect(self.toggle_endpoint_hypothesis)  # noqa
+        canvas_footer_layout.addWidget(endpoint_hypothesis_button)
+        # Canvas navigation bar
+        canvas_footer_layout.addWidget(Navbar(self.canvas, self.frame))
+        # Add widgets above to right column
+        right_column.addLayout(canvas_footer_layout)
 
         # Set column stretch so that only plot gets rescaled with GUI
         columns.setStretch(1, 10)
@@ -378,6 +391,8 @@ class DynaFitGUI(QMainWindow):
         self.histogram_ax.set_visible(False)
         self.results_table.clearContents()
         self.results_dataframe = None
+        self.cumulative_hypothesis_data = None
+        self.endpoint_hypothesis_data = None
         if not isinstance(exception_tuple[0], AbortedByUser):
             self.raise_worker_thread_error(exception_tuple)
 
@@ -390,7 +405,8 @@ class DynaFitGUI(QMainWindow):
         self.histogram_ax.set_visible(True)
         params, plotter, df = results
         plotter.plot_cvp_ax(ax=self.cvp_ax)
-        plotter.plot_hypothesis_ax(ax=self.hypothesis_ax, xlims=self.cvp_ax.get_xlim())
+        hypothesis_data = plotter.plot_hypothesis_ax(ax=self.hypothesis_ax, xlims=self.cvp_ax.get_xlim())
+        self.cumulative_hypothesis_data, self.endpoint_hypothesis_data = hypothesis_data
         plotter.plot_histogram_ax(ax=self.histogram_ax)
         self.set_figure_title(filename=params['filename'], sheetname=params['sheetname'])
         self.set_results_table(df=df)
@@ -456,6 +472,24 @@ class DynaFitGUI(QMainWindow):
         if not path.endswith('.csv'):
             path += '.csv'
         self.results_dataframe.to_csv(path, index=False)
+
+    def toggle_cumulative_hypothesis(self):
+        """Shows/hides the cumulative hypothesis line plot."""
+        if self.cumulative_hypothesis_data is None:  # return if the cumulative hypothesis data has not been set yet
+            return
+        for artist in self.cumulative_hypothesis_data:
+            if artist is not None:
+                artist.set_visible(False) if artist.get_visible() else artist.set_visible(True)
+        self.canvas.draw()
+
+    def toggle_endpoint_hypothesis(self):
+        """Shows/hides the endpoint hypothesis line plot."""
+        if self.endpoint_hypothesis_data is None:  # return if the endpoint hypothesis data has not been set yet
+            return
+        for artist in self.endpoint_hypothesis_data:
+            if artist is not None:
+                artist.set_visible(False) if artist.get_visible() else artist.set_visible(True)
+        self.canvas.draw()
 
     def raise_main_thread_error(self, error: Exception) -> None:
         """Generic function for catching errors in the main GUI thread and re-raising them as properly formatted

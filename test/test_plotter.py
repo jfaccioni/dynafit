@@ -48,6 +48,7 @@ class TestPlotterModule(unittest.TestCase):
     def tearDown(self) -> None:
         """Tears down each unit test by deleting the Figure and Axes instances."""
         self.ax.clear()
+        plt.close(self.fig)
         del self.ax
         del self.fig
 
@@ -245,6 +246,32 @@ class TestPlotterModule(unittest.TestCase):
             hypothesis_function.assert_called_with(ax=self.mock_ax)
 
     @patch('test_plotter.Plotter.plot_endpoint_hypothesis_ci')
+    @patch('test_plotter.Plotter.plot_endpoint_hypothesis_distance')
+    @patch('test_plotter.Plotter.plot_cumulative_hypothesis_ci')
+    @patch('test_plotter.Plotter.plot_cumulative_hypothesis_distance')
+    def test_plot_hypothesis_ax_returns_values_from_appropriate_functions(self, mock_cumulative_distance,
+                                                                          mock_cumulative_ci, mock_endpoint_distance,
+                                                                          mock_endpoint_ci) -> None:
+        return_value = self.plotter.plot_hypothesis_ax(ax=self.ax, xlims=(0, 5))
+        (cumulative_line, cumulative_ci), (endpoint_line, endpoint_ci) = return_value
+        self.assertEqual(cumulative_line, mock_cumulative_distance.return_value)
+        self.assertEqual(cumulative_ci, mock_cumulative_ci.return_value)
+        self.assertEqual(endpoint_line, mock_endpoint_distance.return_value)
+        self.assertEqual(endpoint_ci, mock_endpoint_ci.return_value)
+
+    @patch('test_plotter.Plotter.plot_endpoint_hypothesis_distance')
+    @patch('test_plotter.Plotter.plot_cumulative_hypothesis_distance')
+    def test_plot_hypothesis_ax_returns_none_values_if_boolean_flags_are_set_to_false(self, mock_cumulative_distance,
+                                                                                      mock_endpoint_distance) -> None:
+        self.disable_ci()
+        return_value = self.plotter.plot_hypothesis_ax(ax=self.ax, xlims=(0, 5))
+        (cumulative_line, cumulative_ci), (endpoint_line, endpoint_ci) = return_value
+        self.assertEqual(cumulative_line, mock_cumulative_distance.return_value)
+        self.assertIsNone(cumulative_ci)
+        self.assertEqual(endpoint_line, mock_endpoint_distance.return_value)
+        self.assertIsNone(endpoint_ci)
+
+    @patch('test_plotter.Plotter.plot_endpoint_hypothesis_ci')
     @patch('test_plotter.Plotter.plot_cumulative_hypothesis_ci')
     def test_plot_hypothesis_ax_plots_everything_if_boolean_flags_are_set_to_true(self, plot_cumulative_hypothesis_ci,
                                                                                   plot_endpoint_hypothesis_ci) -> None:
@@ -289,6 +316,10 @@ class TestPlotterModule(unittest.TestCase):
         _, actual_kwargs = self.mock_ax.plot.call_args
         self.assertIn(self.plotter.cumul_color, actual_kwargs.values())
 
+    def test_plot_cumulative_hypothesis_returns_a_line2d_instance(self) -> None:
+        expected_line2d = self.plotter.plot_cumulative_hypothesis_distance(ax=self.ax)
+        self.assertIsInstance(expected_line2d, plt.Line2D)
+
     def test_plot_endpoint_hypothesis_distance_plots_line_of_endpoint_distance_values(self) -> None:
         self.plotter.plot_endpoint_hypothesis_distance(ax=self.mock_ax)
         self.mock_ax.plot.assert_called_once()
@@ -300,6 +331,10 @@ class TestPlotterModule(unittest.TestCase):
         self.plotter.plot_endpoint_hypothesis_distance(ax=self.mock_ax)
         _, actual_kwargs = self.mock_ax.plot.call_args
         self.assertIn(self.plotter.endp_color, actual_kwargs.values())
+
+    def test_plot_endpoint_hypothesis_returns_a_line2d_instance(self) -> None:
+        expected_line2d = self.plotter.plot_endpoint_hypothesis_distance(ax=self.ax)
+        self.assertIsInstance(expected_line2d, plt.Line2D)
 
     def test_set_hypothesis_plot_limits_sets_x_limits_to_argument_passed_in(self) -> None:
         xlims = (-50, 50)
@@ -332,6 +367,10 @@ class TestPlotterModule(unittest.TestCase):
         _, actual_kwargs = self.mock_ax.fill_between.call_args
         self.assertIn(self.plotter.cumul_color, actual_kwargs.values())
 
+    def test_plot_cumulative_hypothesis_returns_a_polycollection_instance(self) -> None:
+        expected_polycollection = self.plotter.plot_cumulative_hypothesis_ci(ax=self.ax)
+        self.assertIsInstance(expected_polycollection, PolyCollection)
+
     def test_plot_endpoint_hypothesis_ci_fills_an_area(self) -> None:
         self.plotter.plot_endpoint_hypothesis_ci(ax=self.mock_ax)
         self.mock_ax.fill_between.assert_called_once()
@@ -344,6 +383,10 @@ class TestPlotterModule(unittest.TestCase):
         self.plotter.plot_endpoint_hypothesis_ci(ax=self.mock_ax)
         _, actual_kwargs = self.mock_ax.fill_between.call_args
         self.assertIn(self.plotter.endp_color, actual_kwargs.values())
+
+    def test_plot_endpoint_hypothesis_returns_a_polycollection_instance(self) -> None:
+        expected_polycollection = self.plotter.plot_endpoint_hypothesis_ci(ax=self.ax)
+        self.assertIsInstance(expected_polycollection, PolyCollection)
 
     def test_format_hypothesis_plot_adds_title_labels_ticks_and_set_plot_legends(self) -> None:
         self.assertFalse(self.ax.get_title())

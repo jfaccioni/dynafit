@@ -147,30 +147,36 @@ class Plotter:
         ax.set_xlabel('log2(Colony Size)')
         ax.set_ylabel('log2(Growth Rate Variance)')
 
-    def plot_hypothesis_ax(self, ax: plt.Axes, xlims: Tuple[float, float]) -> None:
+    def plot_hypothesis_ax(self, ax: plt.Axes,
+                           xlims: Tuple[float, float]) -> List[Tuple[plt.Line2D, Optional[PolyCollection]]]:
         """Calls all the functions related to plotting the hypothesis distance plot."""
         self.plot_hypothesis_lines(ax=ax)
-        self.plot_cumulative_hypothesis_distance(ax=ax)
-        self.plot_endpoint_hypothesis_distance(ax=ax)
+        cumulative_hypothesis_data = self.plot_cumulative_hypothesis_distance(ax=ax)
+        endpoint_hypothesis_data = self.plot_endpoint_hypothesis_distance(ax=ax)
         self.set_hypothesis_plot_limits(ax=ax, xlims=xlims)
+        cumulative_hypothesis_ci, endpoint_hypothesis_ci = None, None
         if self.show_ci:
-            self.plot_cumulative_hypothesis_ci(ax=ax)
-            self.plot_endpoint_hypothesis_ci(ax=ax)
+            cumulative_hypothesis_ci = self.plot_cumulative_hypothesis_ci(ax=ax)
+            endpoint_hypothesis_ci = self.plot_endpoint_hypothesis_ci(ax=ax)
         self.format_hypothesis_plot(ax=ax)
         self.invert_hypothesis_plot_y_axis(ax=ax)
+        return [(cumulative_hypothesis_data, cumulative_hypothesis_ci),
+                (endpoint_hypothesis_data, endpoint_hypothesis_ci)]
 
     def plot_hypothesis_lines(self, ax: plt.Axes) -> None:
         """Plots the hypothesis in the hypothesis plot as horizontal lines."""
         ax.axhline(0, color=self.h0_color, linestyle='dotted', alpha=0.8)
         ax.axhline(1, color=self.h1_color, linestyle='dotted', alpha=0.8)
 
-    def plot_cumulative_hypothesis_distance(self, ax: plt.Axes) -> None:
+    def plot_cumulative_hypothesis_distance(self, ax: plt.Axes) -> plt.Line2D:
         """Plots the cumulative hypothesis values as a line plot."""
-        ax.plot(self.xs, self.cumulative_ys, color=self.cumul_color, label='Cumulative')
+        lines = ax.plot(self.xs, self.cumulative_ys, color=self.cumul_color, label='Cumulative')
+        return lines[0]  # single Line2D instance
 
-    def plot_endpoint_hypothesis_distance(self, ax: plt.Axes) -> None:
+    def plot_endpoint_hypothesis_distance(self, ax: plt.Axes) -> plt.Line2D:
         """Plots the endpoint hypothesis values as a line plot."""
-        ax.plot(self.xs, self.endpoint_ys, color=self.endp_color, label='Endpoint')
+        lines = ax.plot(self.xs, self.endpoint_ys, color=self.endp_color, label='Endpoint')
+        return lines[0]  # single Line2D instance
 
     def set_hypothesis_plot_limits(self, ax: plt.Axes, xlims: Tuple[float, float]) -> None:
         """Calculates appropriate limits for the XY axes in the hypothesis plot."""
@@ -181,13 +187,17 @@ class Plotter:
         if current_limits[1] <= self.hypothesis_plot_upper_ylim:
             ax.set_ylim(top=self.hypothesis_plot_upper_ylim)
 
-    def plot_cumulative_hypothesis_ci(self, ax: plt.Axes) -> None:
+    def plot_cumulative_hypothesis_ci(self, ax: plt.Axes) -> PolyCollection:
         """Plots the CI around the cumulative hypothesis values as a line plot."""
-        ax.fill_between(self.xs, self.cumulative_upper_ys, self.cumulative_lower_ys, alpha=0.2, color=self.cumul_color)
+        filled_area = ax.fill_between(self.xs, self.cumulative_upper_ys, self.cumulative_lower_ys, alpha=0.2,
+                                      color=self.cumul_color)
+        return filled_area
 
-    def plot_endpoint_hypothesis_ci(self, ax: plt.Axes) -> None:
+    def plot_endpoint_hypothesis_ci(self, ax: plt.Axes) -> PolyCollection:
         """Plots the CI around the endpoint hypothesis values as a line plot."""
-        ax.fill_between(self.xs, self.endpoint_upper_ys, self.endpoint_lower_ys, alpha=0.2, color=self.endp_color)
+        filled_area = ax.fill_between(self.xs, self.endpoint_upper_ys, self.endpoint_lower_ys, alpha=0.2,
+                                      color=self.endp_color)
+        return filled_area
 
     @staticmethod
     def format_hypothesis_plot(ax: plt.Axes) -> None:
@@ -197,7 +207,7 @@ class Plotter:
         ax.set_ylabel('Hypothesis')
         ax.set_yticks([0, 1])
         ax.set_yticklabels(['H0', 'H1'])
-        ax.legend()
+        ax.legend(bbox_to_anchor=(0.8, 1.4, 0.2, 0.1))
 
     @staticmethod
     def invert_hypothesis_plot_y_axis(ax: plt.Axes) -> None:
