@@ -350,15 +350,9 @@ def results_to_dataframe(original_parameters: Dict[str, Any], xs: np.ndarray, ys
         'Distance to H0 (cumulative)': to_column_ci_format(cumulative_ys),
         'Distance to H0 (cumulative) upper CI': to_column_ci_format(cumulative_upper_ys) if show_ci else None,
         'Distance to H0 (cumulative) lower CI': to_column_ci_format(cumulative_lower_ys) if show_ci else None,
-        'Distance to H1 (cumulative)': to_column_ci_format(cumulative_ys - 1),
-        'Distance to H1 (cumulative) upper CI': to_column_ci_format(cumulative_upper_ys - 1) if show_ci else None,
-        'Distance to H1 (cumulative) lower CI': to_column_ci_format(cumulative_lower_ys - 1) if show_ci else None,
         'Distance to H0 (endpoint)': to_column_ci_format(endpoint_ys),
         'Distance to H0 (endpoint) upper CI': to_column_ci_format(endpoint_upper_ys) if show_ci else None,
         'Distance to H0 (endpoint) lower CI': to_column_ci_format(endpoint_lower_ys) if show_ci else None,
-        'Distance to H1 (endpoint)': to_column_ci_format(endpoint_ys - 1),
-        'Distance to H1 (endpoint) upper CI': to_column_ci_format(endpoint_upper_ys - 1) if show_ci else None,
-        'Distance to H1 (endpoint) lower CI': to_column_ci_format(endpoint_lower_ys - 1) if show_ci else None
     }
     return pd.DataFrame({k: v for k, v in data.items() if v is not None})
 
@@ -375,4 +369,4 @@ def to_column_float_format(a: np.array) -> pd.Series:
 
 def to_column_ci_format(a: np.array) -> pd.Series:
     """Formats numerical arrays confidence intervals to the expected format of the results dataframe."""
-    return pd.Series(np.abs(a.round(4)))
+    return pd.Series(a.round(4))
