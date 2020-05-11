@@ -1,3 +1,8 @@
+# 0.3.3
+- Distance to H0 can be negative now (happens when data goes above H0 line)
+- Removed distance to H1 from results table
+- Added buttons to toggle the display of hypothesis plot results
+
 # 0.3.2
 - Inverted Y axis on hypothesis plot (matches CVP)
 - Fixed bug when plotting violins without CI
