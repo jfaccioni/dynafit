@@ -16,7 +16,7 @@ from PySide2.QtGui import QKeySequence
 from PySide2.QtWidgets import (QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFrame, QGridLayout,
                                QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow, QMessageBox, QProgressBar,
                                QPushButton, QRadioButton, QScrollArea, QSpinBox, QTableWidget, QTableWidgetItem,
-                               QVBoxLayout, QWidget, qApp)
+                               QVBoxLayout, QWidget)
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as Canvas, NavigationToolbar2QT as Navbar
 from matplotlib.pyplot import Figure
 
@@ -40,6 +40,7 @@ class DynaFitGUI(QMainWindow):
         self.results_dataframe = None
         self.cumulative_hypothesis_data = None
         self.endpoint_hypothesis_data = None
+        self.save_dir = ''
 
         # --Central widget--
         self.frame = QWidget(self)
@@ -75,20 +76,20 @@ class DynaFitGUI(QMainWindow):
         self.input_frame = QFrame(self, frameShape=QFrame.Box)
         self.input_frame.setLayout(QGridLayout())
         # Load data button
-        self.load_data_button = QPushButton(self, text='Load input data')  # noqa
+        self.load_data_button = QPushButton(self, text='Load input data')
         self.load_data_button.clicked.connect(self.load_data_dialog)  # noqa
-        self.input_frame.layout().addWidget(self.load_data_button, 0, 0, 1, 2)
+        self.input_frame.layout().addWidget(self.load_data_button, 0, 0, 1, 2)  # noqa
         # Input filename and label
         self.input_filename_helper_label = QLabel(self, text='Data loaded:', styleSheet='font-weight: 600')
-        self.input_frame.layout().addWidget(self.input_filename_helper_label, 1, 0)
+        self.input_frame.layout().addWidget(self.input_filename_helper_label, 1, 0)  # noqa
         self.input_filename_label = QLabel(self, text='')
-        self.input_frame.layout().addWidget(self.input_filename_label, 1, 1)
+        self.input_frame.layout().addWidget(self.input_filename_label, 1, 1)  # noqa
         # Input sheetname and label
         self.input_sheetname_label = QLabel(self, text='Sheet to analyse:', styleSheet='font-weight: 600')
-        self.input_frame.layout().addWidget(self.input_sheetname_label, 2, 0)
+        self.input_frame.layout().addWidget(self.input_sheetname_label, 2, 0)  # noqa
         self.input_sheetname_combobox = QComboBox(self)
         self.input_sheetname_combobox.setDisabled(True)
-        self.input_frame.layout().addWidget(self.input_sheetname_combobox, 2, 1)
+        self.input_frame.layout().addWidget(self.input_sheetname_combobox, 2, 1)  # noqa
         # Add input frame section to left column
         left_column.addWidget(self.input_frame)
 
@@ -100,41 +101,41 @@ class DynaFitGUI(QMainWindow):
         # CS1/CS2 button (calculates GR)
         self.cs1_cs2_button = QRadioButton(self, text='Initial and final colony sizes', checked=True)
         self.cs1_cs2_button.clicked.connect(self.cs1_cs2_button_clicked)  # noqa
-        self.data_type_range_frame.layout().addWidget(self.cs1_cs2_button, 0, 0, 1, 2)
+        self.data_type_range_frame.layout().addWidget(self.cs1_cs2_button, 0, 0, 1, 2)  # noqa
         # CS/GR button (pre-calculated GR)
         self.cs_gr_button = QRadioButton(self, text='Initial colony size and growth rate')
         self.cs_gr_button.clicked.connect(self.cs_gr_button_clicked)  # noqa
-        self.data_type_range_frame.layout().addWidget(self.cs_gr_button, 0, 2, 1, 2)
+        self.data_type_range_frame.layout().addWidget(self.cs_gr_button, 0, 2, 1, 2)  # noqa
         # Time interval label and value
         self.time_interval_label = QLabel(self, text='Hours between initial and final colony sizes:', wordWrap=True)
-        self.data_type_range_frame.layout().addWidget(self.time_interval_label, 1, 0, 1, 2)
+        self.data_type_range_frame.layout().addWidget(self.time_interval_label, 1, 0, 1, 2)  # noqa
         self.time_interval_spinbox = QDoubleSpinBox(self, minimum=0.0, value=24.0, maximum=1000.0, singleStep=1.0)
-        self.data_type_range_frame.layout().addWidget(self.time_interval_spinbox, 1, 2, 1, 2)
+        self.data_type_range_frame.layout().addWidget(self.time_interval_spinbox, 1, 2, 1, 2)  # noqa
         # CS label and GR label
         self.CS_label = QLabel(self, text='Initial colony size column', styleSheet='font-weight: 600')
-        self.data_type_range_frame.layout().addWidget(self.CS_label, 2, 0, 1, 2)
+        self.data_type_range_frame.layout().addWidget(self.CS_label, 2, 0, 1, 2)  # noqa
         self.GR_label = QLabel(self, text='Final colony size column', styleSheet='font-weight: 600')
-        self.data_type_range_frame.layout().addWidget(self.GR_label, 2, 2, 1, 2)
+        self.data_type_range_frame.layout().addWidget(self.GR_label, 2, 2, 1, 2)  # noqa
         # CS start
         self.CS_start_label = QLabel(self, text='From cell:')
-        self.data_type_range_frame.layout().addWidget(self.CS_start_label, 3, 0)
-        self.CS_start_textbox = QLineEdit(self, placeholderText="")  # noqa
-        self.data_type_range_frame.layout().addWidget(self.CS_start_textbox, 3, 1)
+        self.data_type_range_frame.layout().addWidget(self.CS_start_label, 3, 0)  # noqa
+        self.CS_start_textbox = QLineEdit(self, placeholderText="")
+        self.data_type_range_frame.layout().addWidget(self.CS_start_textbox, 3, 1)  # noqa
         # CS end
         self.CS_end_label = QLabel(self, text='To cell:')
-        self.data_type_range_frame.layout().addWidget(self.CS_end_label, 4, 0)
-        self.CS_end_textbox = QLineEdit(self, placeholderText="Entire Column")  # noqa
-        self.data_type_range_frame.layout().addWidget(self.CS_end_textbox, 4, 1)
+        self.data_type_range_frame.layout().addWidget(self.CS_end_label, 4, 0)  # noqa
+        self.CS_end_textbox = QLineEdit(self, placeholderText="Entire Column")
+        self.data_type_range_frame.layout().addWidget(self.CS_end_textbox, 4, 1)  # noqa
         # GR start
         self.GR_start_label = QLabel(self, text='From cell:')
-        self.data_type_range_frame.layout().addWidget(self.GR_start_label, 3, 2)
-        self.GR_start_textbox = QLineEdit(self, placeholderText="")  # noqa
-        self.data_type_range_frame.layout().addWidget(self.GR_start_textbox, 3, 3)
+        self.data_type_range_frame.layout().addWidget(self.GR_start_label, 3, 2)  # noqa
+        self.GR_start_textbox = QLineEdit(self, placeholderText="")
+        self.data_type_range_frame.layout().addWidget(self.GR_start_textbox, 3, 3)  # noqa
         # GR end
         self.GR_end_label = QLabel(self, text='To cell:')
-        self.data_type_range_frame.layout().addWidget(self.GR_end_label, 4, 2)
-        self.GR_end_textbox = QLineEdit(self, placeholderText="Entire Column")  # noqa
-        self.data_type_range_frame.layout().addWidget(self.GR_end_textbox, 4, 3)
+        self.data_type_range_frame.layout().addWidget(self.GR_end_label, 4, 2)  # noqa
+        self.GR_end_textbox = QLineEdit(self, placeholderText="Entire Column")
+        self.data_type_range_frame.layout().addWidget(self.GR_end_textbox, 4, 3)  # noqa
         # Add section above to left column
         left_column.addWidget(self.data_type_range_frame)
 
@@ -147,37 +148,37 @@ class DynaFitGUI(QMainWindow):
         tooltip = 'Colonies up to this colony size are placed in individual groups'
         self.max_individual_cs_label = QLabel(self, text='Max individual colony groups', wordWrap=True)
         self.max_individual_cs_label.setToolTip(tooltip)
-        self.options_frame.layout().addWidget(self.max_individual_cs_label, 0, 0, 1, 1)
+        self.options_frame.layout().addWidget(self.max_individual_cs_label, 0, 0, 1, 1)  # noqa
         self.max_individual_cs_spinbox = QSpinBox(self, minimum=0, value=5, maximum=100, singleStep=1)
         self.max_individual_cs_spinbox.setToolTip(tooltip)
-        self.options_frame.layout().addWidget(self.max_individual_cs_spinbox, 0, 1, 1, 1)
+        self.options_frame.layout().addWidget(self.max_individual_cs_spinbox, 0, 1, 1, 1)  # noqa
         # Number of large colony groups
         tooltip = 'Remaining colonies are equally distributed in these many groups'
         self.large_colony_groups_label = QLabel(self, text='Large colony groups')
         self.large_colony_groups_label.setToolTip(tooltip)
-        self.options_frame.layout().addWidget(self.large_colony_groups_label, 0, 2, 1, 1)
+        self.options_frame.layout().addWidget(self.large_colony_groups_label, 0, 2, 1, 1)  # noqa
         self.large_colony_groups_spinbox = QSpinBox(self, minimum=0, value=5, maximum=100, singleStep=1)
         self.large_colony_groups_spinbox.setToolTip(tooltip)
-        self.options_frame.layout().addWidget(self.large_colony_groups_spinbox, 0, 3, 1, 1)
+        self.options_frame.layout().addWidget(self.large_colony_groups_spinbox, 0, 3, 1, 1)  # noqa
         # Number of bootstrap repeats parameter
         self.bootstrap_repeats_label = QLabel(self, text='Bootstrap repeats')
-        self.options_frame.layout().addWidget(self.bootstrap_repeats_label, 1, 0, 1, 1)
+        self.options_frame.layout().addWidget(self.bootstrap_repeats_label, 1, 0, 1, 1)  # noqa
         self.bootstrap_repeats_spinbox = QSpinBox(self, minimum=0, maximum=1_000_000, singleStep=1)
         self.bootstrap_repeats_spinbox.setValue(100)
-        self.options_frame.layout().addWidget(self.bootstrap_repeats_spinbox, 1, 1, 1, 1)
+        self.options_frame.layout().addWidget(self.bootstrap_repeats_spinbox, 1, 1, 1, 1)  # noqa
         # Confidence interval parameter
         self.conf_int_checkbox = QCheckBox(self, text='Use conf. int.')
         self.conf_int_checkbox.clicked.connect(self.conf_int_checkbox_clicked)  # noqa
-        self.options_frame.layout().addWidget(self.conf_int_checkbox, 1, 2, 1, 1)
+        self.options_frame.layout().addWidget(self.conf_int_checkbox, 1, 2, 1, 1)  # noqa
         self.conf_int_spinbox = QDoubleSpinBox(self, minimum=0, value=0.95, maximum=0.999, singleStep=0.01, decimals=3)
         self.conf_int_spinbox.setEnabled(False)
-        self.options_frame.layout().addWidget(self.conf_int_spinbox, 1, 3, 1, 1)
+        self.options_frame.layout().addWidget(self.conf_int_spinbox, 1, 3, 1, 1)  # noqa
         # Filter outliers parameter
         self.remove_outliers_checkbox = QCheckBox(self, text='Filter outliers before plotting')
-        self.options_frame.layout().addWidget(self.remove_outliers_checkbox, 2, 0, 1, 2)
+        self.options_frame.layout().addWidget(self.remove_outliers_checkbox, 2, 0, 1, 2)  # noqa
         # Plot violins parameter
         self.add_violins_checkbox = QCheckBox(self, text='Add violins to plot')
-        self.options_frame.layout().addWidget(self.add_violins_checkbox, 2, 2, 1, 2)
+        self.options_frame.layout().addWidget(self.add_violins_checkbox, 2, 2, 1, 2)  # noqa
         # Add section above to left column
         left_column.addWidget(self.options_frame)
 
@@ -185,16 +186,16 @@ class DynaFitGUI(QMainWindow):
         # Region where the button to plot is located, as well as the calculated AAC
         plot_grid = QGridLayout()
         # Plot button
-        self.plot_button = QPushButton(self, text='Plot CVP')  # noqa
+        self.plot_button = QPushButton(self, text='Plot CVP')
         self.plot_button.clicked.connect(self.dynafit_run)  # noqa
         plot_grid.addWidget(self.plot_button, 0, 0, 1, 1)
         # Excel export button
-        self.to_excel_button = QPushButton(self, text='Save to Excel')  # noqa
+        self.to_excel_button = QPushButton(self, text='Save to Excel')
         self.to_excel_button.clicked.connect(self.save_excel_dialog)  # noqa
         self.to_excel_button.setDisabled(True)
         plot_grid.addWidget(self.to_excel_button, 0, 1, 1, 1)
         # CSV export button
-        self.to_csv_button = QPushButton(self, text='Save to csv')  # noqa
+        self.to_csv_button = QPushButton(self, text='Save to csv')
         self.to_csv_button.clicked.connect(self.save_csv_dialog)  # noqa
         self.to_csv_button.setDisabled(True)
         plot_grid.addWidget(self.to_csv_button, 0, 2, 1, 1)
@@ -242,11 +243,11 @@ class DynaFitGUI(QMainWindow):
         # Region where canvas navigation bar and related buttons are displayed
         canvas_footer_layout = QHBoxLayout()
         # Button for toggling display of cumulative hypothesis
-        cumulative_hypothesis_button = QPushButton(self, text='Toggle cumulative hypothesis plot')  # noqa
+        cumulative_hypothesis_button = QPushButton(self, text='Toggle cumulative hypothesis plot')
         cumulative_hypothesis_button.clicked.connect(self.toggle_cumulative_hypothesis)  # noqa
         canvas_footer_layout.addWidget(cumulative_hypothesis_button)
         # Button for toggling display of endpoint hypothesis
-        endpoint_hypothesis_button = QPushButton(self, text='Toggle endpoint hypothesis plot')  # noqa
+        endpoint_hypothesis_button = QPushButton(self, text='Toggle endpoint hypothesis plot')
         endpoint_hypothesis_button.clicked.connect(self.toggle_endpoint_hypothesis)  # noqa
         canvas_footer_layout.addWidget(endpoint_hypothesis_button)
         # Canvas navigation bar
@@ -261,7 +262,7 @@ class DynaFitGUI(QMainWindow):
 
     def load_data_dialog(self) -> None:
         """Opens a file dialog, prompting the user to select the data (Excel spreadsheet) to load."""
-        query, _ = QFileDialog.getOpenFileName(self, 'Select input file', '', 'Excel Spreadsheet (*.xlsx)')  # noqa
+        query, _ = QFileDialog.getOpenFileName(self, 'Select input file', '', 'Excel Spreadsheet (*.xlsx)')
         if query:
             self.load_data(query=query)
 
@@ -361,12 +362,12 @@ class DynaFitGUI(QMainWindow):
         self.to_excel_button.setDisabled(True)
         self.to_csv_button.setDisabled(True)
 
-    @Slot(int)  # noqa
+    @Slot(int)
     def dynafit_worker_progress_updated(self, number: int) -> None:
         """Updates DynaFit progress"""
         self.progress_bar.setValue(number)
 
-    @Slot(object)  # noqa
+    @Slot(object)
     def dynafit_worker_small_sample_size_warning(self, warning: Tuple[Queue, Dict[int, Tuple[int, int]]]) -> None:
         """Creates a sample size warning message box. Thread is halted while user selects the answer, which is
         sent back to the thread through a Queue object."""
@@ -375,7 +376,7 @@ class DynaFitGUI(QMainWindow):
                    'impossible to compute.\nDo you want to continue anyway?')
         groups = '\n'.join(f'Group {k}, mean CS {cs}: sample size of {n}' for k, (n, cs) in warning_info.items())
         box = QMessageBox(self, windowTitle='Warning: low sample sizes', text=message, detailedText=groups,
-                          standardButtons=QMessageBox.Yes | QMessageBox.No)  # noqa
+                          standardButtons=QMessageBox.Yes | QMessageBox.No)
         box.setDefaultButton(QMessageBox.No)
         reply = box.exec_()
         if reply == QMessageBox.Yes:
@@ -422,12 +423,12 @@ class DynaFitGUI(QMainWindow):
         self.results_table.setRowCount(len(df))
         self.results_table.setColumnCount(len(df.columns))
         for index, column_name in enumerate(df.columns):
-            self.results_table.setHorizontalHeaderItem(index, QTableWidgetItem(column_name))  # noqa
+            self.results_table.setHorizontalHeaderItem(index, QTableWidgetItem(column_name))
             self.results_table.horizontalHeader().setSectionResizeMode(index, QHeaderView.ResizeToContents)
         string_df = self.remove_nan_strings(df.astype(str))
         for row_index, row_contents in string_df.iterrows():
             for column_index, value in enumerate(row_contents):
-                self.results_table.setItem(row_index, column_index, QTableWidgetItem(value))  # noqa
+                self.results_table.setItem(row_index, column_index, QTableWidgetItem(value))
 
     @staticmethod
     def remove_nan_strings(df: pd.DataFrame) -> pd.DataFrame:
@@ -447,11 +448,14 @@ class DynaFitGUI(QMainWindow):
 
     def save_excel_dialog(self) -> None:
         """Opens a file dialog, prompting the user to select the name/location for the Excel export of the results."""
-        placeholder = f'{self.results_table.item(0, 1).text()}_{self.results_table.item(1, 1).text()}.xlsx'
-        query, _ = QFileDialog.getSaveFileName(self, 'Select file to save dataframe_results', placeholder,  # noqa
+        filename = self.results_table.item(0, 1).text()
+        sheetname = self.results_table.item(1, 1).text()
+        placeholder = os.path.join(self.save_dir, f'{filename}_{sheetname}.xlsx')
+        query, _ = QFileDialog.getSaveFileName(self, 'Select file to save dataframe_results', placeholder,
                                                'Excel Spreadsheet (*.xlsx)')
         if query:
-            self.save_excel(path=query, sheet_name=placeholder[:-5])
+            self.save_excel(path=query, sheet_name=sheetname)
+            self.update_save_dir(query=query)
 
     def save_excel(self, path: str, sheet_name: str) -> None:
         """Saves the DynaFit dataframe_results to the given path as an Excel spreadsheet."""
@@ -461,17 +465,24 @@ class DynaFitGUI(QMainWindow):
 
     def save_csv_dialog(self) -> None:
         """Opens a file dialog, prompting the user to select the name/location for the csv export of the results."""
-        placeholder = f'{self.results_table.item(0, 1).text()}_{self.results_table.item(1, 1).text()}.csv'
-        query, _ = QFileDialog.getSaveFileName(self, 'Select file to save dataframe_results', placeholder,  # noqa
+        filename = self.results_table.item(0, 1).text()
+        sheetname = self.results_table.item(1, 1).text()
+        placeholder = os.path.join(self.save_dir, f'{filename}_{sheetname}.csv')
+        query, _ = QFileDialog.getSaveFileName(self, 'Select file to save dataframe_results', placeholder,
                                                'Comma-separated values (*.csv)')
         if query:
             self.save_csv(path=query)
+            self.update_save_dir(query=query)
 
     def save_csv(self, path: str) -> None:
         """Saves the DynaFit dataframe_results to the given path as a csv file."""
         if not path.endswith('.csv'):
             path += '.csv'
         self.results_dataframe.to_csv(path, index=False)
+
+    def update_save_dir(self, query: str) -> None:
+        """Updates the save directory attribute."""
+        self.save_dir = os.path.dirname(query)
 
     def toggle_cumulative_hypothesis(self):
         """Shows/hides the cumulative hypothesis line plot."""
@@ -507,10 +518,10 @@ class DynaFitGUI(QMainWindow):
 
     def show_error_message(self, name: str, trace: str) -> None:
         """Shows a given error as a message box in front of the GUI."""
-        box = QMessageBox(self, windowTitle='An error occurred!', text=name, detailedText=trace)  # noqa
+        box = QMessageBox(self, windowTitle='An error occurred!', text=name, detailedText=trace)
         box.exec_()
 
-    def resizeEvent(self, e) -> None:  # noqa
+    def resizeEvent(self, e) -> None:
         """Overloaded method that resizes the QScrollArea properly."""
         self.canvas.resize(self.scroll_area.width(), self.canvas.height())
         super().resizeEvent(e)
@@ -518,7 +529,7 @@ class DynaFitGUI(QMainWindow):
     # The following methods "eventFilter" and "copy_selection" allows the result table to be copied to the clipboard.
     # Source: https://stackoverflow.com/questions/40469607/
 
-    def eventFilter(self, source: QWidget, event: QEvent) -> bool:  # noqa
+    def eventFilter(self, source: QWidget, event: QEvent) -> bool:
         """Event filter for dataframe_results table."""
         if event.type() == QEvent.KeyPress and event.matches(QKeySequence.Copy):
             self.copy_selection()
@@ -540,7 +551,7 @@ class DynaFitGUI(QMainWindow):
                 table[row][column] = index.data()
             stream = StringIO()
             writer(stream).writerows(table)
-            qApp.clipboard().setText(stream.getvalue())
+            QApplication.instance().clipboard().setText(stream.getvalue())
 
 
 def main() -> None:
