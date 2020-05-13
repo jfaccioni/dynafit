@@ -237,8 +237,8 @@ class TestInterfaceModule(unittest.TestCase):
         mock_threadpool_start.assert_called_with(mock_worker.return_value)
 
     def test_dynafit_connect_worker_connects_worker_slots_to_interface_signals(self) -> None:
-        signals = [SIGNAL('progress(int)'), SIGNAL('warning(PyObject)'), SIGNAL('finished()'),
-                   SIGNAL('success(PyObject)'), SIGNAL('error(PyObject)')]
+        signals = [SIGNAL('progress(int)'), SIGNAL('warning(PyObject)'), SIGNAL('finished()'),  # noqa
+                   SIGNAL('success(PyObject)'), SIGNAL('error(PyObject)')]  # noqa
         w = Worker(func=print)
         for signal in signals:
             with self.subTest(signal=signal):
@@ -504,7 +504,17 @@ class TestInterfaceModule(unittest.TestCase):
         mock_save_excel.assert_not_called()
         with patch('PySide2.QtWidgets.QFileDialog.getSaveFileName', return_value=('filename', None)):
             self.ui.save_excel_dialog()
-        mock_save_excel.assert_called_with(path='filename', sheet_name='filename_sheetname')
+        mock_save_excel.assert_called_with(path='filename', sheet_name='sheetname')
+
+    @patch('src.interface.DynaFitGUI.update_save_dir')
+    def test_save_excel_dialog_calls_update_save_dir_with_path_returned_from_file_dialog(self,
+                                                                                         mock_update_save_dir) -> None:
+        self.ui.results_dataframe = 'results'
+        self.set_results_table_names()
+        with patch('src.interface.DynaFitGUI.save_excel'), patch('PySide2.QtWidgets.QFileDialog.getSaveFileName') as f:
+            f.return_value = ('/path/to/save/file.xlsx', None)
+            self.ui.save_excel_dialog()
+        mock_update_save_dir.assert_called_with(query='/path/to/save/file.xlsx')
 
     @patch('src.interface.DynaFitGUI.save_excel')
     def test_save_excel_dialog_does_not_call_save_excel_if_user_does_not_choose_a_file(self, mock_save_excel) -> None:
@@ -544,11 +554,26 @@ class TestInterfaceModule(unittest.TestCase):
             self.ui.save_csv_dialog()
         mock_save_csv.assert_not_called()
 
+    @patch('src.interface.DynaFitGUI.update_save_dir')
+    def test_save_csv_dialog_calls_update_save_dir_with_path_returned_from_file_dialog(self,
+                                                                                       mock_update_save_dir) -> None:
+        self.ui.results_dataframe = 'results'
+        self.set_results_table_names()
+        with patch('src.interface.DynaFitGUI.save_csv'), patch('PySide2.QtWidgets.QFileDialog.getSaveFileName') as f:
+            f.return_value = ('/path/to/save/file.csv', None)
+            self.ui.save_csv_dialog()
+        mock_update_save_dir.assert_called_with(query='/path/to/save/file.csv')
+
     @patch('src.interface.pd.DataFrame.to_csv')
     def test_save_csv_adds_csv_extension_to_user_selected_file_name(self, mock_to_csv) -> None:
         self.ui.results_dataframe = pd.DataFrame()
         self.ui.save_csv(path='path')
         mock_to_csv.assert_called_with('path.csv', index=False)
+
+    def test_update_save_dir_sets_save_dir_from_path(self) -> None:
+        self.assertEqual(self.ui.save_dir, '')
+        self.ui.update_save_dir(query='/path/to/my/file.csv')
+        self.assertEqual(self.ui.save_dir, '/path/to/my')
 
     def test_toggle_cumulative_hypothesis_does_nothing_if_cumulative_hypothesis_data_has_not_been_set_yet(self):
         self.ui.canvas = MagicMock()
