@@ -14,32 +14,36 @@ class Plotter:
     """Class that contains all information necessary to plot the DynaFit results"""
     hypothesis_plot_lower_ylim = -0.5
     hypothesis_plot_upper_ylim = 1.5
-    data_color = '#4b006e'  # royal purple
+    data_color = '#fb7d07'  # pumpkin orange
+    boot_color = '#4b006e'  # royal purple
     h0_color = '#be0119'  # scarlet
     h1_color = '#1e488f'  # cobalt
     cumul_color = '#fb7d07'  # pumpkin orange
-    endp_color = data_color
+    endp_color = '#4b006e'  # royal purple
     v_axis_color = 'black'
     scatter_edgecolor = 'black'
-    scatter_facecolor = cumul_color
-    violin_facecolor = data_color
+    scatter_facecolor = boot_color
+    violin_facecolor = boot_color
     violin_edgecolor = 'black'
     violin_median_color = 'white'
     violin_whisker_color = 'black'
     hist_interval_color = 'black'
 
     def __init__(self, xs: np.ndarray, ys: np.ndarray, scatter_xs: np.ndarray, scatter_ys: np.ndarray,
-                 show_violin: bool, violin_xs: Optional[np.ndarray], violin_ys: Optional[List[np.ndarray]],
-                 violin_q1: Optional[np.ndarray], violin_medians: Optional[np.ndarray], violin_q3: Optional[np.ndarray],
-                 cumulative_ys: np.ndarray, endpoint_ys: np.ndarray, show_ci: bool, upper_ys: Optional[np.ndarray],
-                 lower_ys: Optional[np.ndarray], cumulative_upper_ys: Optional[np.ndarray],
-                 cumulative_lower_ys: Optional[np.ndarray], endpoint_upper_ys: Optional[np.ndarray],
-                 endpoint_lower_ys: Optional[np.ndarray], hist_xs: np.ndarray, hist_intervals: np.ndarray) -> None:
+                 mean_xs: np.ndarray, mean_ys: np.ndarray, show_violin: bool, violin_xs: Optional[np.ndarray],
+                 violin_ys: Optional[List[np.ndarray]], violin_q1: Optional[np.ndarray],
+                 violin_medians: Optional[np.ndarray], violin_q3: Optional[np.ndarray], cumulative_ys: np.ndarray,
+                 endpoint_ys: np.ndarray, show_ci: bool, upper_ys: Optional[np.ndarray], lower_ys: Optional[np.ndarray],
+                 cumulative_upper_ys: Optional[np.ndarray], cumulative_lower_ys: Optional[np.ndarray],
+                 endpoint_upper_ys: Optional[np.ndarray], endpoint_lower_ys: Optional[np.ndarray], hist_xs: np.ndarray,
+                 hist_intervals: np.ndarray) -> None:
         """Init method of Plotter class."""
         self.xs = xs
         self.ys = ys
         self.scatter_xs = scatter_xs
         self.scatter_ys = scatter_ys
+        self.mean_xs = mean_xs
+        self.mean_ys = mean_ys
         self.show_violin = show_violin
         self.violin_xs = violin_xs
         self.violin_ys = violin_ys
@@ -69,6 +73,7 @@ class Plotter:
             violins = self.plot_bootstrap_violins(ax=ax)
             self.format_violins(violins=violins)
             self.plot_bootstrap_violin_statistics(ax=ax)
+        self.plot_bootstrap_mean(ax=ax)
         self.plot_bootstrap_scatter(ax=ax)
         self.format_cvp(ax=ax)
 
@@ -95,12 +100,16 @@ class Plotter:
 
     def plot_mean_line(self, ax: plt.Axes) -> None:
         """Plots the mean value for each bootstrapped population as a line plot."""
-        ax.plot(self.xs, self.ys, color=self.data_color, lw=3)
+        ax.plot(self.xs, self.ys, color=self.data_color, lw=3, label='experimental mean')
 
     def plot_bootstrap_scatter(self, ax: plt.Axes) -> None:
         """Plots bootstrap populations for each bin as scatter plots."""
         ax.scatter(self.scatter_xs, self.scatter_ys, marker='.', alpha=0.6, edgecolor=self.scatter_edgecolor,
                    facecolor=self.scatter_facecolor)
+
+    def plot_bootstrap_mean(self, ax: plt.Axes) -> None:
+        """Plots the mean of each bootstrap population as a line plot."""
+        ax.plot(self.mean_xs, self.mean_ys, color=self.boot_color, lw=3, label='bootstrap mean')
 
     def plot_bootstrap_violins(self, ax: plt.Axes) -> List[PolyCollection]:
         """Plots the bootstrap populations for each bin as violin plots."""
@@ -139,13 +148,14 @@ class Plotter:
 
     def plot_mean_line_ci(self, ax: plt.Axes) -> None:
         """Plots the confidence interval around the mean line as a line plot."""
-        ax.fill_between(self.xs, self.upper_ys, self.lower_ys, color=self.data_color, alpha=0.1)
+        ax.fill_between(self.xs, self.upper_ys, self.lower_ys, color=self.boot_color, alpha=0.1)
 
     @staticmethod
     def format_cvp(ax: plt.Axes) -> None:
         """Adds formatting to the CVP."""
         ax.set_xlabel('log2(Colony Size)')
         ax.set_ylabel('log2(Growth Rate Variance)')
+        ax.legend()
 
     def plot_hypothesis_ax(self, ax: plt.Axes,
                            xlims: Tuple[float, float]) -> List[Tuple[plt.Line2D, Optional[PolyCollection]]]:

@@ -61,6 +61,9 @@ def dynafit(workbook: Workbook, filename: str, sheetname: str, calculate_growth_
     # Get bootstrap scatter values
     scatter_xs, scatter_ys = get_bootstrap_scatter_values(df=df)
 
+    # Get bootstrap mean values
+    mean_xs, mean_ys = get_bootstrap_mean_values(df=df)
+
     # Get bootstrap violin values (if user wants to do so)
     violin_ys, violin_xs = None, None
     violin_q1, violin_medians, violin_q3 = None, None, None
@@ -96,10 +99,10 @@ def dynafit(workbook: Workbook, filename: str, sheetname: str, calculate_growth_
     }
     
     # Create Plotter instance
-    plot_results = Plotter(xs=xs, ys=ys, scatter_xs=scatter_xs, scatter_ys=scatter_ys, show_violin=show_violin,
-                           violin_xs=violin_xs, violin_ys=violin_ys, violin_q1=violin_q1, violin_medians=violin_medians,
-                           violin_q3=violin_q3, cumulative_ys=cumulative_ys, endpoint_ys=endpoint_ys,
-                           show_ci=show_ci, upper_ys=upper_ys, lower_ys=lower_ys,
+    plot_results = Plotter(xs=xs, ys=ys, scatter_xs=scatter_xs, scatter_ys=scatter_ys, mean_xs=mean_xs, mean_ys=mean_ys,
+                           show_violin=show_violin, violin_xs=violin_xs, violin_ys=violin_ys, violin_q1=violin_q1,
+                           violin_medians=violin_medians, violin_q3=violin_q3, cumulative_ys=cumulative_ys,
+                           endpoint_ys=endpoint_ys, show_ci=show_ci, upper_ys=upper_ys, lower_ys=lower_ys,
                            cumulative_upper_ys=cumulative_upper_ys, cumulative_lower_ys=cumulative_lower_ys,
                            endpoint_upper_ys=endpoint_upper_ys, endpoint_lower_ys=endpoint_lower_ys,
                            hist_xs=hist_xs, hist_intervals=hist_intervals)
@@ -273,10 +276,17 @@ def add_log2_columns(df: pd.DataFrame, column_names: List[str]) -> pd.DataFrame:
 
 
 def get_bootstrap_scatter_values(df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
-    """Returns a tuple of numpy arrays representing the X, Y and color values of the bootstrap scatter."""
+    """Returns a tuple of numpy arrays representing the XY values of the bootstrap scatter."""
     scatter_xs = df['log2_bootstrap_CS_mean'].values
     scatter_ys = df['log2_bootstrap_GR_var'].values
     return scatter_xs, scatter_ys
+
+
+def get_bootstrap_mean_values(df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
+    """Returns a tuple of numpy arrays representing the mean XY values of the bootstrap."""
+    mean_xs = df.groupby('groups').mean()['log2_bootstrap_CS_mean'].values
+    mean_ys = df.groupby('groups').mean()['log2_bootstrap_GR_var'].values
+    return mean_xs, mean_ys
 
 
 def get_bootstrap_violin_values(df: pd.DataFrame) -> Tuple[np.ndarray, List[np.ndarray]]:
