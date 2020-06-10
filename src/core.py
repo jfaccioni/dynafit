@@ -52,6 +52,11 @@ def dynafit(workbook: Workbook, filename: str, sheetname: str, calculate_growth_
     # Get histogram values
     hist_xs, hist_intervals = get_histogram_values(df=df)
 
+    # Get GR values
+    groups, growth_rates = get_growth_rates(df=df)
+    growth_rate_means, growth_rate_vars = get_growth_rate_statistics(df=df)
+    global_growth_rate_mean, global_growth_rate_var = get_global_growth_rate_statistics(df=df)
+
     # Perform DynaFit bootstrap
     df = bootstrap_data(df=df, repeats=bootstrap_repeats, progress_callback=progress_callback, show_ci=show_ci)
     
@@ -102,7 +107,10 @@ def dynafit(workbook: Workbook, filename: str, sheetname: str, calculate_growth_
                            show_ci=show_ci, upper_ys=upper_ys, lower_ys=lower_ys,
                            cumulative_upper_ys=cumulative_upper_ys, cumulative_lower_ys=cumulative_lower_ys,
                            endpoint_upper_ys=endpoint_upper_ys, endpoint_lower_ys=endpoint_lower_ys,
-                           hist_xs=hist_xs, hist_intervals=hist_intervals)
+                           hist_xs=hist_xs, hist_intervals=hist_intervals, groups=groups, growth_rates=growth_rates,
+                           growth_rate_means=growth_rate_means, growth_rate_vars=growth_rate_vars,
+                           global_growth_rate_mean=global_growth_rate_mean,
+                           global_growth_rate_var=global_growth_rate_var)
     
     # Store results as a pandas DataFrame
     dataframe_results = results_to_dataframe(original_parameters=original_parameters, xs=xs, ys=ys,
@@ -210,6 +218,28 @@ def get_histogram_values(df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
     hist_xs = df['CS']
     hist_intervals = df.groupby('groups').max()['CS'].values
     return hist_xs, hist_intervals
+
+
+def get_growth_rates(df: pd.DataFrame) -> Tuple[np.array, List[np.array]]:
+    """Returns a numpy array representing the X coordinates of each CS group, and a list of numpy arrays representing
+    the growth rate values inside each group."""
+    groups = [group.mean() for _, group in df.groupby('groups')['CS']]
+    growth_rates = [group.values for _, group in df.groupby('groups')['GR']]
+    return groups, growth_rates
+
+
+def get_growth_rate_statistics(df: pd.DataFrame) -> Tuple[np.array, np.array]:
+    """Returns mean/var statistics of the growth rate inside each group."""
+    growth_rate_means = np.array([group.mean() for _, group in df.groupby('groups')['GR']])
+    growth_rate_vars = np.array([group.var() for _, group in df.groupby('groups')['GR']])
+    return growth_rate_means, growth_rate_vars
+
+
+def get_global_growth_rate_statistics(df: pd.DataFrame) -> Tuple[np.array, np.array]:
+    """Returns mean/var statistics of the growth rate for all groups put together."""
+    growth_rate_mean = df['GR'].mean()
+    growth_rate_var = df['GR'].var()
+    return growth_rate_mean, growth_rate_var
 
 
 def bootstrap_data(df: pd.DataFrame, repeats: int, progress_callback: Signal, show_ci: bool) -> pd.DataFrame:

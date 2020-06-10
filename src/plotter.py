@@ -27,6 +27,7 @@ class Plotter:
     violin_median_color = 'white'
     violin_whisker_color = 'black'
     hist_interval_color = 'black'
+    variance_line_color = 'black'
 
     def __init__(self, xs: np.ndarray, ys: np.ndarray, scatter_xs: np.ndarray, scatter_ys: np.ndarray,
                  show_violin: bool, violin_xs: Optional[np.ndarray], violin_ys: Optional[List[np.ndarray]],
@@ -34,7 +35,9 @@ class Plotter:
                  cumulative_ys: np.ndarray, endpoint_ys: np.ndarray, show_ci: bool, upper_ys: Optional[np.ndarray],
                  lower_ys: Optional[np.ndarray], cumulative_upper_ys: Optional[np.ndarray],
                  cumulative_lower_ys: Optional[np.ndarray], endpoint_upper_ys: Optional[np.ndarray],
-                 endpoint_lower_ys: Optional[np.ndarray], hist_xs: np.ndarray, hist_intervals: np.ndarray) -> None:
+                 endpoint_lower_ys: Optional[np.ndarray], hist_xs: np.ndarray, hist_intervals: np.ndarray,
+                 groups: np.ndarray, growth_rates: List[np.ndarray], growth_rate_means: np.ndarray,
+                 growth_rate_vars: np.ndarray, global_growth_rate_mean: float, global_growth_rate_var: float) -> None:
         """Init method of Plotter class."""
         self.xs = xs
         self.ys = ys
@@ -57,6 +60,12 @@ class Plotter:
         self.endpoint_lower_ys = endpoint_lower_ys
         self.hist_xs = np.log2(hist_xs)
         self.hist_intervals = np.log2(hist_intervals)
+        self.groups = np.log2(groups)
+        self.growth_rates = growth_rates
+        self.growth_rate_means = growth_rate_means
+        self.growth_rate_vars = growth_rate_vars
+        self.global_growth_rate_mean = global_growth_rate_mean
+        self.global_growth_rate_var = global_growth_rate_var
 
     def plot_cvp_ax(self, ax: plt.Axes) -> None:
         """Calls all the functions related to plotting the CVP."""
@@ -220,6 +229,7 @@ class Plotter:
         self.plot_distributions(ax=ax)
         self.plot_group_divisions(ax=ax)
         self.format_histogram(ax=ax)
+        self.test(ax=ax)
 
     def plot_distributions(self, ax: plt.Axes) -> None:
         """Plots the histogram."""
@@ -235,3 +245,18 @@ class Plotter:
         ax.set_title('Histogram of colony groups')
         ax.set_xlabel('log2(Colony Size)')
         ax.set_ylabel('% of colonies')
+
+    def test(self, ax: plt.Axes) -> None:
+        """docstring"""
+        edge = ax.get_xlim()[1]
+        ax.scatter(self.hist_intervals, self.growth_rate_means, edgecolor=self.scatter_edgecolor,
+                   facecolor=self.scatter_facecolor)
+        ax.scatter(edge, self.global_growth_rate_mean, edgecolor=self.scatter_edgecolor,
+                   facecolor=self.scatter_facecolor)
+        ax.vlines(self.hist_intervals, ymin=self.growth_rate_means-self.growth_rate_vars,
+                  ymax=self.growth_rate_means+self.growth_rate_vars, color=self.variance_line_color)
+        ax.vlines(edge, ymin=self.global_growth_rate_mean-self.global_growth_rate_var,
+                  ymax=self.global_growth_rate_mean+self.global_growth_rate_var, color=self.variance_line_color)
+        ax.fill_between([0, edge], [self.global_growth_rate_mean-self.global_growth_rate_var]*2,
+                        [self.global_growth_rate_mean+self.global_growth_rate_var]*2, facecolor=self.scatter_facecolor,
+                        alpha=0.3)
