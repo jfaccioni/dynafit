@@ -27,7 +27,8 @@ class Plotter:
     violin_median_color = 'white'
     violin_whisker_color = 'black'
     hist_interval_color = 'black'
-    variance_line_color = 'black'
+    group_var_color = cumul_color
+    global_var_color = data_color
 
     def __init__(self, xs: np.ndarray, ys: np.ndarray, scatter_xs: np.ndarray, scatter_ys: np.ndarray,
                  show_violin: bool, violin_xs: Optional[np.ndarray], violin_ys: Optional[List[np.ndarray]],
@@ -153,8 +154,8 @@ class Plotter:
     @staticmethod
     def format_cvp(ax: plt.Axes) -> None:
         """Adds formatting to the CVP."""
-        ax.set_xlabel('log2(Colony Size)')
-        ax.set_ylabel('log2(Growth Rate Variance)')
+        ax.set_xlabel('$log_2$(Colony Size)')
+        ax.set_ylabel('$log_2$(Growth Rate Variance)')
 
     def plot_hypothesis_ax(self, ax: plt.Axes,
                            xlims: Tuple[float, float]) -> List[Tuple[plt.Line2D, Optional[PolyCollection]]]:
@@ -212,7 +213,7 @@ class Plotter:
     def format_hypothesis_plot(ax: plt.Axes) -> None:
         """Adds formatting to the hypothesis plot."""
         ax.set_title('Hypothesis plot')
-        ax.set_xlabel('log2(Colony Size)')
+        ax.set_xlabel('$log_2$(Colony Size)')
         ax.set_ylabel('Hypothesis')
         ax.set_yticks([0, 1])
         ax.set_yticklabels(['H0', 'H1'])
@@ -224,12 +225,11 @@ class Plotter:
         (easier than redoing plot calculations)."""
         ax.invert_yaxis()
 
-    def plot_histogram_ax(self, ax: plt.Axes) -> None:
+    def plot_histogram_ax(self, ax: plt.Axes, xlims: Tuple[float, float]) -> None:
         """Calls all the functions related to plotting the histogram."""
         self.plot_distributions(ax=ax)
         self.plot_group_divisions(ax=ax)
-        self.format_histogram(ax=ax)
-        self.test(ax=ax)
+        self.format_histogram(ax=ax, xlims=xlims)
 
     def plot_distributions(self, ax: plt.Axes) -> None:
         """Plots the histogram."""
@@ -240,23 +240,34 @@ class Plotter:
         ax.vlines(self.hist_intervals, *ax.get_ylim(), color=self.hist_interval_color, linestyle='dotted', alpha=0.8)
 
     @staticmethod
-    def format_histogram(ax: plt.Axes) -> None:
+    def format_histogram(ax: plt.Axes, xlims: Tuple[float, float]) -> None:
         """Adds formatting to the histogram."""
-        ax.set_title('Histogram of colony groups')
-        ax.set_xlabel('log2(Colony Size)')
-        ax.set_ylabel('% of colonies')
+        ax.set_frame_on(False)
+        ax.get_yaxis().set_visible(False)
+        ax.set_xlabel('$log_2$(Colony Size)')
+        ax.set_xlim(*xlims)
+        ax.axvline(xlims[0], color='k', linewidth=0.5)
 
-    def test(self, ax: plt.Axes) -> None:
+    def plot_gr_ax(self, ax: plt.Axes, xlims: Tuple[float, float]) -> None:
         """docstring"""
-        edge = ax.get_xlim()[1]
         ax.scatter(self.hist_intervals, self.growth_rate_means, edgecolor=self.scatter_edgecolor,
-                   facecolor=self.scatter_facecolor)
+                   facecolor=self.group_var_color)
+        edge = xlims[0] + abs(xlims[0] - xlims[1]) * 0.05
+        ymax = self.global_growth_rate_mean + self.global_growth_rate_var
+        ymin = self.global_growth_rate_mean - self.global_growth_rate_var
         ax.scatter(edge, self.global_growth_rate_mean, edgecolor=self.scatter_edgecolor,
-                   facecolor=self.scatter_facecolor)
+                   facecolor=self.global_var_color)
         ax.vlines(self.hist_intervals, ymin=self.growth_rate_means-self.growth_rate_vars,
-                  ymax=self.growth_rate_means+self.growth_rate_vars, color=self.variance_line_color)
-        ax.vlines(edge, ymin=self.global_growth_rate_mean-self.global_growth_rate_var,
-                  ymax=self.global_growth_rate_mean+self.global_growth_rate_var, color=self.variance_line_color)
-        ax.fill_between([0, edge], [self.global_growth_rate_mean-self.global_growth_rate_var]*2,
-                        [self.global_growth_rate_mean+self.global_growth_rate_var]*2, facecolor=self.scatter_facecolor,
-                        alpha=0.3)
+                  ymax=self.growth_rate_means+self.growth_rate_vars, color=self.violin_whisker_color)
+        ax.vlines(edge, ymin=ymin, ymax=ymax, color=self.global_var_color)
+        ax.fill_between([edge, xlims[1]], [ymin]*2, [ymax]*2, facecolor=self.global_var_color, alpha=0.3)
+        ax.axhline(self.global_growth_rate_mean, edge, xlims[1], color=self.global_var_color, linewidth=1,
+                   linestyle='dashed')
+        ax.set_xlim(*xlims)
+        ax.set_frame_on(False)
+        ax.get_xaxis().set_visible(False)
+        ax.axvline(xlims[0], color='k', linewidth=0.5)
+        ax.axhline(0, color='k', linewidth=0.5)
+        ax.set_ylabel('GR mean\n(± variance)')
+        ax.set_title('Validation')
+

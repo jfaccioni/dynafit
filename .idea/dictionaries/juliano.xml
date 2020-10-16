@@ -6,6 +6,7 @@
       <w>codiff</w>
       <w>colnames</w>
       <w>colsize</w>
+      <w>cppt</w>
       <w>cumcody</w>
       <w>cumul</w>
       <w>dataframe</w>
@@ -25,11 +26,15 @@
       <w>iamateststring</w>
       <w>iterrows</w>
       <w>juliano</w>
+      <w>linestyle</w>
+      <w>linewidth</w>
+      <w>luana</w>
       <w>luiz</w>
       <w>matplotlib</w>
       <w>maxbin</w>
       <w>maxs</w>
       <w>mins</w>
+      <w>mpatches</w>
       <w>navbar</w>
       <w>nbins</w>
       <w>ndarray</w>
