@@ -17,7 +17,7 @@ def main(input_file: str, plot: bool) -> None:
     gaussian_df = df.loc[df.distribution == 'gaussian']
     gaussian_b = get_b_var_values(data=gaussian_df)
     uniform_df = df.loc[df.distribution == 'uniform']
-    uniform_df.loc['variation'] = (1 - uniform_df['variation']) * 2  # fixes calculation of uniform range
+    uniform_df['variation'] = (1 - uniform_df['variation']) * 2  # fixes calculation of uniform range
     uniform_b = get_b_var_values(data=uniform_df)
     if plot:
         plot_individual_distribution(data=gaussian_df, name='Gaussian')
