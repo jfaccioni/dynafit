@@ -38,7 +38,7 @@ def plot_individual_distribution(data: pd.DataFrame, name: str) -> None:
                  scalex=False, scaley=False, zorder=0, label='$x = y$')
     fig.suptitle(f'{name} distribution')
     ax.set_xlabel('Final number of cells, fluctuating GR')
-    ax.set_xlabel('Final number of cells, fixed GR (average of fluctuating GR)')
+    ax.set_ylabel('Final number of cells, fixed GR (average of fluctuating GR)')
     ax.legend().texts[2].set_text("$\sigma$" if name == 'Gaussian' else 'interval width ')
 
 
