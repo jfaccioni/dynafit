@@ -35,6 +35,8 @@
       <w>maxs</w>
       <w>mins</w>
       <w>mpatches</w>
+      <w>multiplot</w>
+      <w>multiplots</w>
       <w>navbar</w>
       <w>nbins</w>
       <w>ndarray</w>
