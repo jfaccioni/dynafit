@@ -1,8 +1,15 @@
+"""
+pop_growth_modelling.py
+
+Common functions used for population growth modelling.
+"""
+
 from typing import Any, Dict
 import matplotlib.pyplot as plt
-
+import seaborn as sns
 import numpy as np
 import pandas as pd
+
 
 SETTINGS = {
     'save': False,
@@ -24,18 +31,6 @@ SETTINGS = {
 }
 
 
-def main(save: bool, plot: bool, model_params: Dict[str, Any], gaussian_params: Dict[str, float],
-         uniform_params: Dict[str, float]) -> None:
-    """Main function of this script"""
-    gaussian_df = pop_growth_modelling(**model_params, gaussian_params=gaussian_params, uniform_params=uniform_params)
-    model_params['gr_method'] = 'uniform'
-    uniform_df = pop_growth_modelling(**model_params, gaussian_params=gaussian_params, uniform_params=uniform_params)
-    if save:
-        save_to_excel(gaussian_df=gaussian_df, uniform_df=uniform_df)
-    if plot:
-        plot_results(gaussian_df=gaussian_df, uniform_df=uniform_df, model_params=model_params)
-
-
 def save_to_excel(gaussian_df: pd.DataFrame, uniform_df: pd.DataFrame, filename: str = 'results') -> None:
     xl = pd.ExcelWriter(f'{filename}.xlsx')
     gaussian_df.to_excel(excel_writer=xl, sheet_name='gaussian')
@@ -44,11 +39,14 @@ def save_to_excel(gaussian_df: pd.DataFrame, uniform_df: pd.DataFrame, filename:
 
 
 def plot_results(gaussian_df, uniform_df, model_params: Dict[str, Any]) -> None:
-    plt.scatter(gaussian_df.fixed_final_n, gaussian_df.random_final_n, color='blue', label='gaussian', alpha=0.4)
-    plt.scatter(uniform_df.fixed_final_n, uniform_df.random_final_n, color='orange', label='uniform', alpha=0.4)
-    plt.plot(plt.xlim(), plt.xlim(), linestyle='--', color='k', lw=3, scalex=False, scaley=False)
+    pal = sns.color_palette('rainbow')
+    gauss_color = pal[0]
+    unif_color = pal[-1]
+    plt.scatter(gaussian_df.fixed_final_n, gaussian_df.random_final_n, color=gauss_color, label='gaussian', alpha=0.7)
+    plt.scatter(uniform_df.fixed_final_n, uniform_df.random_final_n, color=unif_color, label='uniform', alpha=0.7)
+    plt.plot(plt.xlim(), plt.xlim(), linestyle='--', color='k', lw=3, scalex=False, scaley=False, zorder=0)
     plt.scatter([model_params['initial_n']], [model_params['initial_n']], color='white', edgecolor='black',
-                marker='*', s=200, label='start')
+                marker='*', s=200, label='start', zorder=1)
     plt.xlabel('Final N - Fixed GR (mean of fluctuating GR for the same replicate)')
     plt.ylabel('Final N - GR fluctuates on each generation')
     plt.title(f'Comparison of fixed and fluctuating GR\nreplicates={model_params["replicates"]} '
@@ -97,34 +95,3 @@ def calculate_random_final_n(initial_n: int, gr_sample) -> int:
 
 def calculate_fixed_final_n(initial_n: int, gr_sample: np.array) -> int:
     return initial_n * (gr_sample.mean()**len(gr_sample))
-
-
-def generate_multiplot_data(model_params: Dict[str, Any], gaussian_params: Dict[str, float],
-                            uniform_params: Dict[str, float]) -> None:
-    initial_std = 0.01 / 3
-    initial_uniform_range = 0.01
-    out_df = pd.DataFrame(columns=['fixed_final_n', 'random_final_n', 'distribution', 'variation'])
-    for scale in range(1, 50):
-        # get gaussian data
-        gaussian_params['sigma'] = initial_std * scale
-        gaussian_df = pop_growth_modelling(**model_params, gaussian_params=gaussian_params,
-                                           uniform_params=uniform_params).loc[:, ['fixed_final_n', 'random_final_n']]
-        gaussian_df['distribution'] = 'gaussian'
-        gaussian_df['variation'] = gaussian_params['sigma']
-        # get uniform data
-        model_params['gr_method'] = 'uniform'
-        uniform_params['lower'] = 1 - initial_uniform_range * scale
-        uniform_params['upper'] = 1 + initial_uniform_range * scale
-        uniform_df = pop_growth_modelling(**model_params, gaussian_params=gaussian_params,
-                                          uniform_params=uniform_params).loc[:, ['fixed_final_n', 'random_final_n']]
-        uniform_df['distribution'] = 'uniform'
-        uniform_df['variation'] = uniform_params["lower"]
-        out_df = pd.concat([out_df, gaussian_df, uniform_df])
-    out_df.to_excel('multiplot_data.xlsx')
-
-
-if __name__ == '__main__':
-    # main(**SETTINGS)
-    generate_multiplot_data(model_params=SETTINGS['model_params'],
-                            gaussian_params=SETTINGS['gaussian_params'],
-                            uniform_params=SETTINGS['uniform_params'])

@@ -59,8 +59,9 @@ def get_b_var_values(data: pd.DataFrame) -> pd.DataFrame:
 
 
 def plot_lr(gaussian_data: pd.DataFrame, uniform_data: pd.DataFrame) -> None:
-    gauss_color = 'blue'
-    unif_color = 'orange'
+    pal = sns.color_palette('rainbow')
+    gauss_color = pal[0]
+    unif_color = pal[-1]
     data = pd.concat([gaussian_data, uniform_data])
     ax1_data = data.loc[data.type == 'intercept']
     ax2_data = data.loc[data.type == 'r_value']
