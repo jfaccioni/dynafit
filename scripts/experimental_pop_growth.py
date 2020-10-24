@@ -3,7 +3,7 @@ pop_growth_modelling.py
 
 Common functions used for population growth modelling.
 """
-
+from typing import List
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -35,7 +35,7 @@ else:
 
 
 def main(replicates: int, initial_n: int, generations: int, growth_rate: float, growth_rate_std: float) -> None:
-    colnames = ['fixed', 'gaussian', 'uniform']
+    # extract gaussian/uniform parameters from experimental input distribution
     gaussian_params = {
         'mi': growth_rate,
         'sigma': growth_rate_std,
@@ -44,30 +44,37 @@ def main(replicates: int, initial_n: int, generations: int, growth_rate: float, 
         'lower': growth_rate - 3 * growth_rate_std,
         'upper': growth_rate + 3 * growth_rate_std,
     }
+    # initialize containers for storing data during main loop
+    colnames = ['fixed', 'gaussian', 'uniform']
     df = pd.DataFrame(columns=colnames)
     gauss_means = []
     gauss_sd = []
+    unif_means = []
+    unif_sd = []
+    # main loop
     for _ in range(replicates):
-        fixed_final_n = calculate_fixed_final_n(initial_n=initial_n,
-                                                generations=generations,
-                                                growth_rate=growth_rate)
+        # fixed N (should be always the same)
+        fixed_final_n = calculate_fixed_final_n(initial_n=initial_n, generations=generations, growth_rate=growth_rate)
+        # Gaussian GR distribution
         gaussian_gr_sample = get_gaussian_growth_rate_sample(**gaussian_params, generations=generations)
-        gauss_means.append(gaussian_gr_sample.mean())
-        gauss_sd.append(gaussian_gr_sample.std())
         gaussian_final_n = calculate_random_final_n(initial_n=initial_n, gr_sample=gaussian_gr_sample)
+        # Uniform GR distribution
         uniform_gr_sample = get_uniform_growth_rate_sample(**uniform_params, generations=generations)
         uniform_final_n = calculate_random_final_n(initial_n=initial_n, gr_sample=uniform_gr_sample)
+        # Add values to containers
         df.loc[len(df), :] = pd.Series([fixed_final_n, gaussian_final_n, uniform_final_n], index=colnames)
+        gauss_means.append(gaussian_gr_sample.mean())
+        gauss_sd.append(gaussian_gr_sample.std())
+        unif_means.append(uniform_gr_sample.mean())
+        unif_sd.append(uniform_gr_sample.std())
+    # plot data
     plot_results(df=df, initial_n=initial_n, replicates=replicates, generations=generations)
-    fig, ax = plt.subplots()
-    ax.hist(gauss_means, label='Mean', color='blue', alpha=0.5)
-    ax.axvline(np.mean(gauss_means), linestyle='--', alpha=0.9)
-    ax.hist(gauss_sd, label='SD', color='orange', alpha=0.5)
-    ax.axvline(np.mean(gauss_sd), linestyle='--', alpha=0.9)
-    ax.legend()
-    fig.suptitle('Histogram of gaussian means and SD')
-    print("Student's t-test - Fixed vs Gaussian ->", stats.ttest_rel(df.fixed,df.gaussian))
-    print("Student's t-test - Fixed vs Uniform ->", stats.ttest_rel(df.fixed,df.gaussian))
+    plot_histograms(gauss_means=gauss_means, gauss_sd=gauss_sd, name='gaussian')
+    plot_histograms(gauss_means=unif_means, gauss_sd=unif_sd, name='uniform')
+    # t-tests
+    print("Student's t-test - Fixed vs Gaussian ->", stats.ttest_rel(df.fixed, df.gaussian))
+    print("Student's t-test - Fixed vs Uniform ->", stats.ttest_rel(df.fixed, df.uniform))
+    # show plots
     plt.show()
 
 
@@ -86,6 +93,16 @@ def plot_results(df: pd.DataFrame, initial_n: int, replicates: int, generations:
     ax.set_ylabel('Final N - Dynamic GR (fluctuates on each generation)')
     ax.legend()
     fig.suptitle(f'Comparison of fixed and fluctuating GR\n{initial_n=} {replicates=}, {generations=}')
+
+
+def plot_histograms(gauss_means: List[float], gauss_sd: List[float], name: str) -> None:
+    fig, ax = plt.subplots()
+    ax.hist(gauss_means, label='Mean', color='blue', alpha=0.5)
+    ax.axvline(np.mean(gauss_means), linestyle='--', alpha=0.9)
+    ax.hist(gauss_sd, label='SD', color='orange', alpha=0.5)
+    ax.axvline(np.mean(gauss_sd), linestyle='--', alpha=0.9)
+    ax.legend()
+    fig.suptitle(f'Histogram of {name} means and SD')
 
 
 def get_gaussian_growth_rate_sample(mi: float, sigma: float, generations: int) -> np.array:
