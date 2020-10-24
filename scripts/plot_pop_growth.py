@@ -37,8 +37,8 @@ def plot_individual_distribution(data: pd.DataFrame, name: str) -> None:
     sns.lineplot(plt.xlim(), plt.xlim(), ax=ax, linestyle='--', color='k', alpha=0.7, lw=3,
                  scalex=False, scaley=False, zorder=0, label='$x = y$')
     fig.suptitle(f'{name} distribution')
-    ax.set_xlabel('Final number of cells, fluctuating GR')
-    ax.set_ylabel('Final number of cells, fixed GR (average of fluctuating GR)')
+    ax.set_xlabel('Final N - Fixed GR (mean of dynamic GR for the same replicate)')
+    ax.set_ylabel('Final N - Dynamic GR (fluctuates on each generation)')
     ax.legend().texts[2].set_text("$\sigma$" if name == 'Gaussian' else 'interval width ')
 
 

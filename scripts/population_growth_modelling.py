@@ -47,8 +47,8 @@ def plot_results(gaussian_df, uniform_df, model_params: Dict[str, Any]) -> None:
     plt.plot(plt.xlim(), plt.xlim(), linestyle='--', color='k', lw=3, scalex=False, scaley=False, zorder=0)
     plt.scatter([model_params['initial_n']], [model_params['initial_n']], color='white', edgecolor='black',
                 marker='*', s=200, label='start', zorder=1)
-    plt.xlabel('Final N - Fixed GR (mean of fluctuating GR for the same replicate)')
-    plt.ylabel('Final N - GR fluctuates on each generation')
+    plt.xlabel('Final N - Fixed GR (mean of dynamic GR for the same replicate)')
+    plt.ylabel('Final N - Dynamic GR (fluctuates on each generation)')
     plt.title(f'Comparison of fixed and fluctuating GR\nreplicates={model_params["replicates"]} '
               f'initial_n={model_params["initial_n"]} generations={model_params["generations"]}')
     plt.legend()
@@ -77,7 +77,7 @@ def get_growth_rate_sample(gr_method: str, generations: int, gaussian_params: Di
     if gr_method == 'gaussian':
         return get_gaussian_growth_rate_sample(**gaussian_params, generations=generations)
     elif gr_method == 'uniform':
-        return get_linear_growth_rate_sample(**uniform_params, generations=generations)
+        return get_uniform_growth_rate_sample(**uniform_params, generations=generations)
     raise ValueError('gr_method must be one of: "gaussian", "uniform".')
 
 
@@ -85,7 +85,7 @@ def get_gaussian_growth_rate_sample(mi: float, sigma: float, generations: int) -
     return np.random.normal(loc=mi, scale=sigma, size=generations)
 
 
-def get_linear_growth_rate_sample(lower: float, upper: float, generations: int) -> np.array:
+def get_uniform_growth_rate_sample(lower: float, upper: float, generations: int) -> np.array:
     return np.random.uniform(low=lower, high=upper, size=generations)
 
 

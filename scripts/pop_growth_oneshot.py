@@ -14,7 +14,7 @@ SETTINGS = {
     'model_params': {
         'replicates': 1000,
         'initial_n': 1000,
-        'generations': 1000,
+        'generations': 20,
         'gr_method': 'gaussian',
     },
     'gaussian_params': {
