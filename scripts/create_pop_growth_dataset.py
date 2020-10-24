@@ -33,7 +33,7 @@ def main(model_params: Dict[str, Any], gaussian_params: Dict[str, float], unifor
     initial_std = 0.01 / 3
     initial_uniform_range = 0.01
     out_df = pd.DataFrame(columns=['fixed_final_n', 'random_final_n', 'distribution', 'variation'])
-    for scale in range(1, 50):
+    for scale in range(1, 101, 20):
         # get gaussian data
         gaussian_params['sigma'] = initial_std * scale
         gaussian_df = pop_growth_modelling(**model_params, gaussian_params=gaussian_params,

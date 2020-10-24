@@ -69,22 +69,22 @@ def plot_lr(gaussian_data: pd.DataFrame, uniform_data: pd.DataFrame) -> None:
     ax2 = ax1.twinx()
     ax1.plot(ax1_data.loc[ax1_data.dist == 'gaussian'].x, ax1_data.loc[ax1_data.dist == 'gaussian'].y,
              color=gauss_color)
-    ax1.plot(ax1_data.loc[ax1_data.dist == 'uniform'].x, ax1_data.loc[ax1_data.dist == 'uniform'].y,
-             color=unif_color)
+    # ax1.plot(ax1_data.loc[ax1_data.dist == 'uniform'].x, ax1_data.loc[ax1_data.dist == 'uniform'].y,
+    #          color=unif_color)
     ax2.plot(ax2_data.loc[ax2_data.dist == 'gaussian'].x, ax2_data.loc[ax2_data.dist == 'gaussian'].y,
              color=gauss_color, linestyle='--')
-    ax2.plot(ax2_data.loc[ax2_data.dist == 'uniform'].x, ax2_data.loc[ax2_data.dist == 'uniform'].y,
-             color=unif_color, linestyle='--')
+    # ax2.plot(ax2_data.loc[ax2_data.dist == 'uniform'].x, ax2_data.loc[ax2_data.dist == 'uniform'].y,
+    #          color=unif_color, linestyle='--')
     fig.suptitle(f'$b$ and $r$ values as a function of distribution variance')
-    ax1.set_xlabel(f'$\sigma$ (gaussian distribution) or interval width (uniform distribution)')
+    ax1.set_xlabel(f'$\sigma$')
     ax1.set_ylabel('$b$')
     ax2.set_ylabel('$r$')
     ax2.set_ylim(0, 1.05)
     ax1.legend(loc='lower left', handles=[
         Line2D([], [], color=gauss_color, linestyle='-', label='gaussian distribution'),
-        Line2D([], [], color=unif_color, linestyle='-', label='uniform distribution'),
+        # Line2D([], [], color=unif_color, linestyle='-', label='uniform distribution'),
         Line2D([], [], color='#232323', linestyle='--', label='$r$'),
-        Line2D([], [], color='#232323', linestyle='--', label='$b$')
+        # Line2D([], [], color='#232323', linestyle='--', label='$b$')
     ])
 
 
