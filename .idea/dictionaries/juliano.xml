@@ -57,6 +57,8 @@
       <w>relcody</w>
       <w>resizes</w>
       <w>samplesize</w>
+      <w>scalex</w>
+      <w>scaley</w>
       <w>scipy</w>
       <w>seaborn</w>
       <w>sheetname</w>
@@ -73,6 +75,7 @@
       <w>ylim</w>
       <w>ylims</w>
       <w>yvals</w>
+      <w>zorder</w>
     </words>
   </dictionary>
 </component>
