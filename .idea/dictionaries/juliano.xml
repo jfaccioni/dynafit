@@ -21,6 +21,8 @@
       <w>faccioni</w>
       <w>facecolor</w>
       <w>facecolors</w>
+      <w>fulano</w>
+      <w>gaussians</w>
       <w>groupname</w>
       <w>hbox</w>
       <w>iamateststring</w>
@@ -48,6 +50,7 @@
       <w>openpyxl</w>
       <w>polycollection</w>
       <w>preprocessing</w>
+      <w>pval</w>
       <w>qapp</w>
       <w>qstandarditemmodel</w>
       <w>qtableview</w>
@@ -65,6 +68,7 @@
       <w>sheetnames</w>
       <w>sinal</w>
       <w>threadpool</w>
+      <w>ttest</w>
       <w>tukey</w>
       <w>vbox</w>
       <w>xlims</w>
