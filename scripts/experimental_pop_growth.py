@@ -17,7 +17,7 @@ AVERAGE_EXPERIMENTAL_GR_STD = 0.004 # old value = 0.335737853
 
 if USE_EXPERIMENTAL_PLUS_ONE:
     SETTINGS = {
-        'replicates': 1000,
+        'replicates': 10,
         'initial_n': 1000,
         'generations': 365,
         'growth_rate': AVERAGE_EXPERIMENTAL_GR,
@@ -48,21 +48,31 @@ def main(replicates: int, initial_n: int, generations: int, growth_rate: float, 
     # initialize containers for storing data during main loop
     colnames = ['fixed', 'gaussian_1', 'gaussian_2', 'gaussian_3']
     df = pd.DataFrame(columns=colnames)
-    gauss_means = []
+    gaussdf_names = [[f'gauss_{i+1}_sigma',
+                      f'N_{i+1}_sigma',
+                      f'gauss_{i+1}_sigma_mult10',
+                      f'N_{i+1}_sigma_mult10',
+                      f'gauss_{i+1}_sigma_mult100',
+                      f'N_{i + 1}_sigma_mult100']
+                     for i in range(replicates)]
+    gaussdf_names = [item for sublist in gaussdf_names for item in sublist]
+    gauss_df = pd.DataFrame(columns=gaussdf_names)
+    gaussians = []
     gauss_sd = []
     unif_means = []
     unif_sd = []
     # main loop
-    for _ in range(replicates):
+    for i in range(replicates):
+        starting_sigma = gaussian_params['sigma']
         # fixed N (should be always the same)
         fixed_final_n = calculate_fixed_final_n(initial_n=initial_n, generations=generations, growth_rate=growth_rate)
         # Gaussian GR distribution
         gaussian_gr_sample_1 = get_gaussian_growth_rate_sample(**gaussian_params, generations=generations)
         gaussian_final_n_1 = calculate_random_final_n(initial_n=initial_n, gr_sample=gaussian_gr_sample_1)
-        gaussian_params['sigma'] /= 10
+        gaussian_params['sigma'] *= 10
         gaussian_gr_sample_2 = get_gaussian_growth_rate_sample(**gaussian_params, generations=generations)
         gaussian_final_n_2 = calculate_random_final_n(initial_n=initial_n, gr_sample=gaussian_gr_sample_2)
-        gaussian_params['sigma'] /= 10
+        gaussian_params['sigma'] *= 10
         gaussian_gr_sample_3 = get_gaussian_growth_rate_sample(**gaussian_params, generations=generations)
         gaussian_final_n_3 = calculate_random_final_n(initial_n=initial_n, gr_sample=gaussian_gr_sample_3)
         # Uniform GR distribution
@@ -71,11 +81,20 @@ def main(replicates: int, initial_n: int, generations: int, growth_rate: float, 
         # Add values to containers
         s = pd.Series([fixed_final_n, gaussian_final_n_1, gaussian_final_n_2, gaussian_final_n_3], index=colnames)
         df.loc[len(df), :] = s
+        gauss_df[f'gauss_{i+1}_sigma'] = gaussian_gr_sample_1
+        gauss_df[f'N_{i+1}_sigma'] = calculate_random_final_n_vec(initial_n=initial_n,
+                                                                  gr_sample=gaussian_gr_sample_1)
+        gauss_df[f'gauss_{i+1}_sigma_mult10'] = gaussian_gr_sample_2
+        gauss_df[f'N_{i+1}_sigma_mult10'] = calculate_random_final_n_vec(initial_n=initial_n,
+                                                                        gr_sample=gaussian_gr_sample_2)
+        gauss_df[f'gauss_{i+1}_sigma_mult100'] = gaussian_gr_sample_3
+        gauss_df[f'N_{i+1}_sigma_mult100'] = calculate_random_final_n_vec(initial_n=initial_n,
+                                                                         gr_sample=gaussian_gr_sample_3)
         # gauss_means.append(gaussian_gr_sample.mean())
         # gauss_sd.append(gaussian_gr_sample.std())
         # unif_means.append(uniform_gr_sample.mean())
         # unif_sd.append(uniform_gr_sample.std())
-        gaussian_params['sigma'] *= 10 * 10
+        gaussian_params['sigma'] = starting_sigma
     # plot data
     plot_results(df=df, initial_n=initial_n, replicates=replicates, generations=generations,
                  var=str(gaussian_params['sigma']))
@@ -87,6 +106,8 @@ def main(replicates: int, initial_n: int, generations: int, growth_rate: float, 
     # print("Student's t-test - Fixed vs Gaussian ->", stats.ttest_rel(df.fixed, df.gaussian))
     # print("Student's t-test - Fixed vs Uniform ->", stats.ttest_rel(df.fixed, df.uniform))
     # show plots
+    gauss_df.index.name = f'sigma={gaussian_params["sigma"]}, initial_N={initial_n}'
+    gauss_df.to_excel('Gaussian_GRs_mult.xlsx')
     plt.show()
 
 
@@ -134,6 +155,16 @@ def calculate_random_final_n(initial_n: int, gr_sample) -> int:
     for gr in gr_sample:
         n = n + n * gr
     return n
+    # return initial_n * gr_sample.cumprod()[-1]
+
+
+def calculate_random_final_n_vec(initial_n: int, gr_sample) -> List[int]:
+    n = initial_n
+    ns = []
+    for gr in gr_sample:
+        n = n + n * gr
+        ns.append(n)
+    return ns
     # return initial_n * gr_sample.cumprod()[-1]
 
 
