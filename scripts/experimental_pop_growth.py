@@ -16,9 +16,9 @@ from scipy.stats import ttest_1samp
 SETTINGS = {
     'replicates': 100,
     'initial_n': 1000,
-    'generations': 365,
-    'fixed_growth_rate': 0.01215,
-    'growth_rate_std': 0.02943 * 2,
+    'generations': 20,
+    'fixed_growth_rate': 0.351920148690623,
+    'growth_rate_std': 0.117034030929312,
 }
 
 
@@ -50,9 +50,9 @@ def main(replicates: int, initial_n: int, generations: int, fixed_growth_rate: f
         )
         replicate_list.append(df)
     data = pd.concat(replicate_list)
-    data.to_excel(f'experimental_pop_growth.xlsx', index_label=f'{initial_n} initial cells')
+    data.to_excel(f'experimental_pop_growth_LS12gen20_MIN.xlsx', index_label=f'{initial_n} initial cells')
     summary_stats = measure_replicate_stats(replicate_list=replicate_list)
-    summary_stats.to_excel(f'experimental_pop_growth_stats.xlsx', index_label=f'Replicate')
+    summary_stats.to_excel(f'experimental_pop_growth_stats_LS12gen20_MIN.xlsx', index_label=f'Replicate')
 
 
 def calculate_pop_size_from_growth_rate(initial_n: int, generations: int, growth_rate: float) -> np.array:
