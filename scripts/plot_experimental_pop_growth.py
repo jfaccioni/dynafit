@@ -118,6 +118,9 @@ def plot_relative_violins(dataframes: Dict[str, pd.DataFrame], initial_n: int, p
                    order=sort_order)
     sns.swarmplot(ax=ax, data=merged_df, x='Growth rate standard deviation', y='N', palette=colors2, dodge=True,
                   edgecolor='gray', alpha=0.7, size=3, order=sort_order)
+    for group_name, group in merged_df.groupby('Growth rate standard deviation'):
+        name = group_name.replace("$", "").replace("\\", "")
+        print(f'{name} -> mean = {group["N"].mean()}')
     ax.axhline(np.log2(1), lw=2, ls='-', color='k', alpha=0.7)
     ax.set_ylabel(r'Final number of cells on each replicate ($\frac{static}{dynamic}$)')
 
