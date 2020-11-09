@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 import numpy as np
+from scipy.stats import ttest_ind
+
 sns.set(context='notebook')
 
 SETTINGS = {
@@ -34,7 +36,8 @@ def main(path: str, filenames: Dict[str, str], initial_n: int, plot_cutoff: int,
     print('Running violins...')
     plot_violins(dataframes=dataframes, initial_n=initial_n, plot_cutoff=plot_cutoff, log=log)
     print('Running relative violins...')
-    plot_relative_violins(dataframes=dataframes, initial_n=initial_n, plot_cutoff=plot_cutoff, log=log)
+    data = plot_relative_violins(dataframes=dataframes, initial_n=initial_n, plot_cutoff=plot_cutoff, log=log)
+    calculate_pvals(data=data)
     print('Showing...')
     plt.show()
 
@@ -96,9 +99,11 @@ def plot_violins(dataframes: Dict[str, pd.DataFrame], initial_n: int, plot_cutof
     ax.legend(title='Growth rate strategy', handles=handles[2:], labels=labels[2:])
 
 
-def plot_relative_violins(dataframes: Dict[str, pd.DataFrame], initial_n: int, plot_cutoff: int, log: bool) -> None:
+def plot_relative_violins(dataframes: Dict[str, pd.DataFrame], initial_n: int, plot_cutoff: int,
+                          log: bool) -> pd.DataFrame:
     """Docstring"""
     sort_order = []
+    pal = sns.color_palette('rainbow', n_colors=20)
     for label, df in dataframes.items():
         df_gr_sd = df.loc[:, 'Fixed_GR_SD'].iloc[0]
         xlabel = f'{label} ($\sigma = {round(df_gr_sd, 4)}$)'
@@ -110,7 +115,6 @@ def plot_relative_violins(dataframes: Dict[str, pd.DataFrame], initial_n: int, p
         merged_df['N'] = np.log2(merged_df['N'])
     if len(merged_df) > plot_cutoff:
         merged_df = merged_df.sample(n=plot_cutoff, replace=False)
-    pal = sns.color_palette('rainbow', n_colors=20)
     colors = [pal[2], pal[15], pal[17]]
     colors2 = [pal[4], pal[17], pal[19]]
     fig, ax = plt.subplots()
@@ -118,11 +122,24 @@ def plot_relative_violins(dataframes: Dict[str, pd.DataFrame], initial_n: int, p
                    order=sort_order)
     sns.swarmplot(ax=ax, data=merged_df, x='Growth rate standard deviation', y='N', palette=colors2, dodge=True,
                   edgecolor='gray', alpha=0.7, size=3, order=sort_order)
+    ax.axhline(np.log2(1), lw=2, ls='-', color='k', alpha=0.7)
+    ax.set_ylabel(r'Final number of cells on each replicate ($\frac{static}{dynamic}$)')
     for group_name, group in merged_df.groupby('Growth rate standard deviation'):
         name = group_name.replace("$", "").replace("\\", "")
         print(f'{name} -> mean = {group["N"].mean()}')
-    ax.axhline(np.log2(1), lw=2, ls='-', color='k', alpha=0.7)
-    ax.set_ylabel(r'Final number of cells on each replicate ($\frac{static}{dynamic}$)')
+
+    return merged_df
+
+
+def calculate_pvals(data: pd.DataFrame) -> None:
+    """Docstring"""
+    g_max = data.loc[data['Growth rate standard deviation'] == r'max ($\sigma = 0.3415$)']
+    g_avg = data.loc[data['Growth rate standard deviation'] == r'avg ($\sigma = 0.2228$)']
+    g_min = data.loc[data['Growth rate standard deviation'] == r'min ($\sigma = 0.117$)']
+    _, pval_max_avg = ttest_ind(g_max['N'], g_avg['N'])
+    _, pval_avg_min = ttest_ind(g_avg['N'], g_min['N'])
+    print('ttest pvalue (max vs average) ->', pval_max_avg)
+    print('ttest pvalue (min vs average) ->', pval_avg_min)
 
 
 if __name__ == '__main__':
